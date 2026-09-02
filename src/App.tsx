@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   AlertTriangle, Bell, Check, CheckCircle2, ChevronDown, ChevronRight, Copy,
   ClipboardCheck, Clock3, FileClock, HeartHandshake, House, LayoutDashboard,
@@ -18,6 +18,7 @@ import type {
   RetentionRequest, Role, SmallGroup, TeamMember,
 } from './types'
 import { usePersistentState } from './usePersistentState'
+import { useEcosystem } from './useEcosystem'
 
 type View = 'home' | 'implementation' | 'presence' | 'people' | 'care' | 'groups' | 'discipleship' | 'pastoral' | 'settings'
 type SettingsTab = 'identity' | 'team' | 'privacy' | 'audit'
@@ -88,10 +89,12 @@ function Empty({ title, text }: { title: string; text: string }) {
 }
 
 export default function App() {
+  const ecosystem = useEcosystem()
   const [view, setView] = useState<View>('home')
   const [mobileNav, setMobileNav] = useState(false)
   const [congregationId, setCongregationId] = useState('all')
-  const [role, setRole] = usePersistentState<Role>('rem:demo-role', 'pastor')
+  const [demoRole, setDemoRole] = usePersistentState<Role>('rem:demo-role', 'pastor')
+  const role = ecosystem.isCloud ? ecosystem.role : demoRole
   const [organization, setOrganization] = usePersistentState<Organization>('rem:organization', seedOrganization)
   const [congregations, setCongregations] = usePersistentState<Congregation[]>('rem:congregations', seedCongregations)
   const [labels, setLabels] = usePersistentState<AppLabels>('rem:labels', seedLabels)
@@ -111,9 +114,21 @@ export default function App() {
   const [showNotifications, setShowNotifications] = useState(false)
   const [showRoleMenu, setShowRoleMenu] = useState(false)
   const [messageDraft, setMessageDraft] = useState<{ person: Person; intent: MessageIntent } | null>(null)
+  const [syncError, setSyncError] = useState('')
+
+  useEffect(() => {
+    const listener = (event: Event) => {
+      setSyncError((event as CustomEvent<string>).detail || 'Não foi possível sincronizar a alteração.')
+      window.setTimeout(() => setSyncError(''), 7000)
+    }
+    window.addEventListener('rem:sync-error', listener)
+    return () => window.removeEventListener('rem:sync-error', listener)
+  }, [])
 
   const isElevated = ['owner', 'pastor', 'data_admin'].includes(role)
-  const roleCongregations = isElevated ? congregations.map((item) => item.id) : [congregationId === 'all' ? congregations[0]?.id : congregationId]
+  const roleCongregations = ecosystem.isCloud && ecosystem.congregationIds.length
+    ? ecosystem.congregationIds
+    : isElevated ? congregations.map((item) => item.id) : [congregationId === 'all' ? congregations[0]?.id : congregationId]
   const inScope = <T extends { congregationId: string }>(items: T[]) => items.filter((item) =>
     (congregationId === 'all' || item.congregationId === congregationId) &&
     (isElevated || roleCongregations.includes(item.congregationId))
@@ -165,8 +180,9 @@ export default function App() {
         {navSections.map((section) => { const items = nav.filter(([id, , , allowed]) => allowed && section.ids.includes(id)); return items.length ? <section className="nav-section" key={section.label}><span className="nav-section-label">{section.label}</span>{items.map(([id, label, Icon]) => <button key={id} className={view === id ? 'active' : ''} onClick={() => go(id as View)}><Icon /><span>{label}</span>{id === 'care' && pendingCare.length ? <b>{pendingCare.length}</b> : null}</button>)}</section> : null })}
       </nav>
       <div className="sidebar-footer role-switcher">
-        {showRoleMenu ? <div className="role-menu"><span>Visualizar como</span>{Object.entries(roleLabels).map(([id, name]) => <button key={id} className={role === id ? 'active' : ''} onClick={() => { setRole(id as Role); setShowRoleMenu(false); go('home') }}><i>{initials(name)}</i>{name}{role === id ? <Check /> : null}</button>)}</div> : null}
-        <button className="role-trigger" onClick={() => setShowRoleMenu((current) => !current)}><div className="avatar">{initials(roleLabels[role])}</div><span><small>Perfil atual</small><strong>{roleLabels[role]}</strong></span><ChevronDown /></button>
+        {!ecosystem.isCloud && showRoleMenu ? <div className="role-menu"><span>Visualizar como</span>{Object.entries(roleLabels).map(([id, name]) => <button key={id} className={role === id ? 'active' : ''} onClick={() => { setDemoRole(id as Role); setShowRoleMenu(false); go('home') }}><i>{initials(name)}</i>{name}{role === id ? <Check /> : null}</button>)}</div> : null}
+        <button className="role-trigger" onClick={() => !ecosystem.isCloud && setShowRoleMenu((current) => !current)} aria-expanded={!ecosystem.isCloud ? showRoleMenu : undefined}><div className="avatar">{initials(roleLabels[role])}</div><span><small>{ecosystem.isCloud ? ecosystem.user?.email || 'Conta MillionsNest' : 'Perfil demonstrativo'}</small><strong>{roleLabels[role]}</strong></span>{ecosystem.isCloud ? <span className="cloud-dot" title="Sincronizado na nuvem" /> : <ChevronDown />}</button>
+        <button className="session-action" onClick={ecosystem.isCloud ? ecosystem.logout : ecosystem.leaveDemo}>{ecosystem.isCloud ? 'Sair da conta' : 'Entrar no MillionsNest'}</button>
       </div>
     </aside>
     {mobileNav ? <button className="nav-scrim" onClick={() => setMobileNav(false)} aria-label="Fechar menu" /> : null}
@@ -175,7 +191,7 @@ export default function App() {
       <header className="topbar">
         <button className="menu-button" onClick={() => setMobileNav(true)} aria-label="Abrir menu"><Menu /></button>
         <div className="mobile-brand"><img src="/brand/raiz-e-mesa-mark.webp" alt="" /><strong>Raiz e Mesa</strong></div>
-        <div className="page-context"><span>Raiz e Mesa</span><i /><strong>{currentTitle}</strong></div>
+        <div className="page-context"><span>Raiz e Mesa</span><i /><strong>{currentTitle}</strong><em>{ecosystem.isCloud ? 'nuvem' : 'demonstração'}</em></div>
         <label className="congregation-select"><span>{congregationId === 'all' ? 'Todas as unidades' : congregationName(congregationId)}</span><ChevronDown /><select value={congregationId} onChange={(event) => setCongregationId(event.target.value)}><option value="all">Todas as unidades</option>{congregations.filter((item) => item.active).map((item) => <option key={item.id} value={item.id}>{item.name} · {item.city}</option>)}</select></label>
         <div className="top-actions">
           <button onClick={() => setShowSearch(true)} aria-label="Pesquisar"><Search /></button>
@@ -186,6 +202,8 @@ export default function App() {
       </header>
 
       <div className="content">
+        {syncError ? <div className="sync-alert"><AlertTriangle /><span><strong>Alteração salva neste dispositivo</strong><small>{syncError}</small></span><button onClick={() => setSyncError('')}><X /></button></div> : null}
+        {ecosystem.isCloud && !congregations.length ? <CloudOnboarding organization={organization} save={(name, city) => setCongregations([{ id: crypto.randomUUID(), organizationId: organization.id, name, city, active: true }])} /> : null}
         {view === 'home' && <Dashboard people={scopedPeople} groups={scopedGroups} discipleships={scopedDiscipleships} pending={pendingCare} labels={labels} go={go} open={setSelectedPerson} />}
         {view === 'implementation' && <Implementation done={weekDone} setDone={setWeekDone} />}
         {view === 'presence' && <Presence records={scopedPresence} people={scopedPeople} labels={labels} congregationName={congregationName} add={(record) => { setPresence((current) => [record, ...current]); log('Presença registrada', record.personName) }} />}
@@ -194,7 +212,7 @@ export default function App() {
         {view === 'groups' && <Groups groups={scopedGroups} meetings={inScope(groupMeetings)} requests={inScope(joinRequests)} labels={labels} addGroup={() => { const unit = congregationId === 'all' ? congregations[0]?.id : congregationId; setGroups((current) => [...current, { id: crypto.randomUUID(), organizationId: organization.id, congregationId: unit, name: 'Nova Casa de Paz', leader: 'Definir líder', host: 'Definir anfitrião', apprentice: 'Em formação', neighborhood: 'Definir bairro', weekday: 'Quinzenal', time: '20h', capacity: 12, participants: 0, health: 'healthy' }]); log('Casa criada', 'Nova Casa de Paz') }} addMeeting={(group) => { const meeting = { id: crypto.randomUUID(), organizationId: organization.id, congregationId: group.congregationId, groupId: group.id, date: new Date().toISOString().slice(0,10), attendance: group.participants, newcomers: 0, followUpAuthorized: 0, pastoralFlag: false, operationalNote: 'Relatório mínimo registrado.' }; setGroupMeetings((current) => [meeting, ...current]); log('Relatório de Casa registrado', group.name) }} accept={(request) => { setJoinRequests((current) => current.map((item) => item.id === request.id ? { ...item, status: 'accepted', groupId: scopedGroups[0]?.id } : item)); log('Pedido de entrada aceito', request.personName) }} />}
         {view === 'discipleship' && <Discipleship labels={labels} items={scopedDiscipleships} team={team} advance={(item) => { const next = Math.min(item.meeting + 1, 7); setDiscipleships((current) => current.map((existing) => existing.id === item.id ? { ...existing, meeting: next, completedMeetings: [...new Set([...(existing.completedMeetings ?? []), existing.meeting])], status: next === 7 ? 'completed' : 'active', nextMeeting: next === 7 ? 'Ciclo concluído' : 'Agendar próximo encontro' } : existing)); log('Encontro do Raiz concluído', item.person) }} />}
         {view === 'pastoral' && <Pastoral people={scopedPeople} groups={scopedGroups} team={team} labels={labels} />}
-        {view === 'settings' && <Governance organization={organization} setOrganization={setOrganization} labels={labels} setLabels={setLabels} congregations={congregations} setCongregations={setCongregations} team={team} setTeam={setTeam} retention={retention} setRetention={setRetention} audit={audit} log={log} />}
+        {view === 'settings' && <Governance organization={organization} setOrganization={setOrganization} labels={labels} setLabels={setLabels} congregations={congregations} setCongregations={setCongregations} team={team} setTeam={setTeam} retention={retention} setRetention={setRetention} audit={audit} log={log} cloud={ecosystem.isCloud} />}
       </div>
     </main>
 
@@ -315,12 +333,12 @@ function Pastoral({ people, groups, team, labels }: { people: Person[]; groups: 
   </>
 }
 
-function Governance({ organization, setOrganization, labels, setLabels, congregations, setCongregations, team, setTeam, retention, setRetention, audit, log }: { organization: Organization; setOrganization: React.Dispatch<React.SetStateAction<Organization>>; labels: AppLabels; setLabels: React.Dispatch<React.SetStateAction<AppLabels>>; congregations: Congregation[]; setCongregations: React.Dispatch<React.SetStateAction<Congregation[]>>; team: TeamMember[]; setTeam: React.Dispatch<React.SetStateAction<TeamMember[]>>; retention: RetentionRequest[]; setRetention: React.Dispatch<React.SetStateAction<RetentionRequest[]>>; audit: AuditEvent[]; log: (action: string, target: string, sensitivity?: AuditEvent['sensitivity']) => void }) {
+function Governance({ organization, setOrganization, labels, setLabels, congregations, setCongregations, team, setTeam, retention, setRetention, audit, log, cloud }: { organization: Organization; setOrganization: React.Dispatch<React.SetStateAction<Organization>>; labels: AppLabels; setLabels: React.Dispatch<React.SetStateAction<AppLabels>>; congregations: Congregation[]; setCongregations: React.Dispatch<React.SetStateAction<Congregation[]>>; team: TeamMember[]; setTeam: React.Dispatch<React.SetStateAction<TeamMember[]>>; retention: RetentionRequest[]; setRetention: React.Dispatch<React.SetStateAction<RetentionRequest[]>>; audit: AuditEvent[]; log: (action: string, target: string, sensitivity?: AuditEvent['sensitivity']) => void; cloud: boolean }) {
   const [tab, setTab] = useState<SettingsTab>('identity')
   return <><Intro title="Governança e configuração" description="Marca, equipe, escopos, privacidade, retenção e histórico de alterações." /><section className="settings-layout"><div className="panel settings-nav">{([['identity','Identidade e unidades',Pencil],['team','Equipe e permissões',UserCog],['privacy','Privacidade e retenção',LockKeyhole],['audit','Auditoria',FileClock]] as const).map(([id,title,Icon]) => <button className={tab === id ? 'active' : ''} onClick={() => setTab(id)} key={id}><Icon />{title}</button>)}</div>
       <div className="panel settings-form">
         {tab === 'identity' ? <><span className="eyebrow">MARCA DA IGREJA</span><div className="brand-preview"><img src="/brand/raiz-e-mesa-poster.webp" alt="Identidade Raiz e Mesa" /><div><strong>{organization.name}</strong><span>Personalização por organização</span></div></div><div className="two-fields"><Field label="Nome da igreja" value={organization.name} onChange={(value) => setOrganization((current) => ({ ...current, name: value }))} /><Field label="Nome do programa" value={organization.ministryName} onChange={(value) => setOrganization((current) => ({ ...current, ministryName: value }))} /></div><div className="color-fields"><label><span>Cor principal</span><input type="color" value={organization.primaryColor} onChange={(event) => setOrganization((current) => ({ ...current, primaryColor: event.target.value }))} /></label><label><span>Cor de destaque</span><input type="color" value={organization.accentColor} onChange={(event) => setOrganization((current) => ({ ...current, accentColor: event.target.value }))} /></label></div><hr /><span className="eyebrow">NOMES ADAPTÁVEIS</span>{(Object.keys(labels) as Array<keyof AppLabels>).map((key) => <Field key={key} label={key} value={labels[key]} onChange={(value) => setLabels((current) => ({ ...current, [key]: value }))} />)}<hr /><div className="section-heading"><h2>Unidades</h2><button className="secondary" onClick={() => setCongregations((current) => [...current, { id: crypto.randomUUID(), organizationId: organization.id, name: 'Nova unidade', city: 'Cidade · UF', active: true }])}><Plus /> Adicionar</button></div>{congregations.map((item) => <div className="congregation-edit" key={item.id}><input value={item.name} onChange={(event) => setCongregations((current) => current.map((existing) => existing.id === item.id ? { ...existing, name: event.target.value } : existing))} /><input value={item.city} onChange={(event) => setCongregations((current) => current.map((existing) => existing.id === item.id ? { ...existing, city: event.target.value } : existing))} /><button className={`status-toggle ${item.active ? 'active' : ''}`} onClick={() => setCongregations((current) => current.map((existing) => existing.id === item.id ? { ...existing, active: !existing.active } : existing))}>{item.active ? 'Ativa' : 'Inativa'}</button></div>)}</> : null}
-        {tab === 'team' ? <><div className="section-heading"><div><span className="eyebrow">MENOR PRIVILÉGIO</span><h2>Equipe e escopo</h2></div><button className="secondary" onClick={() => { setTeam((current) => [...current, { id: crypto.randomUUID(), name: 'Novo integrante', role: 'care', congregationIds: [congregations[0]?.id], active: true, weeklyLoad: 0 }]); log('Integrante adicionado', 'Novo integrante') }}><Plus /> Integrante</button></div><div className="team-list">{team.map((member) => <article key={member.id}><div className="person-cell"><i className="person-avatar">{initials(member.name)}</i><span><strong>{member.name}</strong><small>{member.congregationIds.map((id) => congregations.find((item) => item.id === id)?.name).join(', ')}</small></span></div><select value={member.role} onChange={(event) => { setTeam((current) => current.map((item) => item.id === member.id ? { ...item, role: event.target.value as Role } : item)); log('Papel alterado', member.name, 'restricted') }}>{Object.entries(roleLabels).map(([id,name]) => <option key={id} value={id}>{name}</option>)}</select><Pill tone={member.active ? 'green' : 'neutral'}>{member.active ? 'ativo' : 'inativo'}</Pill></article>)}</div></> : null}
+        {tab === 'team' ? <><div className="section-heading"><div><span className="eyebrow">MENOR PRIVILÉGIO</span><h2>Equipe e escopo</h2></div>{cloud ? <a className="secondary" href="https://www.millionsnest.com/dashboard/team"><UserCog /> Gerenciar no Hub</a> : <button className="secondary" onClick={() => { setTeam((current) => [...current, { id: crypto.randomUUID(), name: 'Novo integrante', role: 'care', congregationIds: [congregations[0]?.id], active: true, weeklyLoad: 0 }]); log('Integrante adicionado', 'Novo integrante') }}><Plus /> Integrante</button>}</div>{cloud ? <div className="governance-note"><ShieldCheck /><div><strong>Identidade e permissões centralizadas</strong><p>Convites, contas e papéis são administrados no MillionsNest para que a mesma equipe funcione em todos os aplicativos.</p></div></div> : null}<div className="team-list">{team.map((member) => <article key={member.id}><div className="person-cell"><i className="person-avatar">{initials(member.name)}</i><span><strong>{member.name}</strong><small>{member.congregationIds.map((id) => congregations.find((item) => item.id === id)?.name).join(', ')}</small></span></div><select disabled={cloud} value={member.role} onChange={(event) => { setTeam((current) => current.map((item) => item.id === member.id ? { ...item, role: event.target.value as Role } : item)); log('Papel alterado', member.name, 'restricted') }}>{Object.entries(roleLabels).map(([id,name]) => <option key={id} value={id}>{name}</option>)}</select><Pill tone={member.active ? 'green' : 'neutral'}>{member.active ? 'ativo' : 'inativo'}</Pill></article>)}</div></> : null}
         {tab === 'privacy' ? <><span className="eyebrow">LGPD POR DESIGN</span><h2>Solicitações e retenção</h2><div className="principle-grid">{['Coleta mínima','Consentimento revogável','Sem prontuário íntimo','Exportação administrada'].map((item) => <span key={item}><ShieldCheck />{item}</span>)}</div><div className="retention-list">{retention.map((request) => <article key={request.id}><div><strong>{request.personName}</strong><small>{request.type === 'deletion' ? 'Exclusão' : request.type === 'correction' ? 'Correção' : 'Revogação de consentimento'} · {formatDate(request.requestedAt)}</small></div><Pill tone={request.status === 'completed' ? 'green' : 'amber'}>{request.status}</Pill>{request.status !== 'completed' ? <button className="secondary" onClick={() => { setRetention((current) => current.map((item) => item.id === request.id ? { ...item, status: 'completed' } : item)); log('Solicitação LGPD concluída', request.personName, 'restricted') }}>Concluir</button> : null}</article>)}</div></> : null}
         {tab === 'audit' ? <><span className="eyebrow">TRILHA IMUTÁVEL</span><h2>Acessos e alterações</h2><div className="audit-list">{audit.map((event) => <article key={event.id}><i className={event.sensitivity === 'restricted' ? 'restricted' : ''}>{event.sensitivity === 'restricted' ? <LockKeyhole /> : <Check />}</i><div><strong>{event.action}</strong><span>{event.target}</span><small>{event.actor} · {new Date(event.createdAt).toLocaleString('pt-BR')}</small></div></article>)}</div></> : null}
       </div></section>
@@ -397,4 +415,13 @@ function GlobalSearch({ people, groups, close, openPerson, go }: { people: Perso
   const persons = query ? people.filter((item) => item.name.toLowerCase().includes(query.toLowerCase())).slice(0,5) : []
   const houses = query ? groups.filter((item) => item.name.toLowerCase().includes(query.toLowerCase())).slice(0,5) : []
   return <div className="modal-backdrop search-backdrop" onMouseDown={close}><div className="global-search" onMouseDown={(event) => event.stopPropagation()}><label><Search /><input autoFocus value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar pessoas ou Casas..." /><button onClick={close}><X /></button></label>{query ? <div className="search-results"><span className="eyebrow">RESULTADOS</span>{persons.map((person) => <button key={person.id} onClick={() => openPerson(person)}><Users /><span><strong>{person.name}</strong><small>{stageLabels[person.stage]}</small></span><ChevronRight /></button>)}{houses.map((group) => <button key={group.id} onClick={() => { close(); go('groups') }}><House /><span><strong>{group.name}</strong><small>{group.neighborhood}</small></span><ChevronRight /></button>)}{!persons.length && !houses.length ? <Empty title="Nenhum resultado" text="Tente outro nome." /> : null}</div> : <div className="search-hint"><Sparkles /><p>Pesquisa limitada ao seu papel, organização e unidades.</p></div>}</div></div>
+}
+
+function CloudOnboarding({ organization, save }: { organization: Organization; save: (name: string, city: string) => void }) {
+  const [name, setName] = useState('Sede')
+  const [city, setCity] = useState('')
+  return <section className="onboarding-card">
+    <div><span className="eyebrow">PRIMEIRA CONFIGURAÇÃO</span><h2>Prepare {organization.name} para começar</h2><p>Cadastre a primeira unidade. Depois você poderá adicionar outras igrejas ou congregações em Governança.</p></div>
+    <form onSubmit={(event) => { event.preventDefault(); if (name.trim() && city.trim()) save(name.trim(), city.trim()) }}><label className="field"><span>Nome da unidade</span><input value={name} onChange={(event) => setName(event.target.value)} required /></label><label className="field"><span>Cidade e estado</span><input value={city} onChange={(event) => setCity(event.target.value)} placeholder="Londrina · PR" required /></label><button className="primary"><ChevronRight /> Começar</button></form>
+  </section>
 }
