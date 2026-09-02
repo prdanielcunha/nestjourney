@@ -35,5 +35,13 @@ Este repositório mantém regras completas apenas para o emulador e testes do do
 1. A igreja cria uma única conta no MillionsNest.
 2. O Hub cria ou reutiliza `organizationId` e associações.
 3. A compra habilita `apps.raiz_e_mesa` via backend/webhook idempotente.
-4. O Hub abre o Raiz e Mesa com a mesma identidade Firebase.
+4. O Hub emite um handoff assinado, de uso curto, vinculado ao usuário, igreja e aplicativo.
+5. O Raiz e Mesa autentica o token no mesmo Firebase e remove o contexto da URL.
+6. Leituras e escritas ficam limitadas ao tenant, papel e unidades do usuário.
+
+## Persistência do produto
+
+Pessoas, presenças, Casas, encontros, discipulados, solicitações e auditoria usam documentos independentes. Configurações e o progresso da implantação usam documentos próprios. O modo de demonstração continua isolado no navegador e nunca é enviado automaticamente para uma igreja real.
+
+O cliente não cria memberships, não habilita planos e não altera entitlements. Essas operações continuam exclusivas do Hub e do backend confiável.
 5. O app lê somente o tenant ativo e o namespace do produto.
