@@ -11,7 +11,7 @@ Esta matriz compara o produto com o Blueprint do Aplicativo, Manual Mestre, Manu
 | Área | Requisito consolidado | Evidência no produto | Situação |
 |---|---|---|---|
 | SaaS | Qualquer igreja, unidades e nomes próprios | Organização, congregações, cores e nomenclaturas configuráveis | Implementado |
-| Ecossistema | Conta e organização compartilhadas no MillionsNest | Namespace `organizations/{orgId}/products/raiz_e_mesa`, associações canônicas e entitlement do app | Preparado; ativação depende do Firebase compartilhado |
+| Ecossistema | Conta e organização compartilhadas no MillionsNest | Firebase Auth comum, handoff assinado, associações canônicas, entitlement e namespace `organizations/{orgId}/products/raiz_e_mesa` | Implementado em código; Rules centrais exigem gate de produção |
 | Implantação | Ciclo completo de 7 semanas | 7 semanas, tarefas, prática real, ritmo de 40–45 min e progresso persistido | Implementado |
 | Presença | Primeira visita, retorno e anfitrião de vínculo | Registro rápido e histórico por pessoa, data, tipo, unidade, anfitrião e Mesa | Implementado |
 | Mesa Aberta | Convite sem pressão e participação simples | Indicadores de convite/participação, linguagem de hospitalidade e ausência de avaliação subjetiva | Implementado |
@@ -39,6 +39,6 @@ Esta matriz compara o produto com o Blueprint do Aplicativo, Manual Mestre, Manu
 
 O MVP não inclui finanças, streaming, chat interno, rede social, gamificação, pontuação de espiritualidade, aconselhamento por IA nem prontuário com confissão, trauma ou saúde. Essas exclusões são intencionais e seguem o blueprint.
 
-## Única dependência externa pendente
+## Gate externo de produção
 
-O app funciona publicamente em modo de demonstração com dados fictícios e persistência local. Para operar com igrejas e pessoas reais é necessário autorizar e configurar o projeto Firebase compartilhado do MillionsNest, suas variáveis na Vercel e as associações/entitlements das organizações. As regras e a arquitetura para isso já estão prontas; nenhuma credencial deve entrar no repositório público.
+O app mantém uma demonstração pública isolada, mas já possui autenticação, resolução de tenant, papéis, onboarding e persistência remota implementados. Antes de habilitar dados reais, as Rules centrais propostas precisam passar pelo Emulator e pela revisão independente exigida pela política do ecossistema. As variáveis públicas do cliente entram na Vercel; nenhuma chave administrativa entra no repositório.
