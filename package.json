@@ -8,7 +8,7 @@
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "test": "vitest run --exclude firestore.rules.test.ts",
-    "test:rules": "npx -y firebase-tools@14.25.1 emulators:exec --only firestore --project raiz-e-mesa-rules-test \"vitest run firestore.rules.test.ts\"",
+    "test:rules": "npx -y firebase-tools@14.25.1 emulators:exec --config firebase.emulator.json --only firestore --project raiz-e-mesa-rules-test \"vitest run firestore.rules.test.ts\"",
     "check": "npm run lint && npm test && npm run build",
     "preview": "vite preview"
   },

@@ -2,27 +2,83 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     function signedIn() { return request.auth != null; }
-    function membership(orgId) { return get(/databases/$(database)/documents/organizations/$(orgId)/members/$(request.auth.uid)); }
-    function hasMembership(orgId) {
+    function nestedMemberPath(orgId) {
+      return /databases/$(database)/documents/organizations/$(orgId)/members/$(request.auth.uid);
+    }
+    function legacyMemberPath(orgId) {
+      return /databases/$(database)/documents/organization_members/$(request.auth.uid + '_' + orgId);
+    }
+    function reverseLegacyMemberPath(orgId) {
+      return /databases/$(database)/documents/organization_members/$(orgId + '_' + request.auth.uid);
+    }
+    function hasAnyMemberDocument(orgId) {
+      return signedIn() && (
+        exists(nestedMemberPath(orgId)) ||
+        exists(legacyMemberPath(orgId)) ||
+        exists(reverseLegacyMemberPath(orgId))
+      );
+    }
+    function membership(orgId) {
+      return exists(nestedMemberPath(orgId))
+        ? get(nestedMemberPath(orgId)).data
+        : (exists(legacyMemberPath(orgId))
+          ? get(legacyMemberPath(orgId)).data
+          : get(reverseLegacyMemberPath(orgId)).data);
+    }
+    function membershipIsActive(orgId) {
+      return hasAnyMemberDocument(orgId)
+        && membership(orgId).get('status', 'active') in ['active', 'ativo'];
+    }
+    function isSystemAdmin() {
       return signedIn()
-        && exists(/databases/$(database)/documents/organizations/$(orgId)/members/$(request.auth.uid))
-        && membership(orgId).data.get('status', '') in ['active', 'ativo'];
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('systemRole', '') in
+          ['ceo', 'global_admin', 'ecosystem_owner', 'founder'];
+    }
+    function isOwner(orgId) {
+      return signedIn()
+        && exists(/databases/$(database)/documents/organizations/$(orgId))
+        && get(/databases/$(database)/documents/organizations/$(orgId)).data.get(
+          'ownerUid',
+          get(/databases/$(database)/documents/organizations/$(orgId)).data.get('ownerId', '')
+        ) == request.auth.uid;
+    }
+    function hasProductAccess(orgId) {
+      return isSystemAdmin() || (
+        exists(/databases/$(database)/documents/organizations/$(orgId))
+        && get(/databases/$(database)/documents/organizations/$(orgId)).data
+          .get('apps', {}).get('raiz_e_mesa', {}).get('status', '') in ['active', 'trialing']
+      );
+    }
+    function hasMembership(orgId) {
+      return hasProductAccess(orgId) && (membershipIsActive(orgId) || isOwner(orgId) || isSystemAdmin());
+    }
+    function memberRole(orgId) {
+      return membershipIsActive(orgId)
+        ? membership(orgId).get('organizationRole', membership(orgId).get('role', ''))
+        : (isOwner(orgId) ? 'owner' : '');
     }
     function role(orgId, allowed) {
-      return hasMembership(orgId)
-        && membership(orgId).data.get('organizationRole', membership(orgId).data.get('role', '')) in allowed;
+      return hasMembership(orgId) && (isSystemAdmin() || memberRole(orgId) in allowed);
     }
     function hasPermission(orgId, permission) {
       return role(orgId, ['owner', 'admin'])
-        || (hasMembership(orgId) && membership(orgId).data.get('permissions', {}).get(permission, false) == true);
+        || (membershipIsActive(orgId) && membership(orgId).get('permissions', {}).get(permission, false) == true);
     }
-    function isOrgAdmin(orgId) { return role(orgId, ['owner', 'admin', 'pastor', 'data_admin']); }
+    function isOrgAdmin(orgId) {
+      return isSystemAdmin() || role(orgId, ['owner', 'admin', 'pastor', 'data_admin']);
+    }
     function assignedToCongregation(orgId, congregationId) {
-      return hasMembership(orgId) && congregationId is string
-        && congregationId in membership(orgId).data.get('congregationIds', []);
+      return membershipIsActive(orgId) && congregationId is string
+        && congregationId in membership(orgId).get('congregationIds', []);
     }
-    function canAccessCongregation(orgId, congregationId) { return isOrgAdmin(orgId) || assignedToCongregation(orgId, congregationId); }
-    function tenantCreate(orgId) { return request.resource.data.get('organizationId', '') == orgId; }
+    function canAccessCongregation(orgId, congregationId) {
+      return hasProductAccess(orgId)
+        && (isOrgAdmin(orgId) || assignedToCongregation(orgId, congregationId));
+    }
+    function tenantCreate(orgId) {
+      return request.resource.data.get('organizationId', '') == orgId;
+    }
     function tenantUnchanged(orgId) {
       return resource.data.get('organizationId', '') == orgId
         && request.resource.data.get('organizationId', '') == orgId;
@@ -39,81 +95,74 @@ service cloud.firestore {
 
     match /organizations/{orgId} {
       allow read: if hasMembership(orgId);
-      allow create: if signedIn() && request.resource.data.get('ownerId', '') == request.auth.uid
-        && request.resource.data.get('status', '') == 'active';
-      allow update: if role(orgId, ['owner', 'admin'])
-        && request.resource.data.get('ownerId', '') == resource.data.get('ownerId', '');
-      allow delete: if false;
+      allow create, update, delete: if false;
 
       match /members/{uid} {
         allow read: if signedIn() && (request.auth.uid == uid || isOrgAdmin(orgId));
-        allow create, update, delete: if false;
-      }
-      match /invitations/{invitationId} {
-        allow read: if role(orgId, ['owner', 'admin']);
-        allow create, update, delete: if false;
-      }
-      match /billing/{document=**} {
-        allow read: if role(orgId, ['owner', 'admin']);
         allow write: if false;
       }
-      match /congregations/{congregationId} {
-        allow read: if canAccessCongregation(orgId, congregationId);
-        allow create: if isOrgAdmin(orgId) && tenantCreate(orgId);
-        allow update: if isOrgAdmin(orgId) && tenantUnchanged(orgId);
-        allow delete: if false;
+      match /products/raiz_e_mesa {
+        allow read: if hasMembership(orgId);
+        allow write: if false;
+
+        match /congregations/{congregationId} {
+          allow read: if canAccessCongregation(orgId, congregationId);
+          allow create: if isOrgAdmin(orgId) && tenantCreate(orgId);
+          allow update: if isOrgAdmin(orgId) && tenantUnchanged(orgId);
+          allow delete: if false;
+        }
+        match /people/{personId} {
+          allow read: if canAccessCongregation(orgId, resource.data.get('congregationId', ''));
+          allow create: if tenantCreate(orgId)
+            && request.resource.data.get('deletedAt', null) == null
+            && canAccessCongregation(orgId, request.resource.data.get('congregationId', ''))
+            && (isOrgAdmin(orgId) || hasPermission(orgId, 'canManagePeople'));
+          allow update: if tenantUnchanged(orgId) && congregationUnchanged()
+            && canAccessCongregation(orgId, resource.data.get('congregationId', ''))
+            && (isOrgAdmin(orgId) || hasPermission(orgId, 'canManagePeople'));
+          allow delete: if false;
+        }
+        match /groups/{groupId} {
+          allow read: if canAccessCongregation(orgId, resource.data.get('congregationId', ''));
+          allow create: if tenantCreate(orgId)
+            && canAccessCongregation(orgId, request.resource.data.get('congregationId', ''))
+            && (isOrgAdmin(orgId) || hasPermission(orgId, 'canManageGroups'));
+          allow update: if tenantUnchanged(orgId) && congregationUnchanged()
+            && canAccessCongregation(orgId, resource.data.get('congregationId', ''))
+            && (isOrgAdmin(orgId) || hasPermission(orgId, 'canManageGroups'));
+          allow delete: if false;
+        }
+        match /discipleships/{discipleshipId} {
+          allow read: if canAccessCongregation(orgId, resource.data.get('congregationId', ''))
+            && (isOrgAdmin(orgId) || resource.data.get('disciplerId', '') == request.auth.uid);
+          allow create: if tenantCreate(orgId)
+            && canAccessCongregation(orgId, request.resource.data.get('congregationId', ''))
+            && (isOrgAdmin(orgId) || request.resource.data.get('disciplerId', '') == request.auth.uid);
+          allow update: if tenantUnchanged(orgId) && congregationUnchanged()
+            && canAccessCongregation(orgId, resource.data.get('congregationId', ''))
+            && (isOrgAdmin(orgId) || resource.data.get('disciplerId', '') == request.auth.uid)
+            && request.resource.data.get('disciplerId', '') == resource.data.get('disciplerId', '');
+          allow delete: if false;
+        }
+        match /pastoral/{pastoralId} {
+          allow read: if role(orgId, ['owner', 'pastor']);
+          allow create: if tenantCreate(orgId) && role(orgId, ['owner', 'pastor']);
+          allow update: if tenantUnchanged(orgId) && role(orgId, ['owner', 'pastor']);
+          allow delete: if false;
+        }
+        match /audit/{auditId} {
+          allow read: if isOrgAdmin(orgId);
+          allow create: if hasMembership(orgId) && validAudit(orgId);
+          allow update, delete: if false;
+        }
+        match /retentionRequests/{requestId} {
+          allow read: if role(orgId, ['owner', 'admin', 'data_admin']);
+          allow create: if hasMembership(orgId) && tenantCreate(orgId)
+            && request.resource.data.get('requestedBy', '') == request.auth.uid;
+          allow update, delete: if false;
+        }
+        match /{document=**} { allow read, write: if false; }
       }
-      match /people/{personId} {
-        allow read: if canAccessCongregation(orgId, resource.data.get('congregationId', ''));
-        allow create: if tenantCreate(orgId)
-          && request.resource.data.get('deletedAt', null) == null
-          && canAccessCongregation(orgId, request.resource.data.get('congregationId', ''))
-          && (isOrgAdmin(orgId) || hasPermission(orgId, 'canManagePeople'));
-        allow update: if tenantUnchanged(orgId) && congregationUnchanged()
-          && canAccessCongregation(orgId, resource.data.get('congregationId', ''))
-          && (isOrgAdmin(orgId) || hasPermission(orgId, 'canManagePeople'));
-        allow delete: if false;
-      }
-      match /groups/{groupId} {
-        allow read: if canAccessCongregation(orgId, resource.data.get('congregationId', ''));
-        allow create: if tenantCreate(orgId)
-          && canAccessCongregation(orgId, request.resource.data.get('congregationId', ''))
-          && (isOrgAdmin(orgId) || hasPermission(orgId, 'canManageGroups'));
-        allow update: if tenantUnchanged(orgId) && congregationUnchanged()
-          && canAccessCongregation(orgId, resource.data.get('congregationId', ''))
-          && (isOrgAdmin(orgId) || hasPermission(orgId, 'canManageGroups'));
-        allow delete: if false;
-      }
-      match /discipleships/{discipleshipId} {
-        allow read: if canAccessCongregation(orgId, resource.data.get('congregationId', ''))
-          && (isOrgAdmin(orgId) || resource.data.get('disciplerId', '') == request.auth.uid);
-        allow create: if tenantCreate(orgId)
-          && canAccessCongregation(orgId, request.resource.data.get('congregationId', ''))
-          && (isOrgAdmin(orgId) || request.resource.data.get('disciplerId', '') == request.auth.uid);
-        allow update: if tenantUnchanged(orgId) && congregationUnchanged()
-          && canAccessCongregation(orgId, resource.data.get('congregationId', ''))
-          && (isOrgAdmin(orgId) || resource.data.get('disciplerId', '') == request.auth.uid)
-          && request.resource.data.get('disciplerId', '') == resource.data.get('disciplerId', '');
-        allow delete: if false;
-      }
-      match /pastoral/{pastoralId} {
-        allow read: if role(orgId, ['owner', 'pastor']);
-        allow create: if tenantCreate(orgId) && role(orgId, ['owner', 'pastor']);
-        allow update: if tenantUnchanged(orgId) && role(orgId, ['owner', 'pastor']);
-        allow delete: if false;
-      }
-      match /audit/{auditId} {
-        allow read: if isOrgAdmin(orgId);
-        allow create: if hasMembership(orgId) && validAudit(orgId);
-        allow update, delete: if false;
-      }
-      match /retentionRequests/{requestId} {
-        allow read: if role(orgId, ['owner', 'admin', 'data_admin']);
-        allow create: if hasMembership(orgId) && tenantCreate(orgId)
-          && request.resource.data.get('requestedBy', '') == request.auth.uid;
-        allow update, delete: if false;
-      }
-      match /{document=**} { allow read, write: if false; }
     }
 
     match /users/{uid} {
@@ -123,6 +172,10 @@ service cloud.firestore {
     match /organization_members/{membershipId} {
       allow read: if signedIn()
         && resource.data.get('uid', resource.data.get('userId', '')) == request.auth.uid;
+      allow write: if false;
+    }
+    match /subscriptions/{orgId} {
+      allow read: if hasMembership(orgId);
       allow write: if false;
     }
     match /{document=**} { allow read, write: if false; }

@@ -35,4 +35,6 @@ Sem variáveis Firebase, o aplicativo abre em modo de demonstração com dados f
 
 As regras seguem o padrão multi-tenant do ecossistema: associação canônica por organização, acesso operacional limitado às congregações atribuídas, privilégios explícitos, anotações pastorais restritas, auditoria imutável e mutações de identidade/cobrança somente por backend confiável. O workflow `Quality` bloqueia regressões de lint, testes, build e Firestore Rules.
 
+O projeto usa a arquitetura Hub-and-Spoke do MillionsNest. Contas, organizações, associações e assinaturas são compartilhadas; os dados deste produto ficam isolados em `organizations/{orgId}/products/raiz_e_mesa`. Consulte [docs/ECOSYSTEM_ARCHITECTURE.md](docs/ECOSYSTEM_ARCHITECTURE.md).
+
 O repositório é público e contém somente configuração de exemplo e dados fictícios. Credenciais e dados de pessoas nunca devem ser versionados.
