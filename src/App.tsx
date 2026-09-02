@@ -2,7 +2,7 @@ import { useState } from 'react'
 import {
   AlertTriangle, Bell, Check, CheckCircle2, ChevronDown, ChevronRight, Copy,
   ClipboardCheck, Clock3, FileClock, HeartHandshake, House, LayoutDashboard,
-  Leaf, LockKeyhole, Menu, MessageCircle, MoreHorizontal, Pencil, Phone, Plus,
+  Leaf, LockKeyhole, Menu, MessageCircle, Pencil, Phone, Plus,
   RefreshCw, Search, Send, Settings, ShieldCheck, Sparkles, Trash2, UserCheck,
   UserCog, Users, X,
 } from 'lucide-react'
@@ -109,6 +109,7 @@ export default function App() {
   const [showAddPerson, setShowAddPerson] = useState(false)
   const [showSearch, setShowSearch] = useState(false)
   const [showNotifications, setShowNotifications] = useState(false)
+  const [showRoleMenu, setShowRoleMenu] = useState(false)
   const [messageDraft, setMessageDraft] = useState<{ person: Person; intent: MessageIntent } | null>(null)
 
   const isElevated = ['owner', 'pastor', 'data_admin'].includes(role)
@@ -148,22 +149,24 @@ export default function App() {
     ['pastoral', 'Visão pastoral', Sparkles, ['owner','pastor'].includes(role)],
     ['settings', 'Governança', Settings, ['owner','pastor','data_admin'].includes(role)],
   ] as const
+  const navSections = [
+    { label: 'Visão geral', ids: ['home', 'implementation'] },
+    { label: 'Jornada', ids: ['presence', 'people', 'care'] },
+    { label: 'Comunidade', ids: ['groups', 'discipleship'] },
+    { label: 'Gestão', ids: ['pastoral', 'settings'] },
+  ]
+  const currentTitle = nav.find(([id]) => id === view)?.[1] ?? 'Início'
 
   return <div className="app-shell" style={{ '--tenant-primary': organization.primaryColor, '--tenant-accent': organization.accentColor } as React.CSSProperties}>
     <aside className={`sidebar ${mobileNav ? 'sidebar-open' : ''}`}>
-      <button className="brand" onClick={() => go('home')}><img src="/brand/raiz-e-mesa-mark.webp" alt="Raiz e Mesa" /></button>
+      <button className="brand" onClick={() => go('home')}><img src="/brand/raiz-e-mesa-mark.webp" alt="" /><span><strong>Raiz e Mesa</strong><small>{organization.name}</small></span></button>
       <button className="mobile-close" onClick={() => setMobileNav(false)} aria-label="Fechar menu"><X /></button>
-      <div className="workspace-tag"><span>ECOSSISTEMA MILLIONSNEST</span><Pill tone="gold">{organization.plan}</Pill></div>
       <nav aria-label="Navegação principal">
-        {nav.filter(([, , , allowed]) => allowed).map(([id, label, Icon]) =>
-          <button key={id} className={view === id ? 'active' : ''} onClick={() => go(id as View)}>
-            <Icon /><span>{label}</span>{id === 'care' && pendingCare.length ? <b>{pendingCare.length}</b> : null}
-          </button>)}
+        {navSections.map((section) => { const items = nav.filter(([id, , , allowed]) => allowed && section.ids.includes(id)); return items.length ? <section className="nav-section" key={section.label}><span className="nav-section-label">{section.label}</span>{items.map(([id, label, Icon]) => <button key={id} className={view === id ? 'active' : ''} onClick={() => go(id as View)}><Icon /><span>{label}</span>{id === 'care' && pendingCare.length ? <b>{pendingCare.length}</b> : null}</button>)}</section> : null })}
       </nav>
-      <div className="sidebar-footer">
-        <div className="avatar">{initials(roleLabels[role])}</div>
-        <label><span>Visualizar como</span><select value={role} onChange={(event) => { setRole(event.target.value as Role); go('home') }}>{Object.entries(roleLabels).map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select></label>
-        <MoreHorizontal />
+      <div className="sidebar-footer role-switcher">
+        {showRoleMenu ? <div className="role-menu"><span>Visualizar como</span>{Object.entries(roleLabels).map(([id, name]) => <button key={id} className={role === id ? 'active' : ''} onClick={() => { setRole(id as Role); setShowRoleMenu(false); go('home') }}><i>{initials(name)}</i>{name}{role === id ? <Check /> : null}</button>)}</div> : null}
+        <button className="role-trigger" onClick={() => setShowRoleMenu((current) => !current)}><div className="avatar">{initials(roleLabels[role])}</div><span><small>Perfil atual</small><strong>{roleLabels[role]}</strong></span><ChevronDown /></button>
       </div>
     </aside>
     {mobileNav ? <button className="nav-scrim" onClick={() => setMobileNav(false)} aria-label="Fechar menu" /> : null}
@@ -171,7 +174,8 @@ export default function App() {
     <main>
       <header className="topbar">
         <button className="menu-button" onClick={() => setMobileNav(true)} aria-label="Abrir menu"><Menu /></button>
-        <div className="tenant-switcher"><img src="/brand/raiz-e-mesa-mark.webp" alt="" /><div><strong>{organization.name}</strong><small>Raiz e Mesa · {roleLabels[role]}</small></div></div>
+        <div className="mobile-brand"><img src="/brand/raiz-e-mesa-mark.webp" alt="" /><strong>Raiz e Mesa</strong></div>
+        <div className="page-context"><span>Raiz e Mesa</span><i /><strong>{currentTitle}</strong></div>
         <label className="congregation-select"><span>{congregationId === 'all' ? 'Todas as unidades' : congregationName(congregationId)}</span><ChevronDown /><select value={congregationId} onChange={(event) => setCongregationId(event.target.value)}><option value="all">Todas as unidades</option>{congregations.filter((item) => item.active).map((item) => <option key={item.id} value={item.id}>{item.name} · {item.city}</option>)}</select></label>
         <div className="top-actions">
           <button onClick={() => setShowSearch(true)} aria-label="Pesquisar"><Search /></button>
@@ -224,7 +228,7 @@ function Dashboard({ people, pending, groups, discipleships, labels, go, open }:
         <p className="privacy-note"><ShieldCheck /> Indicadores servem ao cuidado; não medem valor espiritual.</p>
       </div>
     </section>
-    <section className="culture-card"><img src="/brand/raiz-e-mesa-mark.webp" alt="" /><div><span className="eyebrow">NOSSA CULTURA</span><blockquote>“Pessoas ao lado de pessoas, até que criem raízes em Cristo e aprendam a fazer o mesmo por outras.”</blockquote></div></section>
+    <section className="culture-card"><span className="culture-mark"><img src="/brand/raiz-e-mesa-mark.webp" alt="" /></span><div><span className="eyebrow">NOSSA CULTURA</span><blockquote>Pessoas ao lado de pessoas, até que criem raízes em Cristo e aprendam a fazer o mesmo por outras.</blockquote></div></section>
   </>
 }
 
