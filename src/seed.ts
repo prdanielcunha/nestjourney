@@ -1,4 +1,4 @@
-import type { AppLabels, Congregation, Discipleship, Organization, Person, SmallGroup } from './types'
+import type { AppLabels, AuditEvent, Congregation, Discipleship, GroupMeeting, JoinRequest, Organization, Person, PresenceRecord, RetentionRequest, SmallGroup, TeamMember } from './types'
 
 export const seedOrganization: Organization = {
   id: 'org-obpc-family',
@@ -6,8 +6,8 @@ export const seedOrganization: Organization = {
   ministryName: 'Raiz e Mesa',
   slug: 'familia-obpc',
   logoText: 'OBPC',
-  primaryColor: '#12553f',
-  accentColor: '#d49345',
+  primaryColor: '#c9974f',
+  accentColor: '#f2d18b',
   plan: 'pilot',
 }
 
@@ -40,19 +40,56 @@ export const seedGroups: SmallGroup[] = [
 ]
 
 export const seedDiscipleships: Discipleship[] = [
-  { id: 'd1', organizationId: seedOrganization.id, congregationId: 'cong-industrial', person: 'Discípulo Exemplo 05', mentor: 'Discipulador 01', meeting: 4, nextMeeting: '05 set. · 10h', status: 'active' },
-  { id: 'd2', organizationId: seedOrganization.id, congregationId: 'cong-monte-castelo', person: 'Participante Exemplo 03', mentor: 'Discipuladora 02', meeting: 2, nextMeeting: '08 set. · 19h', status: 'active' },
-  { id: 'd3', organizationId: seedOrganization.id, congregationId: 'cong-monte-castelo', person: 'Participante Exemplo 06', mentor: 'Discipulador 03', meeting: 7, nextMeeting: 'Ciclo concluído', status: 'completed' },
+  { id: 'd1', organizationId: seedOrganization.id, congregationId: 'cong-industrial', person: 'Discípulo Exemplo 05', mentor: 'Discipulador 01', mentorId: 'tm6', meeting: 4, completedMeetings: [1,2,3], nextMeeting: '05 set. · 10h', status: 'active' },
+  { id: 'd2', organizationId: seedOrganization.id, congregationId: 'cong-monte-castelo', person: 'Participante Exemplo 03', mentor: 'Discipuladora 02', mentorId: 'tm7', meeting: 2, completedMeetings: [1], nextMeeting: '08 set. · 19h', status: 'active' },
+  { id: 'd3', organizationId: seedOrganization.id, congregationId: 'cong-monte-castelo', person: 'Participante Exemplo 06', mentor: 'Discipulador 03', mentorId: 'tm8', meeting: 7, completedMeetings: [1,2,3,4,5,6,7], nextMeeting: 'Ciclo concluído', status: 'completed' },
+]
+
+export const seedPresence: PresenceRecord[] = [
+  { id: 'v1', organizationId: seedOrganization.id, congregationId: 'cong-monte-castelo', personId: 'p1', personName: 'Visitante Exemplo 01', date: '2026-08-30', kind: 'first_visit', host: 'Anfitriã 01', tableInvited: true, tableJoined: true, contactOffered: true },
+  { id: 'v2', organizationId: seedOrganization.id, congregationId: 'cong-industrial', personId: 'p2', personName: 'Visitante Exemplo 02', date: '2026-08-30', kind: 'return', host: 'Anfitrião 02', tableInvited: true, tableJoined: false, contactOffered: true },
+  { id: 'v3', organizationId: seedOrganization.id, congregationId: 'cong-industrial', personId: 'p4', personName: 'Visitante Exemplo 04', date: '2026-08-30', kind: 'first_visit', host: 'Anfitrião 03', tableInvited: true, tableJoined: true, contactOffered: false },
+]
+
+export const seedGroupMeetings: GroupMeeting[] = [
+  { id: 'gm1', organizationId: seedOrganization.id, congregationId: 'cong-monte-castelo', groupId: 'g1', date: '2026-08-26', attendance: 9, newcomers: 1, followUpAuthorized: 1, pastoralFlag: false, operationalNote: 'Encontro dentro do tempo.' },
+  { id: 'gm2', organizationId: seedOrganization.id, congregationId: 'cong-industrial', groupId: 'g2', date: '2026-08-28', attendance: 9, newcomers: 0, followUpAuthorized: 0, pastoralFlag: true, operationalNote: 'Avaliar capacidade e apoio.' },
+]
+
+export const seedJoinRequests: JoinRequest[] = [
+  { id: 'jr1', organizationId: seedOrganization.id, congregationId: 'cong-industrial', personName: 'Pessoa Interessada 01', neighborhood: 'Jd. Industrial', status: 'pending' },
+  { id: 'jr2', organizationId: seedOrganization.id, congregationId: 'cong-monte-castelo', personName: 'Pessoa Interessada 02', neighborhood: 'Monte Castelo', status: 'accepted', groupId: 'g1' },
+]
+
+export const seedTeam: TeamMember[] = [
+  { id: 'tm1', name: 'Pastor responsável', role: 'pastor', congregationIds: ['cong-monte-castelo','cong-industrial'], active: true, weeklyLoad: 2 },
+  { id: 'tm2', name: 'Coordenador Presença', role: 'coordinator', congregationIds: ['cong-monte-castelo'], active: true, weeklyLoad: 3 },
+  { id: 'tm3', name: 'Cuidador 01', role: 'care', congregationIds: ['cong-monte-castelo'], active: true, weeklyLoad: 8 },
+  { id: 'tm4', name: 'Cuidadora 02', role: 'care', congregationIds: ['cong-industrial'], active: true, weeklyLoad: 10 },
+  { id: 'tm5', name: 'Líder 01', role: 'group_leader', congregationIds: ['cong-monte-castelo'], active: true, weeklyLoad: 9 },
+  { id: 'tm6', name: 'Discipulador 01', role: 'discipler', congregationIds: ['cong-industrial'], active: true, weeklyLoad: 2 },
+  { id: 'tm7', name: 'Discipuladora 02', role: 'discipler', congregationIds: ['cong-monte-castelo'], active: true, weeklyLoad: 2 },
+  { id: 'tm8', name: 'Administrador de dados', role: 'data_admin', congregationIds: ['cong-monte-castelo','cong-industrial'], active: true, weeklyLoad: 1 },
+]
+
+export const seedAudit: AuditEvent[] = [
+  { id: 'a1', actor: 'Cuidador 01', action: 'Contato concluído', target: 'Visitante Exemplo 01', createdAt: '2026-09-02T12:40:00Z', sensitivity: 'standard' },
+  { id: 'a2', actor: 'Pastor responsável', action: 'Marcador pastoral acessado', target: 'Registro restrito', createdAt: '2026-09-02T11:15:00Z', sensitivity: 'restricted' },
+  { id: 'a3', actor: 'Administrador de dados', action: 'Consentimento corrigido', target: 'Visitante Exemplo 02', createdAt: '2026-09-01T18:10:00Z', sensitivity: 'standard' },
+]
+
+export const seedRetention: RetentionRequest[] = [
+  { id: 'r1', personName: 'Solicitante Exemplo 01', type: 'consent_revocation', status: 'open', requestedAt: '2026-09-01' },
 ]
 
 export const implementationWeeks = [
-  { week: 1, title: 'Coração, missão e cultura', status: 'done', tasks: 4, done: 4 },
-  { week: 2, title: 'Presença e Mesa Aberta', status: 'current', tasks: 6, done: 4 },
-  { week: 3, title: 'Cuidado e conexão', status: 'next', tasks: 5, done: 0 },
-  { week: 4, title: 'Pequenos grupos nos lares', status: 'planned', tasks: 5, done: 0 },
-  { week: 5, title: 'Discipulado inicial', status: 'planned', tasks: 5, done: 0 },
-  { week: 6, title: 'Serviço, multiplicação e segurança', status: 'planned', tasks: 4, done: 0 },
-  { week: 7, title: 'Consolidação, compromisso e envio', status: 'planned', tasks: 5, done: 0 },
+  { week: 1, title: 'Coração, missão e cultura', status: 'done', tasks: ['Apresentar o caminho completo','Contar histórias sem exposição','Praticar hospitalidade','Confirmar facilitadores'], practice: 'Aprender o nome de alguém com quem normalmente não conversaria.' },
+  { week: 2, title: 'Presença e Mesa Aberta', status: 'current', tasks: ['Definir entrada, salão e vínculo','Treinar boas-vindas','Treinar convite à Mesa','Revisar postura no apelo','Publicar escala','Fazer debrief de 10 minutos'], practice: 'Iniciar a Mesa Aberta e revisar o domingo com a equipe.' },
+  { week: 3, title: 'Cuidado e conexão', status: 'next', tasks: ['Treinar consentimento opcional','Treinar primeira mensagem','Definir quando ligar','Revisar limites e LGPD','Definir encaminhamento pastoral'], practice: 'Contatar todos os autorizados em aproximadamente 24h, no máximo 48h.' },
+  { week: 4, title: 'Casa de Paz', status: 'planned', tasks: ['Confirmar líder, anfitrião e aprendiz','Escolher local e horário','Treinar convite pessoal','Simular os 50 minutos','Realizar encontro piloto'], practice: 'Confirmar equipe, convidados e data da primeira Casa piloto.' },
+  { week: 5, title: 'Raiz · discipulado inicial', status: 'planned', tasks: ['Apresentar os sete encontros','Treinar escuta e perguntas','Validar discipuladores','Alinhar material oficial','Praticar convite ao Raiz'], practice: 'Iniciar apenas 1–2 relações com pessoas e discipuladores preparados.' },
+  { week: 6, title: 'Serviço, multiplicação e segurança', status: 'planned', tasks: ['Separar serviço simples de função sensível','Revisar critérios de liderança','Treinar limites de cuidado','Mapear aprendizes e sobrecarga'], practice: 'Identificar alguém para formação sem prometer função.' },
+  { week: 7, title: 'Consolidação, compromisso e envio', status: 'planned', tasks: ['Revisar o fluxo completo','Compartilhar histórias preservando identidades','Confirmar responsáveis por 90 dias','Revisar métricas e falhas','Comissionar e iniciar ciclo 30/60/90'], practice: 'Entrar no ciclo de revisão de 30, 60 e 90 dias.' },
 ]
 
 export const discipleshipMeetings = [

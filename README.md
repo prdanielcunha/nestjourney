@@ -37,4 +37,6 @@ As regras seguem o padrão multi-tenant do ecossistema: associação canônica p
 
 O projeto usa a arquitetura Hub-and-Spoke do MillionsNest. Contas, organizações, associações e assinaturas são compartilhadas; os dados deste produto ficam isolados em `organizations/{orgId}/products/raiz_e_mesa`. Consulte [docs/ECOSYSTEM_ARCHITECTURE.md](docs/ECOSYSTEM_ARCHITECTURE.md).
 
+A cobertura funcional consolidada dos oito manuais está documentada em [docs/ROADMAP_AUDIT.md](docs/ROADMAP_AUDIT.md).
+
 O repositório é público e contém somente configuração de exemplo e dados fictícios. Credenciais e dados de pessoas nunca devem ser versionados.

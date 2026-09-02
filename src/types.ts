@@ -42,6 +42,13 @@ export interface Person {
   dueLabel: string
   pastoralFlag?: boolean
   visits: number
+  contactStatus?: 'pending' | 'sent' | 'replied' | 'no_reply' | 'closed'
+  lastContactAt?: string
+  groupId?: string
+  disciplerId?: string
+  consentGrantedAt?: string
+  consentRevokedAt?: string
+  createdAt?: string
 }
 
 export interface SmallGroup {
@@ -58,6 +65,9 @@ export interface SmallGroup {
   capacity: number
   participants: number
   health: 'healthy' | 'attention'
+  frequency?: 'weekly' | 'biweekly'
+  lastMeetingAt?: string
+  nextMeetingAt?: string
 }
 
 export interface Discipleship {
@@ -69,4 +79,70 @@ export interface Discipleship {
   meeting: number
   nextMeeting: string
   status: 'active' | 'paused' | 'completed'
+  mentorId?: string
+  completedMeetings?: number[]
+  startedAt?: string
+}
+
+export interface PresenceRecord {
+  id: string
+  organizationId: string
+  congregationId: string
+  personId: string
+  personName: string
+  date: string
+  kind: 'first_visit' | 'return' | 'member_return'
+  host: string
+  tableInvited: boolean
+  tableJoined: boolean
+  contactOffered: boolean
+}
+
+export interface GroupMeeting {
+  id: string
+  organizationId: string
+  congregationId: string
+  groupId: string
+  date: string
+  attendance: number
+  newcomers: number
+  followUpAuthorized: number
+  pastoralFlag: boolean
+  operationalNote: string
+}
+
+export interface JoinRequest {
+  id: string
+  organizationId: string
+  congregationId: string
+  personName: string
+  neighborhood: string
+  status: 'pending' | 'accepted' | 'waitlist'
+  groupId?: string
+}
+
+export interface TeamMember {
+  id: string
+  name: string
+  role: Role
+  congregationIds: string[]
+  active: boolean
+  weeklyLoad: number
+}
+
+export interface AuditEvent {
+  id: string
+  actor: string
+  action: string
+  target: string
+  createdAt: string
+  sensitivity: 'standard' | 'restricted'
+}
+
+export interface RetentionRequest {
+  id: string
+  personName: string
+  type: 'correction' | 'consent_revocation' | 'deletion'
+  status: 'open' | 'processing' | 'completed'
+  requestedAt: string
 }
