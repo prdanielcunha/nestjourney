@@ -29,13 +29,15 @@ npm run check
 npm run test:rules
 ```
 
-Sem variáveis Firebase, o aplicativo abre em modo de demonstração com dados fictícios persistidos no dispositivo. O Firebase deve ser ativado somente depois de Emulator, testes de Rules e aprovação do ambiente.
+Sem variáveis Firebase, o aplicativo abre em modo de demonstração com dados fictícios persistidos no dispositivo. Com as variáveis públicas do cliente, o acesso usa o mesmo Firebase Authentication do MillionsNest, resolve a organização e o papel do usuário e sincroniza os dados no namespace exclusivo do produto.
+
+O Hub pode abrir o aplicativo por handoff assinado de curta duração (`ecosystem_ctx`). O Raiz e Mesa valida o aplicativo, a organização e a expiração antes de autenticar o token, removendo o contexto da URL em seguida.
 
 ## Segurança e governança
 
 As regras seguem o padrão multi-tenant do ecossistema: associação canônica por organização, acesso operacional limitado às congregações atribuídas, privilégios explícitos, anotações pastorais restritas, auditoria imutável e mutações de identidade/cobrança somente por backend confiável. O workflow `Quality` bloqueia regressões de lint, testes, build e Firestore Rules.
 
-O projeto usa a arquitetura Hub-and-Spoke do MillionsNest. Contas, organizações, associações e assinaturas são compartilhadas; os dados deste produto ficam isolados em `organizations/{orgId}/products/raiz_e_mesa`. Consulte [docs/ECOSYSTEM_ARCHITECTURE.md](docs/ECOSYSTEM_ARCHITECTURE.md).
+O projeto usa a arquitetura Hub-and-Spoke do MillionsNest. Contas, organizações, associações e entitlements são compartilhados; cada entidade operacional é armazenada como documento próprio em `organizations/{orgId}/products/raiz_e_mesa`. Consulte [docs/ECOSYSTEM_ARCHITECTURE.md](docs/ECOSYSTEM_ARCHITECTURE.md).
 
 A cobertura funcional consolidada dos oito manuais está documentada em [docs/ROADMAP_AUDIT.md](docs/ROADMAP_AUDIT.md).
 
