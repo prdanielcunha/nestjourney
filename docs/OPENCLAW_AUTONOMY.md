@@ -107,7 +107,8 @@ To protect quota:
 - summarize completed work and start the next task from the summary rather than replaying long transcripts;
 - avoid parallel agents that inspect the same files for the same purpose;
 - use deterministic tools for formatting, linting, tests, builds, diffs, logs, and dependency inspection;
-- keep one implementation objective per coding-agent run whenever practical.
+- keep one implementation objective per coding-agent run whenever practical;
+- do **not** push after every edited file: commit locally as needed, then push a logical tested batch so GitHub/Vercel do not create redundant CI runs or preview deployments.
 
 ## 8. Standard autonomous delivery loop
 
@@ -120,16 +121,19 @@ To protect quota:
 7. Run `npm run test:rules` when Firebase rules/security/data access is touched, and preferably before any sensitive Firebase deployment.
 8. Review diff for tenant isolation, secrets, destructive behavior, and regression risk.
 9. For sensitive changes, use an independent reviewer agent.
-10. Push/merge autonomously when checks pass.
-11. Deploy/promote to Vercel/Firebase as appropriate.
-12. Run post-deploy smoke checks and inspect errors/logs.
-13. If production regresses, automatically roll back to the last known-good commit/deployment and record the failure before attempting another fix.
-14. Report the final outcome to the user; do not ask the user to perform routine operational steps.
+10. Commit locally in small descriptive commits if useful, but push only the completed logical batch after its gate passes.
+11. Push/merge autonomously when checks pass.
+12. Deploy/promote to Vercel/Firebase as appropriate.
+13. Run post-deploy smoke checks and inspect errors/logs.
+14. If production regresses, automatically roll back to the last known-good commit/deployment and record the failure before attempting another fix.
+15. Report the final outcome to the user; do not ask the user to perform routine operational steps.
 
-## 9. Git and rollback policy
+## 9. Git, push throttling, and rollback policy
 
 - `main` is the canonical integration branch unless repository configuration says otherwise.
-- Keep commits small and descriptive.
+- Keep commits small and descriptive, but distinguish **commit frequency** from **push frequency**.
+- Do not push one commit per file merely to synchronize work; that pattern causes redundant CI and Vercel preview deployments.
+- Prefer one push per tested logical unit/checkpoint, unless a remote backup is specifically needed.
 - Before risky production work, preserve a known-good ref/deployment identifier.
 - Force-push/reset is allowed only when it is the safest way to restore a known repository state and a recoverable reference has first been preserved.
 - A rollback request from the user has priority over new feature work.
