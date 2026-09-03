@@ -1,13 +1,28 @@
-# Arquitetura no ecossistema MillionsNest
+# NestJourney no ecossistema MillionsNest
 
 ## Decisão
 
-O Raiz e Mesa é um **spoke** do Hub MillionsNest. Todos os produtos compartilham o projeto Firebase `millionsnest`, mas somente o Hub é autoridade para identidade, organizações, associações, cobrança e direitos de acesso.
+NestJourney é um **spoke** independente do Hub MillionsNest. “Raiz e Mesa” é uma metodologia configurada dentro do NestJourney para as igrejas piloto, não a identidade do software.
+
+O Hub continua como autoridade exclusiva para identidade, organizações, memberships, cobrança, entitlements e papéis globais. O Firebase compartilhado `millionsnest` oferece Auth, persistência e Rules sem criar uma autoridade paralela.
+
+## Identidade canônica
+
+| Item | Valor |
+|---|---|
+| Produto | NestJourney |
+| App ID novo | `nestjourney` |
+| Domínio | `nestjourney.millionsnest.com` |
+| Marca-mãe | MillionsNest |
+| Programa piloto | Raiz e Mesa |
+| Namespace legado estável | `products/raiz_e_mesa` |
+
+O cliente e o Hub aceitam temporariamente `raiz_e_mesa` e `raiz-e-mesa` em handoffs, memberships e entitlements. Toda nova concessão deve usar `nestjourney`. A remoção dos aliases exige migração server-side auditada e não deve ser feita pelo navegador.
 
 ## Dados compartilhados
 
 | Caminho canônico | Responsabilidade |
-| --- | --- |
+|---|---|
 | `users/{uid}` | perfil e papel global |
 | `organizations/{orgId}` | igreja, marca e apps contratados |
 | `organizations/{orgId}/members/{uid}` | associação, papel, permissões e unidades |
@@ -16,32 +31,37 @@ O Raiz e Mesa é um **spoke** do Hub MillionsNest. Todos os produtos compartilha
 
 ## Dados exclusivos do produto
 
-Todo dado operacional fica no namespace:
+Os dados operacionais continuam em:
 
 `organizations/{orgId}/products/raiz_e_mesa/...`
 
-Subcoleções: `congregations`, `people`, `groups`, `discipleships`, `pastoral`, `audit` e `retentionRequests`. Assim, identidade e tenant são reutilizados sem misturar o domínio do produto com MusicScale, NestFinance ou futuros apps.
+Manter o namespace evita duas fontes de verdade e preserva dados existentes. Subcoleções atuais: `congregations`, `people`, `groups`, `groupMeetings`, `discipleships`, `presence`, `joinRequests`, `teamAssignments`, `pastoral`, `settings`, `implementation`, `audit` e `retentionRequests`.
 
-## Direito de acesso
+## Configuração por igreja
 
-O Hub grava `organizations/{orgId}.apps.raiz_e_mesa.status` como `active` ou `trialing` depois da contratação. O cliente nunca concede a si mesmo assinatura, associação ou permissão.
+Cada organização configura:
 
-## Fonte das regras
+- nome da metodologia ou programa;
+- recepção/presença;
+- mesa/convivência;
+- cuidado/conexão;
+- pequenos grupos;
+- discipulado inicial;
+- cores, unidades e responsáveis.
 
-Este repositório mantém regras completas apenas para o emulador e testes do domínio. Ele deliberadamente não possui `firebase.json` nem workflow de deploy de Rules. A versão para produção deve ser incorporada e testada no repositório central MillionsNest, preservando as regras dos demais produtos.
+Os rótulos são apresentação; IDs de domínio e permissões permanecem estáveis. Assim, renomear “Casa de Paz” para “PG” não rompe dados, auditoria ou integrações.
 
-## Fluxo comercial
+## Fluxo comercial e de acesso
 
-1. A igreja cria uma única conta no MillionsNest.
-2. O Hub cria ou reutiliza `organizationId` e associações.
-3. A compra habilita `apps.raiz_e_mesa` via backend/webhook idempotente.
-4. O Hub emite um handoff assinado, de uso curto, vinculado ao usuário, igreja e aplicativo.
-5. O Raiz e Mesa autentica o token no mesmo Firebase e remove o contexto da URL.
-6. Leituras e escritas ficam limitadas ao tenant, papel e unidades do usuário.
+1. A igreja cria uma conta no MillionsNest.
+2. O Hub cria ou reutiliza a organização e as memberships.
+3. A contratação habilita `apps.nestjourney.status` via backend/webhook idempotente.
+4. O Hub emite handoff curto para `appId: nestjourney`.
+5. NestJourney valida produto, usuário, organização e expiração antes de autenticar o token.
+6. Leituras e escritas permanecem limitadas ao tenant, papel e unidades.
 
-## Persistência do produto
+O cliente não cria memberships, não concede planos e não altera entitlements.
 
-Pessoas, presenças, Casas, encontros, discipulados, solicitações e auditoria usam documentos independentes. Configurações e o progresso da implantação usam documentos próprios. O modo de demonstração continua isolado no navegador e nunca é enviado automaticamente para uma igreja real.
+## Gate de segurança
 
-O cliente não cria memberships, não habilita planos e não altera entitlements. Essas operações continuam exclusivas do Hub e do backend confiável.
-5. O app lê somente o tenant ativo e o namespace do produto.
+Este repositório mantém Rules do domínio para Emulator. A versão de produção é incorporada no repositório central MillionsNest, testada em conjunto com os outros produtos e publicada somente após revisão independente.
