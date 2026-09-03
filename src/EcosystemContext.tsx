@@ -15,6 +15,7 @@ import { auth, db, firebaseConfigured } from './firebase'
 import { parseEcosystemHandoff } from './handoff'
 import type { Role } from './types'
 import { EcosystemContext, type EcosystemContextValue, type SessionStatus } from './ecosystem-context'
+import { LEGACY_PRODUCT_IDS, PRODUCT_ID, PRODUCT_NAME } from './product'
 
 interface EcosystemOrganization {
   id: string
@@ -33,7 +34,7 @@ function uniqueIds(values: unknown[]) {
 function resolveRole(member: Record<string, unknown> | null, systemRole?: unknown): Role {
   if (privilegedRoles.has(String(systemRole))) return 'owner'
   const appAccess = member?.appAccess as Record<string, unknown> | undefined
-  const product = (appAccess?.raiz_e_mesa || appAccess?.['raiz-e-mesa']) as Record<string, unknown> | undefined
+  const product = ([PRODUCT_ID, ...LEGACY_PRODUCT_IDS].map((id) => appAccess?.[id]).find(Boolean)) as Record<string, unknown> | undefined
   const roles = Array.isArray(product?.roles) ? product.roles : []
   const candidate = String(roles[0] || member?.organizationRole || member?.role || 'coordinator')
   const aliases: Record<string, Role> = {
@@ -46,7 +47,7 @@ function resolveRole(member: Record<string, unknown> | null, systemRole?: unknow
 
 function hasEntitlement(organization: EcosystemOrganization, systemRole?: unknown) {
   if (privilegedRoles.has(String(systemRole))) return true
-  const entitlement = organization.apps?.raiz_e_mesa || organization.apps?.['raiz-e-mesa']
+  const entitlement = [PRODUCT_ID, ...LEGACY_PRODUCT_IDS].map((id) => organization.apps?.[id]).find(Boolean)
   return Boolean(entitlement?.access === true || ['active', 'trialing'].includes(String(entitlement?.status)))
 }
 
@@ -86,7 +87,7 @@ export function EcosystemProvider({ children }: { children: React.ReactNode }) {
       return
     }
 
-    let denial = 'O Raiz e Mesa ainda não está habilitado para as suas igrejas.'
+    let denial = `${PRODUCT_NAME} ainda não está habilitado para as suas igrejas.`
     for (const id of ids) {
       const [orgSnapshot, nestedMember, legacyMember, reverseMember] = await Promise.all([
         getDoc(doc(db, 'organizations', id)),
@@ -100,7 +101,7 @@ export function EcosystemProvider({ children }: { children: React.ReactNode }) {
       if (!membershipSnapshot.exists() && !isOwner && !privilegedRoles.has(String(profile.systemRole))) continue
       const org = { id, ...orgSnapshot.data() } as EcosystemOrganization
       if (!hasEntitlement(org, profile.systemRole)) {
-        denial = `${org.name || 'Esta igreja'} ainda não possui acesso ao Raiz e Mesa.`
+        denial = `${org.name || 'Esta igreja'} ainda não possui acesso ao ${PRODUCT_NAME}.`
         continue
       }
       setOrganizationId(id)
