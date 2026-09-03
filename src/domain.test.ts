@@ -60,7 +60,7 @@ describe('handoff seguro do ecossistema', () => {
   const now = 1_800_000_000_000
   const encode = (value: Record<string, unknown>) => btoa(JSON.stringify(value))
   const valid = {
-    appId: 'raiz_e_mesa',
+    appId: 'nestjourney',
     orgId: 'igreja-central',
     userId: 'user-1',
     customToken: 'firebase-custom-token',
@@ -71,6 +71,10 @@ describe('handoff seguro do ecossistema', () => {
 
   it('aceita somente o contexto íntegro e ainda válido', () => {
     expect(parseEcosystemHandoff(encode(valid), now)).toMatchObject(valid)
+  })
+
+  it('mantém handoffs legados durante a migração de marca', () => {
+    expect(parseEcosystemHandoff(encode({ ...valid, appId: 'raiz_e_mesa' }), now)).toMatchObject({ appId: 'raiz_e_mesa' })
   })
 
   it('rejeita contexto expirado, de outro produto ou malformado', () => {
