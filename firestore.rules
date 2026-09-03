@@ -45,11 +45,11 @@ service cloud.firestore {
     }
     function productEntitlement(orgId) {
       let apps = get(/databases/$(database)/documents/organizations/$(orgId)).data.get('apps', {});
-      return apps.get('nestjourney', apps.get('raiz_e_mesa', apps.get('raiz-e-mesa', {})));
+      return apps.get('nestjourney', apps.get('raiz_e_mesa', {}));
     }
     function memberProductAccess(orgId) {
       let apps = membership(orgId).get('appAccess', {});
-      return apps.get('nestjourney', apps.get('raiz_e_mesa', apps.get('raiz-e-mesa', {})));
+      return apps.get('nestjourney', apps.get('raiz_e_mesa', {}));
     }
     function hasProductAccess(orgId) {
       return isSystemAdmin() || (
