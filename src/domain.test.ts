@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { canDeletePerson, canViewPastoral, nextStageAfterCare, scopePeople } from './domain'
 import { implementationWeeks, seedGroups, seedPeople, seedTeam } from './seed'
 import { canEnterCareFlow, groupCapacityStatus, teamLoadStatus } from './policies'
+import { parseEcosystemHandoff } from './handoff'
 
 describe('isolamento multi-tenant e permissões', () => {
   it('nunca retorna pessoas de outra organização', () => {
@@ -52,5 +53,37 @@ describe('limites pastorais e operacionais do roadmap', () => {
   it('sinaliza o limite de carga de cuidado e discipulado', () => {
     expect(teamLoadStatus(seedTeam.find((member) => member.role === 'care' && member.weeklyLoad === 10)!)).toBe('limit')
     expect(teamLoadStatus({ ...seedTeam.find((member) => member.role === 'discipler')!, weeklyLoad: 3 })).toBe('limit')
+  })
+})
+
+describe('handoff seguro do ecossistema', () => {
+  const now = 1_800_000_000_000
+  const encode = (value: Record<string, unknown>) => btoa(JSON.stringify(value))
+  const valid = {
+    appId: 'nestjourney',
+    orgId: 'igreja-central',
+    userId: 'user-1',
+    customToken: 'firebase-custom-token',
+    expiresAt: now + 60_000,
+    supportMode: false,
+    protocolVersion: '1.0.0',
+  }
+
+  it('aceita somente o contexto íntegro e ainda válido', () => {
+    expect(parseEcosystemHandoff(encode(valid), now)).toMatchObject(valid)
+  })
+
+  it('mantém handoffs legados durante a migração de marca', () => {
+    expect(parseEcosystemHandoff(encode({ ...valid, appId: 'raiz_e_mesa' }), now)).toMatchObject({ appId: 'raiz_e_mesa' })
+  })
+
+  it('rejeita contexto expirado, de outro produto ou malformado', () => {
+    expect(parseEcosystemHandoff(encode({ ...valid, expiresAt: now - 1 }), now)).toBeNull()
+    expect(parseEcosystemHandoff(encode({ ...valid, appId: 'musicscale' }), now)).toBeNull()
+    expect(parseEcosystemHandoff('contexto-invalido', now)).toBeNull()
+  })
+
+  it('rejeita identificador de organização inseguro', () => {
+    expect(parseEcosystemHandoff(encode({ ...valid, orgId: '../outra-organizacao' }), now)).toBeNull()
   })
 })
