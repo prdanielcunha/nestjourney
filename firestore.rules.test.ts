@@ -6,7 +6,7 @@ import { afterAll, beforeAll, beforeEach, describe, it } from 'vitest'
 let environment: RulesTestEnvironment
 beforeAll(async () => {
   environment = await initializeTestEnvironment({
-    projectId: 'raiz-e-mesa-rules-test',
+    projectId: 'nestjourney-rules-test',
     firestore: { rules: readFileSync('firestore.rules', 'utf8'), host: '127.0.0.1', port: 8080 },
   })
 })
@@ -19,7 +19,7 @@ async function seedMembership(uid: string, orgId: string, role: string, congrega
     await setDoc(doc(db, `organizations/${orgId}`), {
       ownerUid: 'owner',
       status: 'active',
-      apps: { raiz_e_mesa: { status: 'active', plan: 'pilot' } },
+      apps: { nestjourney: { status: 'active', plan: 'pilot' } },
     })
     await setDoc(doc(db, `organizations/${orgId}/members/${uid}`), { status: 'active', organizationRole: role, congregationIds })
   })
@@ -35,7 +35,7 @@ describe('Firestore tenant and pastoral isolation', () => {
       await setDoc(doc(context.firestore(), 'organizations/org-b'), {
         ownerUid: 'other-owner',
         status: 'active',
-        apps: { raiz_e_mesa: { status: 'active' } },
+        apps: { nestjourney: { status: 'active' } },
       })
       await setDoc(doc(context.firestore(), 'organizations/org-b/products/raiz_e_mesa/people/person-b'), { organizationId: 'org-b', congregationId: 'unit-b', name: 'Example' })
     })
@@ -48,7 +48,7 @@ describe('Firestore tenant and pastoral isolation', () => {
       await setDoc(doc(db, 'organizations/org-a'), {
         ownerUid: 'owner',
         status: 'active',
-        apps: { raiz_e_mesa: { status: 'inactive' } },
+        apps: { nestjourney: { status: 'inactive' } },
       })
       await setDoc(doc(db, 'organizations/org-a/products/raiz_e_mesa/people/person-a'), {
         organizationId: 'org-a', congregationId: 'unit-a', name: 'Example',
@@ -65,7 +65,7 @@ describe('Firestore tenant and pastoral isolation', () => {
       await setDoc(doc(db, 'organizations/org-a'), {
         ownerUid: 'another-owner',
         status: 'active',
-        apps: { raiz_e_mesa: { status: 'active' } },
+        apps: { nestjourney: { status: 'active' } },
       })
       await setDoc(doc(db, 'organization_members/user-a_org-a'), {
         uid: 'user-a', organizationId: 'org-a', status: 'active', role: 'care', congregationIds: ['unit-a'],
