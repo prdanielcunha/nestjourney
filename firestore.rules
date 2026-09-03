@@ -96,6 +96,17 @@ service cloud.firestore {
       return hasProductAccess(orgId)
         && (isOrgAdmin(orgId) || assignedToCongregation(orgId, congregationId));
     }
+    function canManagePresence(orgId, congregationId) {
+      let currentRole = memberRole(orgId);
+      return isSystemAdmin() || (
+        hasMembership(orgId)
+        && currentRole in ['owner', 'admin', 'pastor', 'coordinator']
+        && (
+          currentRole in ['owner', 'admin', 'pastor']
+          || assignedToCongregation(orgId, congregationId)
+        )
+      );
+    }
     function tenantCreate(orgId) {
       return request.resource.data.get('organizationId', '') == orgId;
     }
@@ -167,11 +178,9 @@ service cloud.firestore {
         match /presence/{presenceId} {
           allow read: if canAccessCongregation(orgId, resource.data.get('congregationId', ''));
           allow create: if tenantCreate(orgId)
-            && canAccessCongregation(orgId, request.resource.data.get('congregationId', ''))
-            && role(orgId, ['owner', 'admin', 'pastor', 'coordinator']);
+            && canManagePresence(orgId, request.resource.data.get('congregationId', ''));
           allow update: if tenantUnchanged(orgId) && congregationUnchanged()
-            && canAccessCongregation(orgId, resource.data.get('congregationId', ''))
-            && role(orgId, ['owner', 'admin', 'pastor', 'coordinator']);
+            && canManagePresence(orgId, resource.data.get('congregationId', ''));
           allow delete: if false;
         }
         match /groupMeetings/{meetingId} {
