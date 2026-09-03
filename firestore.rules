@@ -43,11 +43,18 @@ service cloud.firestore {
           get(/databases/$(database)/documents/organizations/$(orgId)).data.get('ownerId', '')
         ) == request.auth.uid;
     }
+    function productEntitlement(orgId) {
+      let apps = get(/databases/$(database)/documents/organizations/$(orgId)).data.get('apps', {});
+      return apps.get('nestjourney', apps.get('raiz_e_mesa', apps.get('raiz-e-mesa', {})));
+    }
+    function memberProductAccess(orgId) {
+      let apps = membership(orgId).get('appAccess', {});
+      return apps.get('nestjourney', apps.get('raiz_e_mesa', apps.get('raiz-e-mesa', {})));
+    }
     function hasProductAccess(orgId) {
       return isSystemAdmin() || (
         exists(/databases/$(database)/documents/organizations/$(orgId))
-        && get(/databases/$(database)/documents/organizations/$(orgId)).data
-          .get('apps', {}).get('raiz_e_mesa', {}).get('status', '') in ['active', 'trialing']
+        && productEntitlement(orgId).get('status', '') in ['active', 'trialing']
       );
     }
     function hasMembership(orgId) {
@@ -55,7 +62,7 @@ service cloud.firestore {
     }
     function memberRole(orgId) {
       let member = membershipIsActive(orgId) ? membership(orgId) : {};
-      let product = member.get('appAccess', {}).get('raiz_e_mesa', {});
+      let product = membershipIsActive(orgId) ? memberProductAccess(orgId) : {};
       let productRoles = product.get('roles', []);
       return membershipIsActive(orgId)
         ? (productRoles is list && productRoles.size() > 0
@@ -68,7 +75,7 @@ service cloud.firestore {
     }
     function hasPermission(orgId, permission) {
       let productPermissions = membershipIsActive(orgId)
-        ? membership(orgId).get('appAccess', {}).get('raiz_e_mesa', {}).get('permissions', [])
+        ? memberProductAccess(orgId).get('permissions', [])
         : [];
       return role(orgId, ['owner', 'admin'])
         || (membershipIsActive(orgId) && membership(orgId).get('permissions', {}).get(permission, false) == true)
