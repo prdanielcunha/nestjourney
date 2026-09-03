@@ -3,6 +3,7 @@ import { collection, doc, onSnapshot, serverTimestamp, setDoc, writeBatch } from
 import { db } from './firebase'
 import { useEcosystem } from './useEcosystem'
 import type { AppLabels, Organization } from './types'
+import { STORAGE_NAMESPACE } from './product'
 
 const STORAGE_VERSION = 3
 const collectionNames: Record<string, string> = {
@@ -37,7 +38,7 @@ export function usePersistentState<T>(key: string, initial: T) {
   useEffect(() => {
     if (!ecosystem.isCloud || !ecosystem.organizationId || !db) return
     const organizationId = ecosystem.organizationId
-    const productPath = ['organizations', organizationId, 'products', 'raiz_e_mesa'] as const
+    const productPath = ['organizations', organizationId, 'products', STORAGE_NAMESPACE] as const
     const collectionName = collectionNames[key]
     if (collectionName) {
       return onSnapshot(collection(db, ...productPath, collectionName), (snapshot) => {
@@ -69,7 +70,7 @@ export function usePersistentState<T>(key: string, initial: T) {
     if (!ecosystem.isCloud || !ecosystem.organizationId || !ecosystem.user || !db) return
 
     const organizationId = ecosystem.organizationId
-    const productPath = ['organizations', organizationId, 'products', 'raiz_e_mesa'] as const
+    const productPath = ['organizations', organizationId, 'products', STORAGE_NAMESPACE] as const
     const collectionName = collectionNames[key]
     if (collectionName && Array.isArray(resolved)) {
       const previousById = new Map((Array.isArray(previous) ? previous : []).map((item: { id?: string }) => [item.id, item]))
