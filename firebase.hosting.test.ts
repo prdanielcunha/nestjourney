@@ -9,7 +9,7 @@ describe('Firebase Hosting migration contract', () => {
     expect(firebase.hosting.rewrites).toEqual([{ source: '**', destination: '/index.html' }])
 
     const rc = JSON.parse(fs.readFileSync('.firebaserc', 'utf8'))
-    expect(rc.targets.millionsnest.hosting.nestjourney).toEqual(['nestjourney-millionsnest'])
+    expect(rc.targets.millionsnest.hosting.nestjourney).toEqual(['mn-nestjourney-555464791734'])
   })
 
   it('preserves the current Vercel rollback path as manual-only', () => {
