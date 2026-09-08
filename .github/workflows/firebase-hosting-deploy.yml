@@ -1,0 +1,45 @@
+name: Firebase Hosting Deploy
+
+on:
+  push:
+    branches: [ production ]
+    paths:
+      - ".github/workflows/firebase-hosting-deploy.yml"
+      - "src/**"
+      - "public/**"
+      - "index.html"
+      - "package.json"
+      - "package-lock.json"
+      - "firebase.json"
+      - ".firebaserc"
+      - "vite.config.*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: nestjourney-firebase-hosting-production
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22
+          cache: npm
+      - name: Authenticate with MillionsNest production WIF
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093
+        with:
+          workload_identity_provider: projects/555464791734/locations/global/workloadIdentityPools/mn-prod-github/providers/github
+          service_account: mn-web-deployer@millionsnest.iam.gserviceaccount.com
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Validate
+        run: npm run check
+      - name: Deploy Hosting
+        run: npx -y firebase-tools@15.26.0 deploy --only hosting:nestjourney --project millionsnest --non-interactive
