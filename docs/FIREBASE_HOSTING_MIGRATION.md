@@ -5,7 +5,7 @@ NestJourney is a React/Vite SPA and does not require a server runtime for its cu
 ## Target
 
 - Firebase project: `millionsnest`
-- Hosting target/site: `nestjourney`
+- Hosting target/site: `nestjourney-millionsnest`
 - Public domain after cutover: `nestjourney.millionsnest.com`
 
 ## Current Firebase configuration behavior
