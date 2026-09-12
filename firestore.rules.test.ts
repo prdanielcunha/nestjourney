@@ -6,7 +6,7 @@ import { afterAll, beforeAll, beforeEach, describe, it } from 'vitest'
 let environment: RulesTestEnvironment
 beforeAll(async () => {
   environment = await initializeTestEnvironment({
-    projectId: 'raiz-e-mesa-rules-test',
+    projectId: 'nestjourney-rules-test',
     firestore: { rules: readFileSync('firestore.rules', 'utf8'), host: '127.0.0.1', port: 8080 },
   })
 })
@@ -19,7 +19,7 @@ async function seedMembership(uid: string, orgId: string, role: string, congrega
     await setDoc(doc(db, `organizations/${orgId}`), {
       ownerUid: 'owner',
       status: 'active',
-      apps: { raiz_e_mesa: { status: 'active', plan: 'pilot' } },
+      apps: { nestjourney: { status: 'active', plan: 'pilot' } },
     })
     await setDoc(doc(db, `organizations/${orgId}/members/${uid}`), { status: 'active', organizationRole: role, congregationIds })
   })
@@ -35,7 +35,7 @@ describe('Firestore tenant and pastoral isolation', () => {
       await setDoc(doc(context.firestore(), 'organizations/org-b'), {
         ownerUid: 'other-owner',
         status: 'active',
-        apps: { raiz_e_mesa: { status: 'active' } },
+        apps: { nestjourney: { status: 'active' } },
       })
       await setDoc(doc(context.firestore(), 'organizations/org-b/products/raiz_e_mesa/people/person-b'), { organizationId: 'org-b', congregationId: 'unit-b', name: 'Example' })
     })
@@ -48,7 +48,7 @@ describe('Firestore tenant and pastoral isolation', () => {
       await setDoc(doc(db, 'organizations/org-a'), {
         ownerUid: 'owner',
         status: 'active',
-        apps: { raiz_e_mesa: { status: 'inactive' } },
+        apps: { nestjourney: { status: 'inactive' } },
       })
       await setDoc(doc(db, 'organizations/org-a/products/raiz_e_mesa/people/person-a'), {
         organizationId: 'org-a', congregationId: 'unit-a', name: 'Example',
@@ -65,7 +65,7 @@ describe('Firestore tenant and pastoral isolation', () => {
       await setDoc(doc(db, 'organizations/org-a'), {
         ownerUid: 'another-owner',
         status: 'active',
-        apps: { raiz_e_mesa: { status: 'active' } },
+        apps: { nestjourney: { status: 'active' } },
       })
       await setDoc(doc(db, 'organization_members/user-a_org-a'), {
         uid: 'user-a', organizationId: 'org-a', status: 'active', role: 'care', congregationIds: ['unit-a'],
@@ -110,5 +110,34 @@ describe('Firestore tenant and pastoral isolation', () => {
     const ref = doc(db, 'organizations/org-a/products/raiz_e_mesa/audit/event-a')
     await assertSucceeds(setDoc(ref, { organizationId: 'org-a', actorId: 'owner', action: 'person.created', createdAt: serverTimestamp() }))
     await assertFails(updateDoc(ref, { action: 'tampered' }))
+  })
+  it('allows product settings only for organization administrators', async () => {
+    await seedMembership('owner', 'org-a', 'owner')
+    await seedMembership('care-a', 'org-a', 'care')
+    const ownerRef = doc(environment.authenticatedContext('owner').firestore(), 'organizations/org-a/products/raiz_e_mesa/settings/labels')
+    const careRef = doc(environment.authenticatedContext('care-a').firestore(), 'organizations/org-a/products/raiz_e_mesa/settings/labels')
+    await assertSucceeds(setDoc(ownerRef, { organizationId: 'org-a', value: { care: 'Conexão' } }))
+    await assertFails(setDoc(careRef, { organizationId: 'org-a', value: { care: 'Alterado' } }))
+  })
+  it('allows presence in assigned units and rejects another unit', async () => {
+    await seedMembership('coordinator-a', 'org-a', 'coordinator', ['unit-a'])
+    const db = environment.authenticatedContext('coordinator-a').firestore()
+    await assertSucceeds(setDoc(doc(db, 'organizations/org-a/products/raiz_e_mesa/presence/event-a'), {
+      organizationId: 'org-a', congregationId: 'unit-a', personId: 'person-a', date: '2026-09-02',
+    }))
+    await assertFails(setDoc(doc(db, 'organizations/org-a/products/raiz_e_mesa/presence/event-b'), {
+      organizationId: 'org-a', congregationId: 'unit-b', personId: 'person-b', date: '2026-09-02',
+    }))
+  })
+  it('allows a data administrator to complete but not rewrite a retention request', async () => {
+    await seedMembership('data-a', 'org-a', 'data_admin')
+    await environment.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), 'organizations/org-a/products/raiz_e_mesa/retentionRequests/request-a'), {
+        organizationId: 'org-a', requestedBy: 'person-a', status: 'open', personName: 'Example',
+      })
+    })
+    const ref = doc(environment.authenticatedContext('data-a').firestore(), 'organizations/org-a/products/raiz_e_mesa/retentionRequests/request-a')
+    await assertSucceeds(updateDoc(ref, { status: 'completed' }))
+    await assertFails(updateDoc(ref, { personName: 'Rewritten' }))
   })
 })
