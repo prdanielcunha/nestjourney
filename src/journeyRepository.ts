@@ -42,6 +42,7 @@ export interface PresencePerson {
 }
 
 export interface PresenceSessionRecord extends PresenceSession {
+  eventName?: string
   status: 'open' | 'closed'
   createdBy: string
   closedBy?: string
@@ -108,8 +109,8 @@ export async function loadJourneyAccess(userId: string, organizationId: string):
           break
         }
       } catch {
-        // Legacy membership reads may be denied for a non-matching document id.
-        // That must not break the canonical nested membership path.
+        // A legacy fallback may be unreadable when its id does not belong to this user.
+        // The canonical nested membership remains the preferred source of truth.
       }
     }
   }
@@ -164,7 +165,7 @@ export async function listPresencePeople(organizationId: string, congregationId:
       id: item.id,
       organizationId,
       congregationId,
-      name: asString(data.name) || 'Sem nome',
+      name: asString(data.name) || '—',
       photoUrl: asString(data.photoUrl || data.photoURL) || undefined,
       phone: asString(data.phone) || undefined,
       consent: Boolean(data.consent),
@@ -188,6 +189,7 @@ export async function listPresenceSessions(organizationId: string, congregationI
       organizationId,
       congregationId,
       eventRef: asString(data.eventRef),
+      eventName: asString(data.eventName) || undefined,
       openedAt: toIso(data.openedAt),
       closedAt: data.closedAt ? toIso(data.closedAt) : undefined,
       expectedPeopleCount: typeof data.expectedPeopleCount === 'number' ? data.expectedPeopleCount : 0,
@@ -199,10 +201,11 @@ export async function listPresenceSessions(organizationId: string, congregationI
   }).sort((a, b) => Date.parse(b.openedAt) - Date.parse(a.openedAt))
 }
 
-export async function listPresenceChecks(organizationId: string, sessionId: string): Promise<PresenceCheck[]> {
+export async function listPresenceChecks(organizationId: string, congregationId: string, sessionId: string): Promise<PresenceCheck[]> {
   const firestore = requireDb()
   const snapshot = await getDocs(query(
     collection(firestore, journeyCollectionPath(organizationId, 'presenceChecks')),
+    where('congregationId', '==', congregationId),
     where('sessionId', '==', sessionId),
   ))
 
@@ -211,7 +214,7 @@ export async function listPresenceChecks(organizationId: string, sessionId: stri
     return {
       id: item.id,
       organizationId,
-      congregationId: asString(data.congregationId),
+      congregationId,
       sessionId,
       personId: asString(data.personId),
       state: data.state as PresenceVerificationState,
@@ -343,12 +346,11 @@ export async function createMinimalVisitor(input: MinimalVisitorInput) {
     firstVisit: today,
     consent,
     stage: consent ? 'contact_authorized' : 'new',
-    owner: 'Sem responsável',
-    nextAction: consent ? 'Enviar primeira mensagem em até 48h' : 'Acolher na próxima visita',
-    dueLabel: consent ? 'Em até 48h' : 'Próxima visita',
+    nextActionCode: consent ? 'FIRST_CONTACT' : 'WELCOME_ON_NEXT_VISIT',
+    ownerRef: null,
     visits: 1,
     contactStatus: consent ? 'pending' : 'closed',
-    consentGrantedAt: consent ? new Date().toISOString() : null,
+    consentGrantedAt: consent ? serverTimestamp() : null,
     createdAt: serverTimestamp(),
     createdBy: input.actorId,
   })
