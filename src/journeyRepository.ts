@@ -1,6 +1,6 @@
 import {
   Timestamp, collection, doc, getDoc, getDocs, query, serverTimestamp, where, writeBatch,
-  type DocumentData, type Firestore,
+  type Firestore,
 } from 'firebase/firestore'
 import { db } from './firebase'
 import { journeyCollectionPath } from './productIdentity'
@@ -92,11 +92,28 @@ export async function loadJourneyAccess(userId: string, organizationId: string):
   const userRef = doc(firestore, `users/${userId}`)
   const orgRef = doc(firestore, `organizations/${organizationId}`)
 
-  const [nested, legacy, reverseLegacy, user, org] = await Promise.all([
-    getDoc(nestedRef), getDoc(legacyRef), getDoc(reverseLegacyRef), getDoc(userRef), getDoc(orgRef),
+  const [nested, user, org] = await Promise.all([
+    getDoc(nestedRef),
+    getDoc(userRef),
+    getDoc(orgRef),
   ])
 
-  const membership = nested.exists() ? nested.data() : legacy.exists() ? legacy.data() : reverseLegacy.exists() ? reverseLegacy.data() : {}
+  let membership = nested.exists() ? nested.data() : {}
+  if (!nested.exists()) {
+    for (const fallbackRef of [legacyRef, reverseLegacyRef]) {
+      try {
+        const fallback = await getDoc(fallbackRef)
+        if (fallback.exists()) {
+          membership = fallback.data()
+          break
+        }
+      } catch {
+        // Legacy membership reads may be denied for a non-matching document id.
+        // That must not break the canonical nested membership path.
+      }
+    }
+  }
+
   const userData = user.exists() ? user.data() : {}
   const orgData = org.exists() ? org.data() : {}
   const permissions = asBooleanMap(membership.permissions)
@@ -163,8 +180,9 @@ export async function listPresenceSessions(organizationId: string, congregationI
     where('congregationId', '==', congregationId),
   ))
 
-  return snapshot.docs.map((item) => {
+  return snapshot.docs.map((item): PresenceSessionRecord => {
     const data = item.data()
+    const status: PresenceSessionRecord['status'] = data.status === 'closed' ? 'closed' : 'open'
     return {
       id: item.id,
       organizationId,
@@ -174,7 +192,7 @@ export async function listPresenceSessions(organizationId: string, congregationI
       closedAt: data.closedAt ? toIso(data.closedAt) : undefined,
       expectedPeopleCount: typeof data.expectedPeopleCount === 'number' ? data.expectedPeopleCount : 0,
       minimumCoveragePercent: typeof data.minimumCoveragePercent === 'number' ? data.minimumCoveragePercent : 90,
-      status: data.status === 'closed' ? 'closed' : 'open',
+      status,
       createdBy: asString(data.createdBy),
       closedBy: asString(data.closedBy) || undefined,
     }
@@ -361,8 +379,4 @@ export function latestChecksByPerson(checks: PresenceCheck[]) {
     if (!current || Date.parse(check.recordedAt) >= Date.parse(current.recordedAt)) latest.set(check.personId, check)
   }
   return latest
-}
-
-export function rawData<T extends DocumentData>(value: T) {
-  return value
 }
