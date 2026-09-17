@@ -279,12 +279,9 @@ export async function recordPresenceCheck(input: {
   personId: string
   actorId: string
   state: PresenceVerificationState
-  source?: PresenceSource
-  correctedFromCheckId?: string
 }) {
   const firestore = requireDb()
   const checkRef = doc(collection(firestore, journeyCollectionPath(input.organizationId, 'presenceChecks')))
-  const source = input.source ?? (input.correctedFromCheckId ? 'retroactive_human_correction' : 'human_check')
   const batch = writeBatch(firestore)
 
   batch.set(checkRef, {
@@ -293,17 +290,16 @@ export async function recordPresenceCheck(input: {
     sessionId: input.sessionId,
     personId: input.personId,
     state: input.state,
-    source,
+    source: 'human_check',
     actorId: input.actorId,
     recordedAt: serverTimestamp(),
-    ...(input.correctedFromCheckId ? { correctedFromCheckId: input.correctedFromCheckId } : {}),
   })
 
   if (input.state !== 'unverified') {
     const factRef = doc(firestore, `${journeyCollectionPath(input.organizationId, 'facts')}/presence-${checkRef.id}`)
     batch.set(factRef, {
       eventId: factRef.id,
-      eventType: input.correctedFromCheckId ? 'PRESENCE_CORRECTED' : 'PRESENCE_CONFIRMED',
+      eventType: 'PRESENCE_CONFIRMED',
       occurredAt: serverTimestamp(),
       recordedAt: serverTimestamp(),
       organizationId: input.organizationId,
@@ -314,7 +310,7 @@ export async function recordPresenceCheck(input: {
       evidenceRef: `presenceCheck:${checkRef.id}`,
       sensitivity: 'confidential',
       version: 1,
-      payload: { checkId: checkRef.id, sessionId: input.sessionId, state: input.state, source },
+      payload: { checkId: checkRef.id, sessionId: input.sessionId, state: input.state, source: 'human_check' },
     })
   }
 
