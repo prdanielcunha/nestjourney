@@ -279,6 +279,7 @@ export async function recordPresenceCheck(input: {
   personId: string
   actorId: string
   state: PresenceVerificationState
+  correctedFromCheckId?: string
 }) {
   const firestore = requireDb()
   const checkRef = doc(collection(firestore, journeyCollectionPath(input.organizationId, 'presenceChecks')))
