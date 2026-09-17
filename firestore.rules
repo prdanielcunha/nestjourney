@@ -219,7 +219,7 @@ service cloud.firestore {
           allow create: if tenantCreate(orgId)
             && canAccessCongregation(orgId, request.resource.data.get('congregationId', ''))
             && (isOrgAdmin(orgId) || hasPermission(orgId, 'canManageGroups'));
-          allow update: if tenantUnanged(orgId) && congregationUnchanged()
+          allow update: if tenantUnchanged(orgId) && congregationUnchanged()
             && canAccessCongregation(orgId, resource.data.get('congregationId', ''))
             && (isOrgAdmin(orgId) || hasPermission(orgId, 'canManageGroups'));
           allow delete: if false;
