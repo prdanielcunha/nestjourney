@@ -68,6 +68,11 @@ service cloud.firestore {
     function isOrgAdmin(orgId) {
       return isSystemAdmin() || role(orgId, ['owner', 'admin', 'pastor', 'data_admin']);
     }
+    function canManagePresence(orgId) {
+      return isSystemAdmin()
+        || role(orgId, ['owner', 'admin', 'pastor', 'coordinator'])
+        || hasPermission(orgId, 'canManagePresence');
+    }
     function assignedToCongregation(orgId, congregationId) {
       return membershipIsActive(orgId) && congregationId is string
         && congregationId in membership(orgId).get('congregationIds', []);
@@ -91,6 +96,68 @@ service cloud.firestore {
         && request.resource.data.get('actorId', '') == request.auth.uid
         && request.resource.data.get('action', '') is string
         && request.resource.data.get('createdAt', null) == request.time;
+    }
+    function validPresenceSessionCreate(orgId) {
+      return tenantCreate(orgId)
+        && request.resource.data.get('congregationId', '') is string
+        && canAccessCongregation(orgId, request.resource.data.get('congregationId', ''))
+        && request.resource.data.get('createdBy', '') == request.auth.uid
+        && request.resource.data.get('openedAt', null) == request.time
+        && request.resource.data.get('status', '') == 'open'
+        && request.resource.data.get('expectedPeopleCount', -1) is number
+        && request.resource.data.get('expectedPeopleCount', -1) >= 0
+        && request.resource.data.get('minimumCoveragePercent', -1) is number
+        && request.resource.data.get('minimumCoveragePercent', -1) >= 0
+        && request.resource.data.get('minimumCoveragePercent', -1) <= 100;
+    }
+    function validPresenceCheckCreate(orgId) {
+      let sessionId = request.resource.data.get('sessionId', '');
+      let congregationId = request.resource.data.get('congregationId', '');
+      let correctedFrom = request.resource.data.get('correctedFromCheckId', '');
+      return tenantCreate(orgId)
+        && sessionId is string
+        && congregationId is string
+        && request.resource.data.get('personId', '') is string
+        && request.resource.data.get('actorId', '') == request.auth.uid
+        && request.resource.data.get('recordedAt', null) == request.time
+        && request.resource.data.get('state', '') in ['present_confirmed', 'absent_confirmed', 'unverified']
+        && request.resource.data.get('source', '') in ['human_check', 'retroactive_human_correction', 'manual_import']
+        && canAccessCongregation(orgId, congregationId)
+        && exists(/databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/presenceSessions/$(sessionId))
+        && get(/databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/presenceSessions/$(sessionId)).data.get('congregationId', '') == congregationId
+        && (correctedFrom == '' || exists(/databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/presenceChecks/$(correctedFrom)));
+    }
+    function validCanonicalFact(orgId) {
+      let eventType = request.resource.data.get('eventType', '');
+      let payload = request.resource.data.get('payload', {});
+      return tenantCreate(orgId)
+        && request.resource.data.get('actorId', '') == request.auth.uid
+        && request.resource.data.get('sourceApp', '') == 'nestjourney'
+        && request.resource.data.get('version', 0) == 1
+        && request.resource.data.get('recordedAt', null) == request.time
+        && request.resource.data.get('occurredAt', null) == request.time
+        && request.resource.data.get('subjectRef', '') is string
+        && request.resource.data.get('scope', '') is string
+        && request.resource.data.get('evidenceRef', '') is string
+        && request.resource.data.get('evidenceRef', '').size() > 0
+        && request.resource.data.get('sensitivity', '') in ['public', 'internal', 'confidential', 'restricted']
+        && eventType in ['VISITOR_REGISTERED', 'PRESENCE_SESSION_OPENED', 'PRESENCE_CONFIRMED', 'PRESENCE_CORRECTED']
+        && (
+          (eventType == 'VISITOR_REGISTERED'
+            && payload.get('personId', '') is string
+            && request.resource.data.get('evidenceRef', '') == 'person:' + payload.get('personId', '')
+            && existsAfter(/databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/people/$(payload.get('personId', ''))))
+          ||
+          (eventType == 'PRESENCE_SESSION_OPENED'
+            && payload.get('sessionId', '') is string
+            && request.resource.data.get('evidenceRef', '') == 'presenceSession:' + payload.get('sessionId', '')
+            && existsAfter(/databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/presenceSessions/$(payload.get('sessionId', ''))))
+          ||
+          (eventType in ['PRESENCE_CONFIRMED', 'PRESENCE_CORRECTED']
+            && payload.get('checkId', '') is string
+            && request.resource.data.get('evidenceRef', '') == 'presenceCheck:' + payload.get('checkId', '')
+            && existsAfter(/databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/presenceChecks/$(payload.get('checkId', ''))))
+        );
     }
 
     match /organizations/{orgId} {
@@ -122,12 +189,37 @@ service cloud.firestore {
             && (isOrgAdmin(orgId) || hasPermission(orgId, 'canManagePeople'));
           allow delete: if false;
         }
+        match /presenceSessions/{sessionId} {
+          allow read: if canManagePresence(orgId)
+            && canAccessCongregation(orgId, resource.data.get('congregationId', ''));
+          allow create: if canManagePresence(orgId) && validPresenceSessionCreate(orgId);
+          allow update: if canManagePresence(orgId)
+            && tenantUnchanged(orgId)
+            && congregationUnchanged()
+            && canAccessCongregation(orgId, resource.data.get('congregationId', ''))
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'closedAt', 'closedBy'])
+            && request.resource.data.get('status', '') == 'closed'
+            && request.resource.data.get('closedAt', null) == request.time
+            && request.resource.data.get('closedBy', '') == request.auth.uid;
+          allow delete: if false;
+        }
+        match /presenceChecks/{checkId} {
+          allow read: if canManagePresence(orgId)
+            && canAccessCongregation(orgId, resource.data.get('congregationId', ''));
+          allow create: if canManagePresence(orgId) && validPresenceCheckCreate(orgId);
+          allow update, delete: if false;
+        }
+        match /facts/{factId} {
+          allow read: if isOrgAdmin(orgId) || canManagePresence(orgId);
+          allow create: if hasMembership(orgId) && validCanonicalFact(orgId);
+          allow update, delete: if false;
+        }
         match /groups/{groupId} {
           allow read: if canAccessCongregation(orgId, resource.data.get('congregationId', ''));
           allow create: if tenantCreate(orgId)
             && canAccessCongregation(orgId, request.resource.data.get('congregationId', ''))
             && (isOrgAdmin(orgId) || hasPermission(orgId, 'canManageGroups'));
-          allow update: if tenantUnchanged(orgId) && congregationUnchanged()
+          allow update: if tenantUnanged(orgId) && congregationUnchanged()
             && canAccessCongregation(orgId, resource.data.get('congregationId', ''))
             && (isOrgAdmin(orgId) || hasPermission(orgId, 'canManageGroups'));
           allow delete: if false;
