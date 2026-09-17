@@ -61,7 +61,7 @@ export default function PresenceAssistPage() {
     setPeople(nextPeople)
     setSessions(nextSessions)
     const session = nextSessions.find((item) => item.status === 'open') ?? nextSessions[0]
-    setChecks(session ? await listPresenceChecks(orgId, session.id) : [])
+    setChecks(session ? await listPresenceChecks(orgId, unitId, session.id) : [])
   }, [])
 
   const bootstrap = useCallback(async () => {
@@ -115,7 +115,7 @@ export default function PresenceAssistPage() {
         state: 'present_confirmed',
         correctedFromCheckId: previous?.id,
       })
-      setChecks(await listPresenceChecks(access.organizationId, displaySession.id))
+      setChecks(await listPresenceChecks(access.organizationId, congregationId, displaySession.id))
     } catch (cause) { console.error(cause); setError(t.error) }
     finally { setBusy(false) }
   }
@@ -152,7 +152,7 @@ export default function PresenceAssistPage() {
       {displaySession?.status === 'open' ? <button className="presence-button" onClick={() => void closeSession()} disabled={busy}>{t.close}</button> : <button className="presence-button primary" onClick={() => setShowSession(true)} disabled={!congregationId || busy}><Plus size={17} /> {t.newSession}</button>}
     </section>
 
-    {error ? <div className="presence-error">{error}</div> : null}
+    {error ? <div className="presence-error" role="alert">{error}</div> : null}
 
     <section className="presence-panel presence-toolbar">
       <label className="presence-field"><span>{t.congregation}</span><select value={congregationId} onChange={(event) => void selectCongregation(event.target.value)} disabled={busy}>{congregations.map((item) => <option value={item.id} key={item.id}>{item.name}{item.city ? ` · ${item.city}` : ''}</option>)}</select></label>
@@ -161,8 +161,8 @@ export default function PresenceAssistPage() {
     </section>
 
     {displaySession ? <section className="presence-panel presence-session-card">
-      <div className="presence-session-head"><div><span className="presence-kicker">{t.session}</span><h2>{new Date(displaySession.openedAt).toLocaleString(locale)}</h2><p>{displaySession.status === 'closed' ? t.closed : displaySession.eventRef}</p></div><span className="presence-badge"><UserCheck size={15} /> {displaySession.status === 'open' ? t.session : t.closed}</span></div>
-      {coverage ? <><div className="coverage-wrap"><span className="coverage-number">{coverage.percent}%</span><div className="coverage-track"><span style={{ width: `${coverage.percent}%` }} /></div><div className="coverage-meta">{coverage.verified} {t.verified}<br />{coverage.unverified} {t.unverified}</div></div><p className="coverage-note">{coverage.meetsMinimum ? t.qualityReady : t.qualityNotReady}</p></> : null}
+      <div className="presence-session-head"><div><span className="presence-kicker">{t.session}</span><h2>{displaySession.eventName ?? new Date(displaySession.openedAt).toLocaleString(locale)}</h2><p>{new Date(displaySession.openedAt).toLocaleString(locale)} · {displaySession.status === 'closed' ? t.closed : displaySession.eventRef}</p></div><span className="presence-badge"><UserCheck size={15} /> {displaySession.status === 'open' ? t.session : t.closed}</span></div>
+      {coverage ? <><div className="coverage-wrap"><span className="coverage-number">{coverage.percent}%</span><div className="coverage-track" aria-label={`${t.coverage}: ${coverage.percent}%`}><span style={{ width: `${coverage.percent}%` }} /></div><div className="coverage-meta">{coverage.verified} {t.verified}<br />{coverage.unverified} {t.unverified}</div></div><p className="coverage-note">{coverage.meetsMinimum ? t.qualityReady : t.qualityNotReady}</p></> : null}
     </section> : <div className="presence-panel presence-empty">{t.noSession}</div>}
 
     <div className="presence-list-head"><h2>{t.people} · {visiblePeople.length}</h2><span className="presence-badge"><ShieldCheck size={14} /> {t.sourceRule}</span></div>
@@ -211,7 +211,7 @@ function SessionModal({ close, create, defaultExpected, locale }: { close: () =>
   const [name, setName] = useState(`${t.todayEvent} · ${new Date().toLocaleDateString(locale)}`)
   const [expected, setExpected] = useState(Math.max(1, defaultExpected))
   const [minimum, setMinimum] = useState(90)
-  return <div className="presence-modal-backdrop" onMouseDown={close}><section className="presence-panel presence-modal" onMouseDown={(event) => event.stopPropagation()}><div className="presence-session-head"><h2>{t.newSession}</h2><button className="presence-button" onClick={close} aria-label={t.cancel}><X size={17} /></button></div><div className="presence-modal-grid"><label className="presence-field"><span>{t.sessionName}</span><input value={name} onChange={(event) => setName(event.target.value)} /></label><label className="presence-field"><span>{t.expected}</span><input type="number" min={1} value={expected} onChange={(event) => setExpected(Number(event.target.value))} /></label><label className="presence-field"><span>{t.minimumCoverage}</span><input type="number" min={0} max={100} value={minimum} onChange={(event) => setMinimum(Number(event.target.value))} /></label></div><div className="presence-modal-actions"><button className="presence-button" onClick={close}>{t.cancel}</button><button className="presence-button primary" disabled={!name.trim() || expected < 1} onClick={() => void create(name, expected, minimum)}>{t.open}</button></div></section></div>
+  return <div className="presence-modal-backdrop" onMouseDown={close}><section className="presence-panel presence-modal" role="dialog" aria-modal="true" aria-labelledby="presence-session-title" onMouseDown={(event) => event.stopPropagation()}><div className="presence-session-head"><h2 id="presence-session-title">{t.newSession}</h2><button className="presence-button" onClick={close} aria-label={t.cancel}><X size={17} /></button></div><div className="presence-modal-grid"><label className="presence-field"><span>{t.sessionName}</span><input value={name} onChange={(event) => setName(event.target.value)} /></label><label className="presence-field"><span>{t.expected}</span><input type="number" min={1} value={expected} onChange={(event) => setExpected(Number(event.target.value))} /></label><label className="presence-field"><span>{t.minimumCoverage}</span><input type="number" min={0} max={100} value={minimum} onChange={(event) => setMinimum(Number(event.target.value))} /></label></div><div className="presence-modal-actions"><button className="presence-button" onClick={close}>{t.cancel}</button><button className="presence-button primary" disabled={!name.trim() || expected < 1} onClick={() => void create(name, expected, minimum)}>{t.open}</button></div></section></div>
 }
 
 function VisitorModal({ close, save, locale }: { close: () => void; save: (name: string, phone: string, consent: boolean) => Promise<void>; locale: AppLocale }) {
@@ -219,5 +219,5 @@ function VisitorModal({ close, save, locale }: { close: () => void; save: (name:
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
   const [consent, setConsent] = useState(false)
-  return <div className="presence-modal-backdrop" onMouseDown={close}><section className="presence-panel presence-modal visitor-form" onMouseDown={(event) => event.stopPropagation()}><div className="presence-session-head"><h2>{t.newVisitor}</h2><button className="presence-button" onClick={close} aria-label={t.cancel}><X size={17} /></button></div><div className="presence-modal-grid"><label className="presence-field"><span>{t.visitorName}</span><input value={name} onChange={(event) => setName(event.target.value)} autoFocus /></label><label className="presence-field"><span>{t.phone}</span><input value={phone} onChange={(event) => setPhone(event.target.value)} disabled={!consent} /></label><label className="presence-check"><input type="checkbox" checked={consent} onChange={(event) => setConsent(event.target.checked)} /><span>{t.consent}</span></label></div><div className="presence-modal-actions"><button className="presence-button" onClick={close}>{t.cancel}</button><button className="presence-button primary" disabled={!name.trim()} onClick={() => void save(name, phone, consent)}>{t.saveVisitor}</button></div></section></div>
+  return <div className="presence-modal-backdrop" onMouseDown={close}><section className="presence-panel presence-modal visitor-form" role="dialog" aria-modal="true" aria-labelledby="presence-visitor-title" onMouseDown={(event) => event.stopPropagation()}><div className="presence-session-head"><h2 id="presence-visitor-title">{t.newVisitor}</h2><button className="presence-button" onClick={close} aria-label={t.cancel}><X size={17} /></button></div><div className="presence-modal-grid"><label className="presence-field"><span>{t.visitorName}</span><input value={name} onChange={(event) => setName(event.target.value)} autoFocus /></label><label className="presence-field"><span>{t.phone}</span><input value={phone} onChange={(event) => setPhone(event.target.value)} disabled={!consent} /></label><label className="presence-check"><input type="checkbox" checked={consent} onChange={(event) => setConsent(event.target.checked)} /><span>{t.consent}</span></label></div><div className="presence-modal-actions"><button className="presence-button" onClick={close}>{t.cancel}</button><button className="presence-button primary" disabled={!name.trim()} onClick={() => void save(name, phone, consent)}>{t.saveVisitor}</button></div></section></div>
 }
