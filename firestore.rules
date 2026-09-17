@@ -116,11 +116,8 @@ service cloud.firestore {
       let sessionId = request.resource.data.get('sessionId', '');
       let congregationId = request.resource.data.get('congregationId', '');
       let personId = request.resource.data.get('personId', '');
-      let source = request.resource.data.get('source', '');
-      let correctedFrom = request.resource.data.get('correctedFromCheckId', '');
       let sessionPath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/presenceSessions/$(sessionId);
       let personPath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/people/$(personId);
-      let correctionPath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/presenceChecks/$(correctedFrom);
       return tenantCreate(orgId)
         && sessionId is string
         && congregationId is string
@@ -128,23 +125,13 @@ service cloud.firestore {
         && request.resource.data.get('actorId', '') == request.auth.uid
         && request.resource.data.get('recordedAt', null) == request.time
         && request.resource.data.get('state', '') in ['present_confirmed', 'absent_confirmed', 'unverified']
-        && source in ['human_check', 'retroactive_human_correction', 'manual_import']
+        && request.resource.data.get('source', '') == 'human_check'
+        && request.resource.data.get('correctedFromCheckId', '') == ''
         && exists(sessionPath)
         && get(sessionPath).data.get('congregationId', '') == congregationId
-        && (get(sessionPath).data.get('status', '') == 'open' || source == 'retroactive_human_correction')
+        && get(sessionPath).data.get('status', '') == 'open'
         && exists(personPath)
-        && get(personPath).data.get('congregationId', '') == congregationId
-        && (
-          correctedFrom == ''
-          || (
-            source == 'retroactive_human_correction'
-            && exists(correctionPath)
-            && get(correctionPath).data.get('organizationId', '') == orgId
-            && get(correctionPath).data.get('congregationId', '') == congregationId
-            && get(correctionPath).data.get('sessionId', '') == sessionId
-            && get(correctionPath).data.get('personId', '') == personId
-          )
-        );
+        && get(personPath).data.get('congregationId', '') == congregationId;
     }
     function validCanonicalFact(orgId) {
       let eventType = request.resource.data.get('eventType', '');
@@ -166,7 +153,7 @@ service cloud.firestore {
         && request.resource.data.get('evidenceRef', '') is string
         && request.resource.data.get('evidenceRef', '').size() > 0
         && request.resource.data.get('sensitivity', '') in ['public', 'internal', 'confidential', 'restricted']
-        && eventType in ['VISITOR_REGISTERED', 'PRESENCE_SESSION_OPENED', 'PRESENCE_CONFIRMED', 'PRESENCE_CORRECTED']
+        && eventType in ['VISITOR_REGISTERED', 'PRESENCE_SESSION_OPENED', 'PRESENCE_CONFIRMED']
         && (
           (eventType == 'VISITOR_REGISTERED'
             && personId is string
@@ -182,15 +169,13 @@ service cloud.firestore {
             && existsAfter(sessionPath)
             && request.resource.data.get('scope', '') == 'congregation:' + getAfter(sessionPath).data.get('congregationId', ''))
           ||
-          (eventType in ['PRESENCE_CONFIRMED', 'PRESENCE_CORRECTED']
+          (eventType == 'PRESENCE_CONFIRMED'
             && checkId is string
             && request.resource.data.get('evidenceRef', '') == 'presenceCheck:' + checkId
             && existsAfter(checkPath)
             && getAfter(checkPath).data.get('state', '') != 'unverified'
             && request.resource.data.get('subjectRef', '') == 'person:' + getAfter(checkPath).data.get('personId', '')
-            && request.resource.data.get('scope', '') == 'congregation:' + getAfter(checkPath).data.get('congregationId', '')
-            && (eventType != 'PRESENCE_CORRECTED' || getAfter(checkPath).data.get('correctedFromCheckId', '') != '')
-          )
+            && request.resource.data.get('scope', '') == 'congregation:' + getAfter(checkPath).data.get('congregationId', ''))
         );
     }
 
@@ -253,7 +238,7 @@ service cloud.firestore {
           allow create: if hasMembership(orgId)
             && (
               (request.resource.data.get('eventType', '') == 'VISITOR_REGISTERED' && canManagePeople(orgId))
-              || (request.resource.data.get('eventType', '') in ['PRESENCE_SESSION_OPENED', 'PRESENCE_CONFIRMED', 'PRESENCE_CORRECTED'] && canManagePresence(orgId))
+              || (request.resource.data.get('eventType', '') in ['PRESENCE_SESSION_OPENED', 'PRESENCE_CONFIRMED'] && canManagePresence(orgId))
             )
             && validCanonicalFact(orgId);
           allow update, delete: if false;
