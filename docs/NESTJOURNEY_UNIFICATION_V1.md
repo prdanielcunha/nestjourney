@@ -1,0 +1,206 @@
+# NestJourney Unified Journey & Care — versão de unificação
+
+Data: 2026-09-17
+Status: decisão de produto e arquitetura para implementação incremental
+
+## 1. Decisão principal
+
+**NestJourney é o produto. Raiz e Mesa é uma implementação ministerial configurável dentro dele.**
+
+Não haverá dois sistemas concorrentes e não haverá recomeço do aplicativo. O que já foi construído para Raiz e Mesa e continua útil passa a compor o Journey & Care Engine do NestJourney.
+
+A regra é:
+
+> preservar o que funciona, separar o que é identidade local do que é capacidade de produto e evoluir por vertical slices auditáveis.
+
+Uma igreja pode continuar chamando sua experiência de **Raiz e Mesa**. Outra pode usar **Café da Família**, **PG**, **Caminho**, **Conexão** ou outros nomes. O motor por trás é NestJourney.
+
+## 2. O que permanece do Raiz e Mesa
+
+| Experiência atual | Papel na versão unificada | Decisão |
+| --- | --- | --- |
+| Implantação em 7 semanas | Playbook de implantação e formação | **Preservar**. Continua sendo um playbook disponível e pode futuramente coexistir com outros playbooks. |
+| Presença + Mesa Aberta | Presence Assist + contexto de hospitalidade | **Evoluir**. A hospitalidade continua; a presença ganha sessão, cobertura, estados verificáveis e auditoria. |
+| Pessoas | People / Journey Profile | **Preservar e evoluir**. Cadastro mínimo, consentimento e próximos passos permanecem. |
+| Cuidado e Conexão | Follow-up + Care Integrity | **Evoluir**. O prazo de 24–48h vira Care Promise configurável e, quando vencido sem resolução, Care Debt. |
+| Casa de Paz | Groups | **Preservar**. Nome é configurável por organização. Líder, anfitrião, aprendiz, capacidade e relatórios mínimos continuam úteis. |
+| Raiz | Discipleship / Journey Track | **Preservar**. Os sete encontros continuam como trilha da implementação Raiz e Mesa, sem virar regra universal para outras igrejas. |
+| Visão pastoral | Journey Lens / Pastoral Lens | **Evoluir**. Sai de painel fixo e passa a mostrar atenção, contexto e fatos conforme responsabilidade e capability. |
+| Governança local | Configuração do domínio Journey | **Reduzir autoridade local**. Nomes, playbooks e preferências permanecem; identidade, membership, RBAC, billing e entitlement continuam autoridade do Hub. |
+| Scripts de contato | Templates aprovados / Connect-ready | **Preservar**. Continuam editáveis e futuramente podem ser executados pelo Connect com autorização. |
+| Auditoria e retenção | Audit + privacy operations | **Preservar e endurecer**. Registros relevantes são append-only e operações sensíveis seguem política de retenção/privacidade. |
+
+## 3. Separação entre produto e identidade ministerial
+
+O software passa a apresentar duas camadas conceituais:
+
+- **Produto:** NestJourney.
+- **Programa/jornada local:** por exemplo, Raiz e Mesa.
+
+Isso resolve o problema de transformar nomenclaturas da OBPC em estrutura fixa do SaaS. O nome do grupo, discipulado, mesa, recepção e cuidado continua configurável.
+
+### Compatibilidade de armazenamento
+
+O namespace Firestore existente `products/raiz_e_mesa` será **preservado durante esta fase**. Renomear a árvore agora criaria migração destrutiva sem ganho funcional.
+
+O código novo usa uma camada de identidade de produto que diferencia:
+
+- `productId = nestjourney` — identidade atual do produto;
+- `storageKey = raiz_e_mesa` — chave legada compatível no armazenamento.
+
+Uma futura migração de namespace só será considerada com dual-read/dual-write ou ferramenta idempotente, recovery point e rollback.
+
+## 4. Modelo unificado de jornada
+
+O NestJourney passa a organizar o domínio em capacidades, não em um funil rígido:
+
+1. **People** — pessoa e dados operacionais mínimos.
+2. **Presence** — fatos de presença confirmados por pessoa autorizada.
+3. **Visitor / Integration** — primeiro contato e próximos passos.
+4. **Care** — necessidades explicitamente registradas, responsáveis, prazos e resolução.
+5. **Groups** — pequenos grupos/células/Casa de Paz.
+6. **Discipleship / Journey Tracks** — Raiz e outras trilhas configuráveis.
+7. **Belonging** — vínculos registrados, nunca diagnóstico de solidão.
+8. **Pulse** — check-ins voluntários e explícitos.
+9. **Safe Voice / Exit** — fases posteriores, com segregação e revisão de privacidade.
+
+A pessoa não é obrigada a passar por todas as etapas em uma ordem fixa. O sistema registra fatos e próximos passos compatíveis com a realidade da igreja e da pessoa.
+
+## 5. Presence: como a versão nova funciona
+
+Cada culto/evento pode abrir uma **Presence Session** com organização, congregação, referência do evento, horário de abertura e quantidade esperada no escopo de checagem.
+
+Cada pessoa fica em um dos estados:
+
+- `present_confirmed` — alguém autorizado confirmou que a pessoa estava presente;
+- `absent_confirmed` — opcional, somente quando existe processo confiável para confirmar ausência;
+- `unverified` — não foi possível verificar.
+
+**Não marcado nunca vira ausente.**
+
+A sessão calcula cobertura a partir do universo esperado. Sinais de ausência só podem usar sessões fechadas e com cobertura mínima configurada. Correções são novos registros append-only, apontando para o registro corrigido.
+
+A experiência antiga de hospitalidade não é descartada. Informações como anfitrião de vínculo, convite/participação na Mesa e oferta de contato continuam pertencendo ao contexto de acolhimento; não devem ser misturadas com o significado factual de presença.
+
+## 6. Visitante e primeiro contato
+
+O cadastro rápido preserva a lógica do Raiz e Mesa:
+
+- nome;
+- congregação;
+- telefone somente quando houver finalidade/consentimento aplicável;
+- autorização de contato;
+- data de primeira visita;
+- responsável/próximo passo quando definido.
+
+Ao registrar visitante novo, o sistema pode emitir `VISITOR_REGISTERED`. Se ele for reconhecido na sessão, também emite a evidência de presença correspondente.
+
+O primeiro contato continua com a cultura de aproximadamente 24h e no máximo 48h no playbook Raiz e Mesa, mas tecnicamente passa a ser representado por **Care Promise** configurável. A plataforma não assume que todas as igrejas usarão exatamente o mesmo SLA.
+
+## 7. Care Promise, Care Debt e resolução
+
+- **Care Request:** necessidade explicitamente registrada por pessoa ou líder autorizado.
+- **Care Promise:** compromisso operacional com prazo, owner e evidência de origem.
+- **Care Debt:** Promise vencida sem resolução registrada.
+- **Resolution:** resultado estruturado, com `evidenceRef`; mensagem enviada não é automaticamente resolução.
+
+O sistema mede primeiro se a organização cumpriu o cuidado que prometeu. Ele não tenta avaliar fé, interesse espiritual, motivação ou estado emocional.
+
+## 8. Fatos canônicos e Intelligence
+
+A versão unificada passa a emitir fatos canônicos com:
+
+- `eventId` idempotente;
+- `eventType`;
+- `occurredAt` e `recordedAt`;
+- `organizationId`;
+- `actorId` quando aplicável;
+- `subjectRef`;
+- `sourceApp = nestjourney`;
+- `scope`;
+- `evidenceRef`;
+- `sensitivity`;
+- `version`;
+- payload mínimo.
+
+Regra permanente: **NO SOURCE → NO CLAIM**.
+
+O Intelligence pode resumir ou sugerir ações sobre fatos autorizados, mas não transforma ausência de dado em diagnóstico.
+
+## 9. RBAC e Lenses
+
+O Hub continua autoridade para identidade, organização, membership, entitlement e RBAC.
+
+O NestJourney aplica capability + scope no domínio. Exemplos:
+
+- voluntário de presença: sessão atual e pessoas necessárias à checagem;
+- integração/cuidado: visitantes e tarefas do escopo permitido;
+- líder de grupo: pessoas e operações do grupo atribuído;
+- discipulador: jornadas atribuídas;
+- pastoral care: Care Requests explicitamente autorizados;
+- pastor/admin: visão ampliada conforme capability, sem acesso automático a todo conteúdo confidencial apenas pelo título do papel.
+
+A experiência futura do Hub usará Lenses. Dentro do NestJourney, as telas continuam especializadas no trabalho de Journey & Care.
+
+## 10. O que não será levado adiante como regra estrutural
+
+Algumas decisões antigas eram corretas para o piloto Raiz e Mesa, mas não devem limitar o produto:
+
+- fluxo único obrigatório `Culto → Mesa → Casa → Raiz` para todas as igrejas;
+- nomes fixos de ministério;
+- papel demonstrativo escolhido manualmente como fonte de autorização;
+- persistência principal em `localStorage`;
+- labels de prazo como fonte de verdade;
+- dashboard pastoral baseado em interpretação subjetiva;
+- qualquer score espiritual ou inferência de afastamento.
+
+Esses itens podem permanecer temporariamente na experiência legada enquanto a substituição equivalente não estiver completa.
+
+## 11. Migração incremental
+
+### Fase atual — compatibilidade + Presence real
+
+- manter UI e fluxos Raiz e Mesa funcionando;
+- manter namespace Firestore legado;
+- restaurar/usar handoff seguro do Hub;
+- adicionar contratos de facts e Care Integrity;
+- persistir Presence Sessions e Presence Checks;
+- emitir facts de Presence/Visitor em batch atômico quando houver evidência;
+- criar Presence Assist mobile-first como experiência nova isolada e reversível.
+
+### Próxima fase — Journey real
+
+- substituir `localStorage` por repositórios Firestore por módulo;
+- criar Care Request/Promise/Debt persistidos;
+- converter follow-up antigo em outcome estruturado;
+- ligar grupos e discipulado ao Journey Profile sem apagar modelos atuais;
+- criar read model `journeyOverview` e `myToday` quando as fontes estiverem confiáveis.
+
+### Depois — Resolve Loop
+
+- Next Best Ministry Action;
+- deep link para ação;
+- Connect prepara/realiza comunicação permitida;
+- outcome confirma resolução;
+- Hub recebe projeções agregadas por Lens.
+
+## 12. Critérios de segurança para substituir uma tela antiga
+
+Uma tela/fluxo legado só pode ser substituído quando a nova versão tiver:
+
+1. paridade das capacidades úteis;
+2. dados reais e tenant isolation;
+3. RBAC positivo e negativo testados;
+4. estados loading/empty/error;
+5. PT-BR/EN/ES;
+6. mobile e desktop validados;
+7. auditoria/evidence refs;
+8. rollback claro;
+9. zero perda de dados;
+10. smoke test do fluxo principal.
+
+Até esse gate, a evolução acontece ao redor da experiência existente, não em seu lugar.
+
+## 13. Definição curta da versão unificada
+
+**NestJourney é o Journey & Care Engine do MillionsNest. Ele transforma o que o Raiz e Mesa já fazia bem — acolher, acompanhar, conectar, discipular e não esquecer pessoas — em um produto multi-igreja, configurável e orientado por fatos verificáveis. A tecnologia registra o cuidado, organiza responsabilidades e ajuda a fechar lacunas; ela não interpreta a espiritualidade das pessoas.**
