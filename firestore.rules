@@ -73,6 +73,9 @@ service cloud.firestore {
         || role(orgId, ['owner', 'admin', 'pastor', 'coordinator'])
         || hasPermission(orgId, 'canManagePresence');
     }
+    function canManagePeople(orgId) {
+      return isOrgAdmin(orgId) || hasPermission(orgId, 'canManagePeople');
+    }
     function assignedToCongregation(orgId, congregationId) {
       return membershipIsActive(orgId) && congregationId is string
         && congregationId in membership(orgId).get('congregationIds', []);
@@ -113,23 +116,47 @@ service cloud.firestore {
     function validPresenceCheckCreate(orgId) {
       let sessionId = request.resource.data.get('sessionId', '');
       let congregationId = request.resource.data.get('congregationId', '');
+      let personId = request.resource.data.get('personId', '');
+      let source = request.resource.data.get('source', '');
       let correctedFrom = request.resource.data.get('correctedFromCheckId', '');
+      let sessionPath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/presenceSessions/$(sessionId);
+      let personPath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/people/$(personId);
+      let correctionPath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/presenceChecks/$(correctedFrom);
       return tenantCreate(orgId)
         && sessionId is string
         && congregationId is string
-        && request.resource.data.get('personId', '') is string
+        && personId is string
         && request.resource.data.get('actorId', '') == request.auth.uid
         && request.resource.data.get('recordedAt', null) == request.time
         && request.resource.data.get('state', '') in ['present_confirmed', 'absent_confirmed', 'unverified']
-        && request.resource.data.get('source', '') in ['human_check', 'retroactive_human_correction', 'manual_import']
+        && source in ['human_check', 'retroactive_human_correction', 'manual_import']
         && canAccessCongregation(orgId, congregationId)
-        && exists(/databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/presenceSessions/$(sessionId))
-        && get(/databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/presenceSessions/$(sessionId)).data.get('congregationId', '') == congregationId
-        && (correctedFrom == '' || exists(/databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/presenceChecks/$(correctedFrom)));
+        && exists(sessionPath)
+        && get(sessionPath).data.get('congregationId', '') == congregationId
+        && (get(sessionPath).data.get('status', '') == 'open' || source == 'retroactive_human_correction')
+        && exists(personPath)
+        && get(personPath).data.get('congregationId', '') == congregationId
+        && (
+          correctedFrom == ''
+          || (
+            source == 'retroactive_human_correction'
+            && exists(correctionPath)
+            && get(correctionPath).data.get('organizationId', '') == orgId
+            && get(correctionPath).data.get('congregationId', '') == congregationId
+            && get(correctionPath).data.get('sessionId', '') == sessionId
+            && get(correctionPath).data.get('personId', '') == personId
+          )
+        );
     }
     function validCanonicalFact(orgId) {
       let eventType = request.resource.data.get('eventType', '');
       let payload = request.resource.data.get('payload', {});
+      let personId = payload.get('personId', '');
+      let sessionId = payload.get('sessionId', '');
+      let checkId = payload.get('checkId', '');
+      let personPath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/people/$(personId);
+      let sessionPath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/presenceSessions/$(sessionId);
+      let checkPath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/presenceChecks/$(checkId);
       return tenantCreate(orgId)
         && request.resource.data.get('actorId', '') == request.auth.uid
         && request.resource.data.get('sourceApp', '') == 'nestjourney'
@@ -144,19 +171,31 @@ service cloud.firestore {
         && eventType in ['VISITOR_REGISTERED', 'PRESENCE_SESSION_OPENED', 'PRESENCE_CONFIRMED', 'PRESENCE_CORRECTED']
         && (
           (eventType == 'VISITOR_REGISTERED'
-            && payload.get('personId', '') is string
-            && request.resource.data.get('evidenceRef', '') == 'person:' + payload.get('personId', '')
-            && existsAfter(/databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/people/$(payload.get('personId', ''))))
+            && canManagePeople(orgId)
+            && personId is string
+            && request.resource.data.get('subjectRef', '') == 'person:' + personId
+            && request.resource.data.get('evidenceRef', '') == 'person:' + personId
+            && existsAfter(personPath)
+            && request.resource.data.get('scope', '') == 'congregation:' + getAfter(personPath).data.get('congregationId', ''))
           ||
           (eventType == 'PRESENCE_SESSION_OPENED'
-            && payload.get('sessionId', '') is string
-            && request.resource.data.get('evidenceRef', '') == 'presenceSession:' + payload.get('sessionId', '')
-            && existsAfter(/databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/presenceSessions/$(payload.get('sessionId', ''))))
+            && canManagePresence(orgId)
+            && sessionId is string
+            && request.resource.data.get('subjectRef', '') == 'presenceSession:' + sessionId
+            && request.resource.data.get('evidenceRef', '') == 'presenceSession:' + sessionId
+            && existsAfter(sessionPath)
+            && request.resource.data.get('scope', '') == 'congregation:' + getAfter(sessionPath).data.get('congregationId', ''))
           ||
           (eventType in ['PRESENCE_CONFIRMED', 'PRESENCE_CORRECTED']
-            && payload.get('checkId', '') is string
-            && request.resource.data.get('evidenceRef', '') == 'presenceCheck:' + payload.get('checkId', '')
-            && existsAfter(/databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/presenceChecks/$(payload.get('checkId', ''))))
+            && canManagePresence(orgId)
+            && checkId is string
+            && request.resource.data.get('evidenceRef', '') == 'presenceCheck:' + checkId
+            && existsAfter(checkPath)
+            && getAfter(checkPath).data.get('state', '') != 'unverified'
+            && request.resource.data.get('subjectRef', '') == 'person:' + getAfter(checkPath).data.get('personId', '')
+            && request.resource.data.get('scope', '') == 'congregation:' + getAfter(checkPath).data.get('congregationId', '')
+            && (eventType != 'PRESENCE_CORRECTED' || getAfter(checkPath).data.get('correctedFromCheckId', '') != '')
+          )
         );
     }
 
@@ -183,10 +222,10 @@ service cloud.firestore {
           allow create: if tenantCreate(orgId)
             && request.resource.data.get('deletedAt', null) == null
             && canAccessCongregation(orgId, request.resource.data.get('congregationId', ''))
-            && (isOrgAdmin(orgId) || hasPermission(orgId, 'canManagePeople'));
+            && canManagePeople(orgId);
           allow update: if tenantUnchanged(orgId) && congregationUnchanged()
             && canAccessCongregation(orgId, resource.data.get('congregationId', ''))
-            && (isOrgAdmin(orgId) || hasPermission(orgId, 'canManagePeople'));
+            && canManagePeople(orgId);
           allow delete: if false;
         }
         match /presenceSessions/{sessionId} {
@@ -194,6 +233,7 @@ service cloud.firestore {
             && canAccessCongregation(orgId, resource.data.get('congregationId', ''));
           allow create: if canManagePresence(orgId) && validPresenceSessionCreate(orgId);
           allow update: if canManagePresence(orgId)
+            && resource.data.get('status', '') == 'open'
             && tenantUnchanged(orgId)
             && congregationUnchanged()
             && canAccessCongregation(orgId, resource.data.get('congregationId', ''))
@@ -210,7 +250,7 @@ service cloud.firestore {
           allow update, delete: if false;
         }
         match /facts/{factId} {
-          allow read: if isOrgAdmin(orgId) || canManagePresence(orgId);
+          allow read: if isOrgAdmin(orgId);
           allow create: if hasMembership(orgId) && validCanonicalFact(orgId);
           allow update, delete: if false;
         }
