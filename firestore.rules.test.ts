@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { assertFails, assertSucceeds, initializeTestEnvironment, type RulesTestEnvironment } from '@firebase/rules-unit-testing'
-import { deleteDoc, doc, getDoc, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore'
+import { deleteDoc, doc, getDoc, serverTimestamp, setDoc, updateDoc, writeBatch } from 'firebase/firestore'
 import { afterAll, beforeAll, beforeEach, describe, it } from 'vitest'
 
 let environment: RulesTestEnvironment
@@ -13,7 +13,7 @@ beforeAll(async () => {
 afterAll(async () => environment.cleanup())
 beforeEach(async () => environment.clearFirestore())
 
-async function seedMembership(uid: string, orgId: string, role: string, congregationIds = ['unit-a']) {
+async function seedMembership(uid: string, orgId: string, role: string, congregationIds = ['unit-a'], permissions: Record<string, boolean> = {}) {
   await environment.withSecurityRulesDisabled(async (context) => {
     const db = context.firestore()
     await setDoc(doc(db, `organizations/${orgId}`), {
@@ -21,7 +21,7 @@ async function seedMembership(uid: string, orgId: string, role: string, congrega
       status: 'active',
       apps: { raiz_e_mesa: { status: 'active', plan: 'pilot' } },
     })
-    await setDoc(doc(db, `organizations/${orgId}/members/${uid}`), { status: 'active', organizationRole: role, congregationIds })
+    await setDoc(doc(db, `organizations/${orgId}/members/${uid}`), { status: 'active', organizationRole: role, congregationIds, permissions })
   })
 }
 
@@ -110,5 +110,86 @@ describe('Firestore tenant and pastoral isolation', () => {
     const ref = doc(db, 'organizations/org-a/products/raiz_e_mesa/audit/event-a')
     await assertSucceeds(setDoc(ref, { organizationId: 'org-a', actorId: 'owner', action: 'person.created', createdAt: serverTimestamp() }))
     await assertFails(updateDoc(ref, { action: 'tampered' }))
+  })
+})
+
+describe('Presence Assist and canonical evidence', () => {
+  it('allows a scoped coordinator to create a session and its evidence fact atomically', async () => {
+    await seedMembership('coord-a', 'org-a', 'coordinator', ['unit-a'])
+    const db = environment.authenticatedContext('coord-a').firestore()
+    const session = doc(db, 'organizations/org-a/products/raiz_e_mesa/presenceSessions/session-a')
+    const fact = doc(db, 'organizations/org-a/products/raiz_e_mesa/facts/fact-session-a')
+    const batch = writeBatch(db)
+    batch.set(session, {
+      organizationId: 'org-a', congregationId: 'unit-a', eventRef: 'event:session-a', eventName: 'Sunday',
+      openedAt: serverTimestamp(), closedAt: null, status: 'open', expectedPeopleCount: 10,
+      minimumCoveragePercent: 90, createdBy: 'coord-a',
+    })
+    batch.set(fact, {
+      eventId: 'fact-session-a', eventType: 'PRESENCE_SESSION_OPENED', occurredAt: serverTimestamp(), recordedAt: serverTimestamp(),
+      organizationId: 'org-a', actorId: 'coord-a', subjectRef: 'presenceSession:session-a', sourceApp: 'nestjourney',
+      scope: 'congregation:unit-a', evidenceRef: 'presenceSession:session-a', sensitivity: 'internal', version: 1,
+      payload: { sessionId: 'session-a' },
+    })
+    await assertSucceeds(batch.commit())
+  })
+
+  it('denies presence management to an unrelated operational role and across assigned scope', async () => {
+    await seedMembership('care-a', 'org-a', 'care', ['unit-a'])
+    await seedMembership('coord-a', 'org-a', 'coordinator', ['unit-a'])
+    const careDb = environment.authenticatedContext('care-a').firestore()
+    const coordDb = environment.authenticatedContext('coord-a').firestore()
+    const base = { organizationId: 'org-a', eventRef: 'event:x', eventName: 'Sunday', openedAt: serverTimestamp(), closedAt: null, status: 'open', expectedPeopleCount: 10, minimumCoveragePercent: 90 }
+    await assertFails(setDoc(doc(careDb, 'organizations/org-a/products/raiz_e_mesa/presenceSessions/session-care'), { ...base, congregationId: 'unit-a', createdBy: 'care-a' }))
+    await assertFails(setDoc(doc(coordDb, 'organizations/org-a/products/raiz_e_mesa/presenceSessions/session-wrong-unit'), { ...base, congregationId: 'unit-b', createdBy: 'coord-a' }))
+  })
+
+  it('keeps checks append-only and only accepts canonical facts backed by the check', async () => {
+    await seedMembership('coord-a', 'org-a', 'coordinator', ['unit-a'])
+    await environment.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), 'organizations/org-a/products/raiz_e_mesa/presenceSessions/session-a'), {
+        organizationId: 'org-a', congregationId: 'unit-a', eventRef: 'event:session-a', openedAt: new Date(),
+        status: 'open', expectedPeopleCount: 10, minimumCoveragePercent: 90, createdBy: 'coord-a',
+      })
+    })
+    const db = environment.authenticatedContext('coord-a').firestore()
+    const check = doc(db, 'organizations/org-a/products/raiz_e_mesa/presenceChecks/check-a')
+    const fact = doc(db, 'organizations/org-a/products/raiz_e_mesa/facts/fact-check-a')
+    const batch = writeBatch(db)
+    batch.set(check, {
+      organizationId: 'org-a', congregationId: 'unit-a', sessionId: 'session-a', personId: 'person-a',
+      state: 'present_confirmed', source: 'human_check', actorId: 'coord-a', recordedAt: serverTimestamp(),
+    })
+    batch.set(fact, {
+      eventId: 'fact-check-a', eventType: 'PRESENCE_CONFIRMED', occurredAt: serverTimestamp(), recordedAt: serverTimestamp(),
+      organizationId: 'org-a', actorId: 'coord-a', subjectRef: 'person:person-a', sourceApp: 'nestjourney',
+      scope: 'congregation:unit-a', evidenceRef: 'presenceCheck:check-a', sensitivity: 'confidential', version: 1,
+      payload: { checkId: 'check-a', sessionId: 'session-a', state: 'present_confirmed', source: 'human_check' },
+    })
+    await assertSucceeds(batch.commit())
+    await assertFails(updateDoc(check, { state: 'absent_confirmed' }))
+
+    await assertFails(setDoc(doc(db, 'organizations/org-a/products/raiz_e_mesa/facts/fake'), {
+      eventId: 'fake', eventType: 'PRESENCE_CONFIRMED', occurredAt: serverTimestamp(), recordedAt: serverTimestamp(),
+      organizationId: 'org-a', actorId: 'coord-a', subjectRef: 'person:missing', sourceApp: 'nestjourney',
+      scope: 'congregation:unit-a', evidenceRef: 'presenceCheck:missing', sensitivity: 'confidential', version: 1,
+      payload: { checkId: 'missing' },
+    }))
+  })
+
+  it('allows a privileged user to register a visitor with a fact that points to the created person', async () => {
+    await seedMembership('owner', 'org-a', 'owner', ['unit-a'])
+    const db = environment.authenticatedContext('owner').firestore()
+    const person = doc(db, 'organizations/org-a/products/raiz_e_mesa/people/person-new')
+    const fact = doc(db, 'organizations/org-a/products/raiz_e_mesa/facts/fact-visitor')
+    const batch = writeBatch(db)
+    batch.set(person, { organizationId: 'org-a', congregationId: 'unit-a', name: 'Visitor', consent: false, deletedAt: null })
+    batch.set(fact, {
+      eventId: 'fact-visitor', eventType: 'VISITOR_REGISTERED', occurredAt: serverTimestamp(), recordedAt: serverTimestamp(),
+      organizationId: 'org-a', actorId: 'owner', subjectRef: 'person:person-new', sourceApp: 'nestjourney',
+      scope: 'congregation:unit-a', evidenceRef: 'person:person-new', sensitivity: 'confidential', version: 1,
+      payload: { personId: 'person-new', consent: false },
+    })
+    await assertSucceeds(batch.commit())
   })
 })
