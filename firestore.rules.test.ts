@@ -181,7 +181,7 @@ describe('Presence Assist and canonical evidence', () => {
     }))
   })
 
-  it('requires corrections to reference the same person, session and congregation', async () => {
+  it('blocks browser retroactive correction after a session closes', async () => {
     await seedMembership('coord-a', 'org-a', 'coordinator', ['unit-a'])
     await environment.withSecurityRulesDisabled(async (context) => {
       const adminDb = context.firestore()
@@ -190,19 +190,14 @@ describe('Presence Assist and canonical evidence', () => {
         status: 'closed', expectedPeopleCount: 10, minimumCoveragePercent: 90, createdBy: 'coord-a',
       })
       await setDoc(doc(adminDb, 'organizations/org-a/products/raiz_e_mesa/people/person-a'), { organizationId: 'org-a', congregationId: 'unit-a', name: 'Person A' })
-      await setDoc(doc(adminDb, 'organizations/org-a/products/raiz_e_mesa/people/person-b'), { organizationId: 'org-a', congregationId: 'unit-a', name: 'Person B' })
       await setDoc(doc(adminDb, 'organizations/org-a/products/raiz_e_mesa/presenceChecks/original'), {
         organizationId: 'org-a', congregationId: 'unit-a', sessionId: 'session-a', personId: 'person-a',
         state: 'absent_confirmed', source: 'human_check', actorId: 'coord-a', recordedAt: new Date(),
       })
     })
     const db = environment.authenticatedContext('coord-a').firestore()
-    await assertSucceeds(setDoc(doc(db, 'organizations/org-a/products/raiz_e_mesa/presenceChecks/correction-a'), {
+    await assertFails(setDoc(doc(db, 'organizations/org-a/products/raiz_e_mesa/presenceChecks/correction-a'), {
       organizationId: 'org-a', congregationId: 'unit-a', sessionId: 'session-a', personId: 'person-a',
-      state: 'present_confirmed', source: 'retroactive_human_correction', actorId: 'coord-a', recordedAt: serverTimestamp(), correctedFromCheckId: 'original',
-    }))
-    await assertFails(setDoc(doc(db, 'organizations/org-a/products/raiz_e_mesa/presenceChecks/correction-b'), {
-      organizationId: 'org-a', congregationId: 'unit-a', sessionId: 'session-a', personId: 'person-b',
       state: 'present_confirmed', source: 'retroactive_human_correction', actorId: 'coord-a', recordedAt: serverTimestamp(), correctedFromCheckId: 'original',
     }))
   })
