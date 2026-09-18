@@ -393,10 +393,13 @@ service cloud.firestore {
         && exists(groupPath)
         && exists(personPath)
         && get(groupPath).data.get('congregationId', '') == request.resource.data.get('congregationId', '')
-        && get(personPath).data.get('congregationId', '') == request.resource.data.get('congregationId', '');
+        && get(personPath).data.get('congregationId', '') == request.resource.data.get('congregationId', '')
+        && get(groupPath).data.get('participants', 0) < get(groupPath).data.get('capacity', 0)
+        && getAfter(groupPath).data.get('participants', 0) == get(groupPath).data.get('participants', 0) + 1;
     }
     function validGroupMembershipUpdate(orgId) {
       let groupId = resource.data.get('groupId', '');
+      let groupPath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/groups/$(groupId);
       let nextStatus = request.resource.data.get('status', '');
       let previousStatus = resource.data.get('status', '');
       return request.resource.data.get('organizationId', '') == orgId
@@ -414,6 +417,8 @@ service cloud.firestore {
             && request.resource.data.get('joinedBy', '') == resource.data.get('joinedBy', '')
             && request.resource.data.get('leftAt', null) == request.time
             && request.resource.data.get('leftBy', '') == request.auth.uid
+            && get(groupPath).data.get('participants', 0) > 0
+            && getAfter(groupPath).data.get('participants', 0) == get(groupPath).data.get('participants', 0) - 1
           )
           ||
           (
@@ -423,6 +428,8 @@ service cloud.firestore {
             && request.resource.data.get('joinedBy', '') == request.auth.uid
             && request.resource.data.get('leftAt', null) == null
             && request.resource.data.get('leftBy', '') == ''
+            && get(groupPath).data.get('participants', 0) < get(groupPath).data.get('capacity', 0)
+            && getAfter(groupPath).data.get('participants', 0) == get(groupPath).data.get('participants', 0) + 1
           )
         );
     }
