@@ -327,3 +327,27 @@ O ciclo de sete encontros continua sendo uma característica do playbook **Raiz 
 My Today passa a levar diretamente para Groups Runtime quando a atenção vem de capacidade e para Discipleship Runtime quando existe próximo passo explícito de discipulado.
 
 Journey Profile e My Today continuam consumidores de fontes; eles não criam fatos subjetivos. Concluir um encontro significa somente que aquele encontro foi registrado como concluído — não que o sistema avaliou maturidade ou transformação espiritual.
+
+
+## 19. Cutover da entrada principal — runtime real
+
+Depois da validação e do primeiro deploy das vertical slices, a entrada principal do NestJourney deixa de abrir automaticamente o shell demonstrativo/local do Raiz e Mesa.
+
+A política de roteamento passa a ser:
+
+- `/` → **Journey Overview**, usando fontes reais e Lens autorizada;
+- `/my-today` → inbox operacional factual;
+- `/presence-assist` → operação real de Presença;
+- `/care-integrity` → operação real de Cuidado;
+- `/journey-profile` → projeção factual por pessoa;
+- `/groups-runtime` → operação real de grupos;
+- `/discipleship-runtime` → operação real de discipulado;
+- `/legacy` → shell anterior do Raiz e Mesa, mantido temporariamente para implantação, governança e rollback.
+
+Nenhum dado legado é apagado por esse cutover. A mudança é somente de **front door**: usuários entram primeiro na experiência sustentada por Firestore e pelas Rules centrais.
+
+### Performance e rollback
+
+As experiências são carregadas por `React.lazy`, evitando que o shell legado inteiro seja incluído no bundle inicial da Journey Overview. Isso reduz o custo da entrada principal e mantém o módulo legado isolado.
+
+O rollback permanece simples: `/legacy` continua disponível, e a regra de resolução de rota está centralizada em `src/routeResolver.ts`, coberta por teste. O produto não depende de apagar ou migrar documentos para alternar a entrada.

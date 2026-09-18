@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { ChevronLeft, HeartHandshake, House, Leaf, ShieldCheck, UserCheck, Users } from 'lucide-react'
+import { HeartHandshake, House, Leaf, ShieldCheck, UserCheck, Users } from 'lucide-react'
 import { auth } from './firebase'
 import { buildJourneyOverview } from './journeyOverview'
 import {
@@ -67,7 +67,7 @@ export default function JourneyOverviewPage() {
 
   const restricted=<><strong>—</strong><small>{t.restricted}</small></>
   return <main className="journey-overview"><div className="overview-shell">
-    <header className="overview-topbar"><div className="overview-brand"><img src="/icon.svg" alt=""/><span><strong>{t.product}</strong><small>Journey & Care Engine</small></span></div><div className="overview-actions"><a href="/"><ChevronLeft size={16}/>{t.back}</a><a href="/my-today">{t.today}</a><select value={locale} onChange={e=>{const next=e.target.value as AppLocale;setLocale(next);persistLocale(next)}}>{(Object.keys(localeLabels) as AppLocale[]).map(id=><option key={id} value={id}>{localeLabels[id]}</option>)}</select></div></header>
+    <header className="overview-topbar"><div className="overview-brand"><img src="/icon.svg" alt=""/><span><strong>{t.product}</strong><small>Journey & Care Engine</small></span></div><div className="overview-actions">{access?.broadJourneyAccess?<a href="/legacy">{t.legacy}</a>:null}<a href="/my-today">{t.today}</a><select value={locale} onChange={e=>{const next=e.target.value as AppLocale;setLocale(next);persistLocale(next)}}>{(Object.keys(localeLabels) as AppLocale[]).map(id=><option key={id} value={id}>{localeLabels[id]}</option>)}</select></div></header>
     <section className="overview-hero"><span className="overview-kicker">Journey / Overview</span><h1>{t.title}</h1><p>{t.subtitle}</p></section>
     {error?<div className="overview-error">{error}</div>:null}
     <section className="overview-panel overview-toolbar"><label><span>{t.congregation}</span><select value={congregationId} disabled={busy} onChange={e=>void selectUnit(e.target.value)}>{congregations.map(x=><option key={x.id} value={x.id}>{x.name}{x.city?` · ${x.city}`:''}</option>)}</select></label></section>
