@@ -10,8 +10,8 @@ import {
   listJourneyCongregations,
   listJourneyGroupEntryRequests,
   listJourneyGroupMemberships,
-  listJourneyGroups,
-  listJourneyPeople,
+  listJourneyGroupsForAccess,
+  listJourneyPeopleForAccess,
   loadJourneyAccess,
   resolveJourneyGroupEntryRequest,
   setJourneyGroupMembership,
@@ -42,9 +42,9 @@ export default function GroupsRuntimePage() {
   const [showNew, setShowNew] = useState(false)
 
   const refresh = useCallback(async (nextAccess: JourneyAccessContext, unitId: string) => {
-    const nextGroups = await listJourneyGroups(nextAccess.organizationId, unitId)
+    const nextGroups = await listJourneyGroupsForAccess(nextAccess, unitId)
     const nextPeople = canCreateJourneyGroupEntryRequest(nextAccess)
-      ? await listJourneyPeople(nextAccess.organizationId, unitId)
+      ? await listJourneyPeopleForAccess(nextAccess, unitId)
       : []
     setGroups(nextGroups)
     setPeople(nextPeople)
