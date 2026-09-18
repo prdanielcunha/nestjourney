@@ -357,6 +357,16 @@ export async function listPresencePeople(organizationId: string, congregationId:
   }).sort((a, b) => a.name.localeCompare(b.name))
 }
 
+export function canBrowseJourneyPeopleDirectory(access: JourneyAccessContext) {
+  if (access.role !== 'group_leader') return true
+  return access.isSystemAdmin
+    || access.isOwner
+    || GROUP_ROSTER_BROAD_ROLES.has(access.role)
+    || access.permissions.canManagePeople === true
+    || access.permissions.canManagePresence === true
+    || access.permissions.canManageCare === true
+}
+
 export async function listJourneyPeople(organizationId: string, congregationId: string): Promise<JourneyPersonRecord[]> {
   const firestore = requireDb()
   const snapshot = await getDocs(query(
@@ -410,6 +420,71 @@ export async function listJourneyGroups(organizationId: string, congregationId: 
       createdBy: asString(data.createdBy) || undefined,
     }
   }).sort((a, b) => a.name.localeCompare(b.name))
+}
+
+export async function listJourneyGroupsForAccess(access: JourneyAccessContext, congregationId: string): Promise<JourneyGroupRecord[]> {
+  if (access.role !== 'group_leader' || access.isSystemAdmin || access.isOwner || GROUP_ROSTER_BROAD_ROLES.has(access.role)) {
+    return listJourneyGroups(access.organizationId, congregationId)
+  }
+
+  const firestore = requireDb()
+  const base = collection(firestore, journeyCollectionPath(access.organizationId, 'groups'))
+  const [ledSnapshot, legacySnapshot] = await Promise.all([
+    getDocs(query(
+      base,
+      where('congregationId', '==', congregationId),
+      where('leaderId', '==', access.userId),
+    )),
+    getDocs(query(
+      base,
+      where('congregationId', '==', congregationId),
+      where('createdBy', '==', access.userId),
+    )),
+  ])
+
+  const byId = new Map<string, JourneyGroupRecord>()
+  for (const item of [...ledSnapshot.docs, ...legacySnapshot.docs]) {
+    const data = item.data()
+    byId.set(item.id, {
+      id: item.id,
+      organizationId: access.organizationId,
+      congregationId,
+      name: asString(data.name) || '—',
+      leader: asString(data.leader || data.leaderName) || undefined,
+      leaderId: asString(data.leaderId) || undefined,
+      host: asString(data.host) || undefined,
+      apprentice: asString(data.apprentice) || undefined,
+      neighborhood: asString(data.neighborhood) || undefined,
+      weekday: asString(data.weekday) || undefined,
+      time: asString(data.time) || undefined,
+      capacity: typeof data.capacity === 'number' ? data.capacity : undefined,
+      participants: typeof data.participants === 'number' ? data.participants : undefined,
+      createdAt: data.createdAt ? toIso(data.createdAt) : undefined,
+      createdBy: asString(data.createdBy) || undefined,
+    })
+  }
+  return [...byId.values()].sort((a, b) => a.name.localeCompare(b.name))
+}
+
+export async function listJourneyPeopleForAccess(access: JourneyAccessContext, congregationId: string): Promise<JourneyPersonRecord[]> {
+  if (canBrowseJourneyPeopleDirectory(access)) {
+    return listJourneyPeople(access.organizationId, congregationId)
+  }
+  if (access.role !== 'group_leader') return []
+
+  const groups = await listJourneyGroupsForAccess(access, congregationId)
+  const membershipSets = await Promise.all(groups.map((group) => listJourneyGroupMemberships(access, group)))
+  const people = new Map<string, JourneyPersonRecord>()
+  for (const membership of membershipSets.flat()) {
+    if (membership.status !== 'active') continue
+    people.set(membership.personId, {
+      id: membership.personId,
+      organizationId: access.organizationId,
+      congregationId,
+      name: membership.personName || '—',
+    })
+  }
+  return [...people.values()].sort((a, b) => a.name.localeCompare(b.name))
 }
 
 export function canManageJourneyGroupRoster(access: JourneyAccessContext, group: JourneyGroupRecord) {
