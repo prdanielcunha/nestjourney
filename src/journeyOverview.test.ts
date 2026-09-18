@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import { buildJourneyOverview } from './journeyOverview'
-import type { CareRequestRecord, JourneyDiscipleshipRecord, JourneyGroupRecord, JourneyPersonRecord, PresenceSessionRecord } from './journeyRepository'
+import { IMPLEMENTATION_PREPARATION_KEYS, implementationWeekKeys } from './implementationPlaybook'
+import type {
+  CareRequestRecord,
+  JourneyDiscipleshipRecord,
+  JourneyGroupRecord,
+  JourneyImplementationCycle,
+  JourneyPersonRecord,
+  PresenceSessionRecord,
+} from './journeyRepository'
 
 describe('Journey Overview factual projection', () => {
   const people: JourneyPersonRecord[] = [{ id: 'p1', organizationId: 'o', congregationId: 'c', name: 'Ana' }]
@@ -10,11 +18,16 @@ describe('Journey Overview factual projection', () => {
   const sessions: PresenceSessionRecord[] = [{ id: 's1', organizationId: 'o', congregationId: 'c', eventRef: 'e', openedAt: '2026-09-03T00:00:00Z', expectedPeopleCount: 10, minimumCoveragePercent: 90, status: 'open', createdBy: 'u' }]
   const groups: JourneyGroupRecord[] = [{ id: 'g1', organizationId: 'o', congregationId: 'c', name: 'Casa', participants: 9, capacity: 10 }]
   const discipleships: JourneyDiscipleshipRecord[] = [{ id: 'd1', organizationId: 'o', congregationId: 'c', personId: 'p1', disciplerId: 'u', meeting: 2, status: 'active' }]
+  const implementationCycles: JourneyImplementationCycle[] = [{
+    id: 'i1', organizationId: 'o', congregationId: 'c', playbookId: 'raiz_e_mesa_2026',
+    status: 'active', completedKeys: [...IMPLEMENTATION_PREPARATION_KEYS, ...implementationWeekKeys(1)],
+    startedAt: '2026-09-01T00:00:00Z', createdBy: 'u',
+  }]
 
   it('projects only available sources', () => {
     const snapshot = buildJourneyOverview({
-      availability: { people: true, care: false, presence: true, groups: true, discipleship: false, implementation: false },
-      people, careRequests, sessions, groups, discipleships,
+      availability: { people: true, care: false, presence: true, groups: true, discipleship: false, implementation: true },
+      people, careRequests, sessions, groups, discipleships, implementationCycles,
       now: new Date('2026-09-04T00:00:00Z'),
     })
     expect(snapshot.people?.count).toBe(1)
@@ -22,6 +35,8 @@ describe('Journey Overview factual projection', () => {
     expect(snapshot.presence?.openSessions).toBe(1)
     expect(snapshot.groups?.nearCapacity).toBe(1)
     expect(snapshot.discipleship).toBeNull()
+    expect(snapshot.implementation?.week).toBe(2)
+    expect(snapshot.implementation?.percent).toBeGreaterThan(0)
   })
 
   it('does not turn a restricted source into a zero metric', () => {
