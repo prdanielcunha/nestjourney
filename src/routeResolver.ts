@@ -7,6 +7,7 @@ export type JourneyRoute =
   | 'groups'
   | 'discipleship'
   | 'implementation'
+  | 'governance'
   | 'legacy'
 
 function normalizePathname(pathname: string) {
@@ -31,6 +32,8 @@ export function resolveJourneyRoute(pathname: string): JourneyRoute {
       return 'discipleship'
     case '/implementation-runtime':
       return 'implementation'
+    case '/governance-runtime':
+      return 'governance'
     case '/legacy':
       return 'legacy'
     case '/journey-overview':
