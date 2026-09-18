@@ -7,8 +7,8 @@ import {
   listCareRequests,
   listJourneyCongregations,
   listJourneyDiscipleships,
-  listJourneyGroups,
-  listJourneyPeople,
+  listJourneyGroupsForAccess,
+  listJourneyPeopleForAccess,
   listPastoralHandoffs,
   listPresenceSessions,
   loadJourneyAccess,
@@ -67,8 +67,8 @@ export default function MyTodayPage() {
 
   const refreshScope = useCallback(async (nextAccess: JourneyAccessContext, unitId: string) => {
     const [nextPeople, nextGroups, nextCare, nextSessions, nextDiscipleships, nextPastoral] = await Promise.all([
-      listJourneyPeople(nextAccess.organizationId, unitId),
-      listJourneyGroups(nextAccess.organizationId, unitId),
+      listJourneyPeopleForAccess(nextAccess, unitId),
+      listJourneyGroupsForAccess(nextAccess, unitId),
       nextAccess.canManageCare || nextAccess.broadJourneyAccess ? listCareRequests(nextAccess.organizationId, unitId) : Promise.resolve([]),
       nextAccess.canManagePresence ? listPresenceSessions(nextAccess.organizationId, unitId) : Promise.resolve([]),
       nextAccess.broadJourneyAccess || nextAccess.canManageDiscipleship ? listJourneyDiscipleships(nextAccess, unitId) : Promise.resolve([]),
