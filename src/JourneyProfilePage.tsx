@@ -3,10 +3,12 @@ import { ChevronLeft, Clock3, HeartHandshake, House, Leaf, Search, ShieldCheck, 
 import { auth } from './firebase'
 import { buildJourneyProfileSnapshot } from './journeyProfile'
 import {
+  canManageJourneyGroupRoster,
   getActiveJourneyOrganizationId,
   listCareRequests,
   listJourneyCongregations,
   listJourneyDiscipleships,
+  listJourneyGroupMemberships,
   listJourneyGroups,
   listJourneyPeople,
   loadJourneyAccess,
@@ -14,6 +16,7 @@ import {
   type JourneyAccessContext,
   type JourneyCongregation,
   type JourneyDiscipleshipRecord,
+  type JourneyGroupMembership,
   type JourneyGroupRecord,
   type JourneyPersonRecord,
 } from './journeyRepository'
@@ -39,6 +42,7 @@ export default function JourneyProfilePage() {
   const [people, setPeople] = useState<JourneyPersonRecord[]>([])
   const [care, setCare] = useState<CareRequestRecord[]>([])
   const [groups, setGroups] = useState<JourneyGroupRecord[]>([])
+  const [memberships, setMemberships] = useState<JourneyGroupMembership[]>([])
   const [discipleships, setDiscipleships] = useState<JourneyDiscipleshipRecord[]>([])
   const requestedPersonId = useMemo(() => new URLSearchParams(window.location.search).get('person') ?? '', [])
   const [selectedId, setSelectedId] = useState(requestedPersonId)
@@ -50,7 +54,7 @@ export default function JourneyProfilePage() {
   const canView = Boolean(access && (access.broadJourneyAccess || access.canManagePeople || access.canManageCare || access.canManageGroups || access.canManageDiscipleship))
   const canReadDiscipleship = Boolean(access && (access.broadJourneyAccess || access.canManageDiscipleship))
   const selected = people.find((person) => person.id === selectedId) ?? people[0]
-  const snapshot = useMemo(() => selected ? buildJourneyProfileSnapshot({ person: selected, careRequests: care, groups, discipleships }) : null, [selected, care, groups, discipleships])
+  const snapshot = useMemo(() => selected ? buildJourneyProfileSnapshot({ person: selected, careRequests: care, groups, memberships, discipleships }) : null, [selected, care, groups, memberships, discipleships])
   const visiblePeople = useMemo(() => {
     const needle = query.trim().toLocaleLowerCase(locale)
     return needle ? people.filter((person) => person.name.toLocaleLowerCase(locale).includes(needle)) : people
@@ -65,12 +69,20 @@ export default function JourneyProfilePage() {
         : Promise.resolve([]),
     ]
     const [nextPeople, nextGroups, nextCare] = await Promise.all(tasks)
-    const nextDiscipleships = nextAccess.broadJourneyAccess || nextAccess.canManageDiscipleship
-      ? await listJourneyDiscipleships(nextAccess, unitId)
-      : []
+    const [nextDiscipleships, membershipSets] = await Promise.all([
+      nextAccess.broadJourneyAccess || nextAccess.canManageDiscipleship
+        ? listJourneyDiscipleships(nextAccess, unitId)
+        : Promise.resolve([]),
+      Promise.all(
+        nextGroups
+          .filter((group) => canManageJourneyGroupRoster(nextAccess, group))
+          .map((group) => listJourneyGroupMemberships(nextAccess, group)),
+      ),
+    ])
     setPeople(nextPeople)
     setGroups(nextGroups)
     setCare(nextCare)
+    setMemberships(membershipSets.flat())
     setDiscipleships(nextDiscipleships)
     setSelectedId((current) => nextPeople.some((person) => person.id === current) ? current : nextPeople.some((person) => person.id === requestedPersonId) ? requestedPersonId : nextPeople[0]?.id ?? '')
   }, [requestedPersonId])
@@ -165,7 +177,7 @@ export default function JourneyProfilePage() {
 
             <article className="journey-panel journey-domain-card">
               <div className="journey-card-title"><span className="journey-icon"><House size={17} /></span><div><h3>{t.groups}</h3><small>{t.groupSourceLabel}</small></div></div>
-              {snapshot.group ? <><h4>{snapshot.group.name}</h4><p>{[snapshot.group.neighborhood, snapshot.group.weekday, snapshot.group.time].filter(Boolean).join(' · ') || '—'}</p><div className="journey-mini-facts"><span>{t.participants}: <b>{snapshot.group.participants ?? '—'}</b></span><span>{t.capacity}: <b>{snapshot.group.capacity ?? '—'}</b></span></div></> : <><p className="journey-muted">{t.noGroup}</p><small className="journey-rule-inline">{t.groupSource}</small></>}
+              {snapshot.groups.length ? <div className="journey-group-links">{snapshot.groups.map((group) => <div key={group.id}><h4>{group.name}</h4><p>{[group.neighborhood, group.weekday, group.time].filter(Boolean).join(' · ') || '—'}</p><div className="journey-mini-facts"><span>{t.participants}: <b>{group.participants ?? '—'}</b></span><span>{t.capacity}: <b>{group.capacity ?? '—'}</b></span></div></div>)}</div> : <><p className="journey-muted">{t.noGroup}</p><small className="journey-rule-inline">{t.groupSource}</small></>}
             </article>
 
             <article className="journey-panel journey-domain-card wide">
