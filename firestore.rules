@@ -172,30 +172,25 @@ service cloud.firestore {
         );
     }
     function validPastoralHandoffCreate(orgId, handoffId) {
-      let congregationId = request.resource.data.get('congregationId', '');
-      let personId = request.resource.data.get('personId', '');
       let sourceCareRequestId = request.resource.data.get('sourceCareRequestId', '');
-      let sourcePath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/careRequests/$(sourceCareRequestId);
+      let source = getAfter(/databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/careRequests/$(sourceCareRequestId)).data;
       return request.resource.data.keys().hasOnly([
           'organizationId', 'congregationId', 'personId', 'sourceCareRequestId',
           'status', 'requestedAt', 'requestedBy', 'resolvedAt', 'resolvedBy'
         ])
-        && tenantCreate(orgId)
-        && congregationId is string
-        && personId is string
+        && request.resource.data.get('organizationId', '') == orgId
         && sourceCareRequestId == handoffId
         && request.resource.data.get('status', '') == 'open'
         && request.resource.data.get('requestedAt', null) == request.time
         && request.resource.data.get('requestedBy', '') == request.auth.uid
         && request.resource.data.get('resolvedAt', null) == null
         && request.resource.data.get('resolvedBy', '') == ''
-        && existsAfter(sourcePath)
-        && getAfter(sourcePath).data.get('organizationId', '') == orgId
-        && getAfter(sourcePath).data.get('congregationId', '') == congregationId
-        && getAfter(sourcePath).data.get('personId', '') == personId
-        && getAfter(sourcePath).data.get('status', '') == 'resolved'
-        && getAfter(sourcePath).data.get('resolutionCode', '') == 'pastoral_handoff'
-        && getAfter(sourcePath).data.get('resolvedBy', '') == request.auth.uid;
+        && source.get('organizationId', '') == orgId
+        && source.get('congregationId', '') == request.resource.data.get('congregationId', '')
+        && source.get('personId', '') == request.resource.data.get('personId', '')
+        && source.get('status', '') == 'resolved'
+        && source.get('resolutionCode', '') == 'pastoral_handoff'
+        && source.get('resolvedBy', '') == request.auth.uid;
     }
     function validPastoralHandoffResolve(orgId) {
       return tenantUnchanged(orgId)
@@ -565,7 +560,6 @@ service cloud.firestore {
           allow read: if canManagePastoral(orgId)
             && canAccessCongregation(orgId, resource.data.get('congregationId', ''));
           allow create: if canManageCare(orgId)
-            && canAccessCongregation(orgId, request.resource.data.get('congregationId', ''))
             && validPastoralHandoffCreate(orgId, handoffId);
           allow update: if canManagePastoral(orgId)
             && canAccessCongregation(orgId, resource.data.get('congregationId', ''))
