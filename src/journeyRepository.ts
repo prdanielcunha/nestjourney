@@ -13,6 +13,8 @@ const CARE_ROLES = new Set(['owner', 'admin', 'pastor', 'care'])
 const GROUP_ROLES = new Set(['owner', 'admin', 'pastor', 'group_leader'])
 const DISCIPLESHIP_ROLES = new Set(['owner', 'admin', 'pastor', 'discipler'])
 const IMPLEMENTATION_ROLES = new Set(['owner', 'admin', 'pastor', 'coordinator'])
+const GOVERNANCE_ROLES = new Set(['owner', 'admin', 'pastor', 'data_admin'])
+const PRIVACY_ROLES = new Set(['owner', 'admin', 'data_admin'])
 
 export interface JourneyAccessContext {
   organizationId: string
@@ -28,6 +30,8 @@ export interface JourneyAccessContext {
   canManageGroups: boolean
   canManageDiscipleship: boolean
   canManageImplementation: boolean
+  canViewGovernance: boolean
+  canManagePrivacy: boolean
   broadJourneyAccess: boolean
 }
 
@@ -155,6 +159,35 @@ export interface CareRequestRecord {
   resolutionNote?: string
 }
 
+export type PrivacyRequestType = 'correction' | 'consent_revocation' | 'deletion_review' | 'retention_review'
+export type PrivacyCorrectionField = 'name' | 'phone' | 'firstVisit'
+
+export interface JourneyPrivacyRequest {
+  id: string
+  organizationId: string
+  congregationId: string
+  personId: string
+  personName?: string
+  requestType: PrivacyRequestType
+  targetField?: PrivacyCorrectionField
+  proposedValue?: string
+  status: 'open'
+  requestedAt: string
+  requestedBy: string
+}
+
+export interface JourneyAuditEvent {
+  id: string
+  organizationId: string
+  congregationId?: string
+  actorId: string
+  action: string
+  targetRef?: string
+  subjectRef?: string
+  requestType?: PrivacyRequestType
+  createdAt: string
+}
+
 function requireDb(): Firestore {
   if (!db) throw new Error('firebase_not_configured')
   return db
@@ -237,6 +270,8 @@ export async function loadJourneyAccess(userId: string, organizationId: string):
     canManageGroups: isSystemAdmin || isOwner || GROUP_ROLES.has(role) || permissions.canManageGroups === true,
     canManageDiscipleship: isSystemAdmin || isOwner || DISCIPLESHIP_ROLES.has(role) || permissions.canManageDiscipleship === true,
     canManageImplementation: isSystemAdmin || isOwner || IMPLEMENTATION_ROLES.has(role) || permissions.canManageImplementation === true,
+    canViewGovernance: isSystemAdmin || isOwner || GOVERNANCE_ROLES.has(role) || permissions.canViewGovernance === true,
+    canManagePrivacy: isSystemAdmin || isOwner || PRIVACY_ROLES.has(role) || permissions.canManagePrivacy === true,
     broadJourneyAccess: isSystemAdmin || isOwner || BROAD_JOURNEY_ROLES.has(role),
   }
 }
@@ -479,6 +514,113 @@ export async function updateJourneyDiscipleship(input: {
     })
   }
   await batch.commit()
+}
+
+export async function listPrivacyRequests(organizationId: string, congregationId: string): Promise<JourneyPrivacyRequest[]> {
+  const firestore = requireDb()
+  const snapshot = await getDocs(query(
+    collection(firestore, journeyCollectionPath(organizationId, 'retentionRequests')),
+    where('congregationId', '==', congregationId),
+  ))
+
+  return snapshot.docs.map((item): JourneyPrivacyRequest => {
+    const data = item.data()
+    const rawType = asString(data.requestType)
+    const requestType: PrivacyRequestType =
+      rawType === 'correction' || rawType === 'consent_revocation' || rawType === 'deletion_review' || rawType === 'retention_review'
+        ? rawType
+        : 'retention_review'
+    const rawField = asString(data.targetField)
+    const targetField: PrivacyCorrectionField | undefined =
+      rawField === 'name' || rawField === 'phone' || rawField === 'firstVisit' ? rawField : undefined
+    return {
+      id: item.id,
+      organizationId,
+      congregationId,
+      personId: asString(data.personId),
+      personName: asString(data.personName) || undefined,
+      requestType,
+      targetField,
+      proposedValue: asString(data.proposedValue) || undefined,
+      status: 'open',
+      requestedAt: toIso(data.requestedAt),
+      requestedBy: asString(data.requestedBy),
+    }
+  }).sort((a, b) => Date.parse(b.requestedAt) - Date.parse(a.requestedAt))
+}
+
+export async function listJourneyAuditEvents(organizationId: string, congregationId: string): Promise<JourneyAuditEvent[]> {
+  const firestore = requireDb()
+  const snapshot = await getDocs(query(
+    collection(firestore, journeyCollectionPath(organizationId, 'audit')),
+    where('congregationId', '==', congregationId),
+  ))
+
+  return snapshot.docs.map((item): JourneyAuditEvent => {
+    const data = item.data()
+    const rawType = asString(data.requestType)
+    const requestType: PrivacyRequestType | undefined =
+      rawType === 'correction' || rawType === 'consent_revocation' || rawType === 'deletion_review' || rawType === 'retention_review'
+        ? rawType
+        : undefined
+    return {
+      id: item.id,
+      organizationId,
+      congregationId: asString(data.congregationId) || undefined,
+      actorId: asString(data.actorId),
+      action: asString(data.action) || 'journey.event',
+      targetRef: asString(data.targetRef) || undefined,
+      subjectRef: asString(data.subjectRef) || undefined,
+      requestType,
+      createdAt: toIso(data.createdAt),
+    }
+  }).sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt)).slice(0, 100)
+}
+
+export async function createPrivacyRequest(input: {
+  organizationId: string
+  congregationId: string
+  actorId: string
+  person: JourneyPersonRecord
+  requestType: PrivacyRequestType
+  targetField?: PrivacyCorrectionField
+  proposedValue?: string
+}) {
+  if (input.person.organizationId !== input.organizationId || input.person.congregationId !== input.congregationId) {
+    throw new Error('privacy_scope_mismatch')
+  }
+  const correction = input.requestType === 'correction'
+  const proposedValue = correction ? String(input.proposedValue ?? '').trim().slice(0, 120) : ''
+  if (correction && (!input.targetField || !proposedValue)) throw new Error('invalid_correction_request')
+
+  const firestore = requireDb()
+  const requestRef = doc(collection(firestore, journeyCollectionPath(input.organizationId, 'retentionRequests')))
+  const auditRef = doc(collection(firestore, journeyCollectionPath(input.organizationId, 'audit')))
+  const batch = writeBatch(firestore)
+  batch.set(requestRef, {
+    organizationId: input.organizationId,
+    congregationId: input.congregationId,
+    personId: input.person.id,
+    personName: input.person.name,
+    requestType: input.requestType,
+    targetField: correction ? input.targetField : '',
+    proposedValue,
+    status: 'open',
+    requestedAt: serverTimestamp(),
+    requestedBy: input.actorId,
+  })
+  batch.set(auditRef, {
+    organizationId: input.organizationId,
+    congregationId: input.congregationId,
+    actorId: input.actorId,
+    action: 'privacy.requested',
+    targetRef: `privacyRequest:${requestRef.id}`,
+    subjectRef: `person:${input.person.id}`,
+    requestType: input.requestType,
+    createdAt: serverTimestamp(),
+  })
+  await batch.commit()
+  return requestRef.id
 }
 
 export async function listImplementationCycles(organizationId: string, congregationId: string): Promise<JourneyImplementationCycle[]> {

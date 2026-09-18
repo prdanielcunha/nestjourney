@@ -372,3 +372,50 @@ O progresso é monotônico nesta V1: cada chave pertence à lista canônica do p
 A capability `canManageImplementation` é concedida por padrão a owner/admin/pastor/coordinator ou por permissão explícita, sempre dentro do escopo de congregação.
 
 Journey Overview expõe a implantação somente para essa Lens. Quando não existe ciclo, o estado é “não iniciado”; isso não é tratado como falha da igreja.
+
+
+## 21. Implementação corrente — Governance Runtime V1
+
+A próxima vertical slice substitui a dependência do shell legado para governança cotidiana e fica disponível em `/governance-runtime`.
+
+Ela é sustentada pelos princípios do Manual Mestre e do blueprint do aplicativo: acesso mínimo necessário, consentimento, correção/revogação/exclusão em fluxo controlado, histórico de alterações, retenção e separação entre operação comum e conteúdo pastoral reservado.
+
+### O que entra nesta V1
+
+- visão do papel e das capabilities efetivas que vieram do MillionsNest Hub;
+- escopo por congregação;
+- fila estruturada de solicitações de `correction`, `consent_revocation`, `deletion_review` e `retention_review`;
+- correção limitada a campos operacionais simples (`name`, `phone`, `firstVisit`);
+- nenhuma caixa de texto livre para histórias íntimas na fila de privacidade;
+- criação atômica de solicitação + evento de auditoria;
+- trilha operacional append-only por unidade;
+- PT-BR, EN e ES;
+- interface mobile-first.
+
+### Papéis e separação de responsabilidades
+
+`canViewGovernance` permite a visão de governança/auditoria para owner, admin, pastor e data_admin, além de permissões explícitas. `canManagePrivacy` fica restrita a owner, admin e data_admin, além de permissões explícitas.
+
+Isso preserva a separação do blueprint: o pastor pode ter visão e encaminhamento sem se tornar automaticamente administrador de solicitações de dados; o administrador de dados cuida de consentimento, correção/exclusão e governança sem ganhar por isso acesso irrestrito a conteúdo pastoral.
+
+Identidade, organização, membership e RBAC continuam canônicos no **MillionsNest Hub**. NestJourney consome o escopo efetivo e não cria um segundo cadastro de usuários/cargos.
+
+### Limite importante da auditoria
+
+A coleção `audit` desta V1 registra eventos de mutação que o produto consegue afirmar de forma append-only. Ela **não é apresentada como uma trilha completa de todos os acessos de leitura**.
+
+Registrar de forma confiável “quem visualizou cada dado sensível” exige uma camada de servidor confiável ou um read proxy/instrumentação equivalente. Registrar isso apenas pelo navegador permitiria omissões e daria uma falsa sensação de conformidade. O produto explicita esse limite na interface.
+
+### Segurança e minimização
+
+Solicitações de privacidade:
+
+- precisam apontar para uma pessoa real da mesma organização e congregação;
+- são criadas apenas por uma Lens de governança de dados;
+- têm tipo canônico e estado inicial `open`;
+- não podem ser atualizadas ou apagadas pelo navegador nesta fase;
+- correções aceitam apenas campo permitido e valor novo limitado;
+- revogação, exclusão e retenção não aceitam narrativa livre;
+- geram um evento de auditoria no mesmo batch.
+
+A execução final de exclusões ou outras mutações destrutivas fica fora do navegador até existir um comando confiável que consiga considerar relacionamentos e políticas de retenção sem deixar referências órfãs.
