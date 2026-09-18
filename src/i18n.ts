@@ -465,3 +465,34 @@ export const journeyOverviewCopy = {
     error: 'No se pudo montar esta visión.',
   },
 } as const
+
+
+export const implementationRuntimeCopy = {
+  'pt-BR': {
+    product:'NestJourney', title:'Implantação guiada', subtitle:'O ciclo de 7 semanas do Raiz e Mesa, agora com progresso real por unidade e prática desde o início.',
+    back:'Visão da Jornada', loading:'Carregando implantação…', noAccessTitle:'Implantação não disponível', noAccess:'Seu perfil não possui capacidade para conduzir a implantação neste escopo.', retry:'Tentar novamente',
+    congregation:'Unidade', startCycle:'Iniciar ciclo de 7 semanas', activeCycle:'Ciclo ativo', completedCycle:'Ciclo concluído', noCycle:'Nenhum ciclo de implantação foi iniciado nesta unidade.',
+    progress:'Progresso registrado', preparation:'Preparação antes da Semana 1', rhythm:'Ritmo fixo de 40–45 minutos', weeks:'Semanas', week:'Semana', facilitator:'Fala sugerida', scriptures:'Textos bíblicos',
+    teaching:'O que ensinar', practice:'Prática da semana', markDone:'Registrar como feito', done:'Registrado', progressive:'Lançamento progressivo', source:'Fonte: Manual de Implantação Raiz e Mesa 2026',
+    sourceNote:'Este roteiro reproduz o Manual de Implantação Raiz e Mesa 2026. Marcar um item registra apenas que aquela etapa foi realizada; não mede saúde ou fidelidade espiritual.',
+    allDone:'As sete semanas foram registradas. O manual orienta seguir em um ciclo de 30/60/90 dias com reuniões curtas e ajustes.', error:'Não foi possível concluir a operação.',
+  },
+  en: {
+    product:'NestJourney', title:'Guided implementation', subtitle:'The Raiz e Mesa 7-week cycle, now with real progress per campus and practice from the start.',
+    back:'Journey Overview', loading:'Loading implementation…', noAccessTitle:'Implementation unavailable', noAccess:'Your profile cannot lead implementation in this scope.', retry:'Try again',
+    congregation:'Campus', startCycle:'Start 7-week cycle', activeCycle:'Active cycle', completedCycle:'Cycle completed', noCycle:'No implementation cycle has been started for this campus.',
+    progress:'Recorded progress', preparation:'Preparation before Week 1', rhythm:'Fixed 40–45 minute rhythm', weeks:'Weeks', week:'Week', facilitator:'Suggested facilitator wording', scriptures:'Biblical texts',
+    teaching:'What to teach', practice:'Weekly practice', markDone:'Record as done', done:'Recorded', progressive:'Progressive rollout', source:'Source: Raiz e Mesa 2026 Implementation Manual',
+    sourceNote:'This path follows the Raiz e Mesa 2026 Implementation Manual. Marking an item only records that the step was carried out; it does not score spiritual health or faithfulness.',
+    allDone:'All seven weeks are recorded. The manual directs the church into a 30/60/90-day cycle with short meetings and adjustments.', error:'The operation could not be completed.',
+  },
+  es: {
+    product:'NestJourney', title:'Implementación guiada', subtitle:'El ciclo de 7 semanas de Raiz e Mesa, ahora con progreso real por sede y práctica desde el comienzo.',
+    back:'Visión de la Jornada', loading:'Cargando implementación…', noAccessTitle:'Implementación no disponible', noAccess:'Tu perfil no puede conducir la implementación en este alcance.', retry:'Intentar de nuevo',
+    congregation:'Sede', startCycle:'Iniciar ciclo de 7 semanas', activeCycle:'Ciclo activo', completedCycle:'Ciclo concluido', noCycle:'No se inició ningún ciclo de implementación en esta sede.',
+    progress:'Progreso registrado', preparation:'Preparación antes de la Semana 1', rhythm:'Ritmo fijo de 40–45 minutos', weeks:'Semanas', week:'Semana', facilitator:'Palabras sugeridas', scriptures:'Textos bíblicos',
+    teaching:'Qué enseñar', practice:'Práctica de la semana', markDone:'Registrar como realizado', done:'Registrado', progressive:'Lanzamiento progresivo', source:'Fuente: Manual de Implementación Raiz e Mesa 2026',
+    sourceNote:'Este recorrido sigue el Manual de Implementación Raiz e Mesa 2026. Marcar un elemento solo registra que la etapa fue realizada; no mide salud ni fidelidad espiritual.',
+    allDone:'Las siete semanas quedaron registradas. El manual orienta entrar en un ciclo de 30/60/90 días con reuniones breves y ajustes.', error:'No se pudo completar la operación.',
+  },
+} as const

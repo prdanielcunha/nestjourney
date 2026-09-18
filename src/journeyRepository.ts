@@ -11,7 +11,7 @@ const BROAD_JOURNEY_ROLES = new Set(['owner', 'admin', 'pastor', 'data_admin'])
 const PRESENCE_ROLES = new Set(['owner', 'admin', 'pastor', 'coordinator'])
 const CARE_ROLES = new Set(['owner', 'admin', 'pastor', 'care'])
 const GROUP_ROLES = new Set(['owner', 'admin', 'pastor', 'group_leader'])
-const DISCIPLESHIP_ROLES = new Set(['owner', 'admin', 'pastor', 'discipler'])
+const DISCIPLESHIP_ROLES = new Set(['owner', 'admin', 'pastor', 'discipler'])\nconst IMPLEMENTATION_ROLES = new Set(['owner', 'admin', 'pastor', 'coordinator'])
 
 export interface JourneyAccessContext {
   organizationId: string
@@ -83,6 +83,21 @@ export interface JourneyDiscipleshipRecord {
   status: 'active' | 'paused' | 'completed'
   nextMeeting?: string
   startedAt?: string
+}
+
+export interface JourneyImplementationCycle {
+  id: string
+  organizationId: string
+  congregationId: string
+  playbookId: 'raiz_e_mesa_2026'
+  status: 'active' | 'completed'
+  completedKeys: string[]
+  startedAt: string
+  createdAt?: string
+  createdBy: string
+  updatedAt?: string
+  updatedBy?: string
+  completedAt?: string
 }
 
 export interface PresenceSessionRecord extends PresenceSession {
@@ -460,6 +475,61 @@ export async function updateJourneyDiscipleship(input: {
       updatedBy: input.actorId,
     })
   }
+  await batch.commit()
+}
+
+export async function listImplementationCycles(organizationId: string, congregationId: string): Promise<JourneyImplementationCycle[]> {
+  const firestore = requireDb()
+  const snapshot = await getDocs(query(
+    collection(firestore, journeyCollectionPath(organizationId, 'implementationCycles')),
+    where('congregationId', '==', congregationId),
+  ))
+  return snapshot.docs.map((item): JourneyImplementationCycle => {
+    const data = item.data()
+    return {
+      id: item.id, organizationId, congregationId, playbookId: 'raiz_e_mesa_2026',
+      status: data.status === 'completed' ? 'completed' : 'active',
+      completedKeys: asStringArray(data.completedKeys),
+      startedAt: toIso(data.startedAt),
+      createdAt: data.createdAt ? toIso(data.createdAt) : undefined,
+      createdBy: asString(data.createdBy),
+      updatedAt: data.updatedAt ? toIso(data.updatedAt) : undefined,
+      updatedBy: asString(data.updatedBy) || undefined,
+      completedAt: data.completedAt ? toIso(data.completedAt) : undefined,
+    }
+  }).sort((a, b) => Date.parse(b.startedAt) - Date.parse(a.startedAt))
+}
+
+export async function createImplementationCycle(input: { organizationId: string; congregationId: string; actorId: string }) {
+  const firestore = requireDb()
+  const cycleRef = doc(firestore, `${journeyCollectionPath(input.organizationId, 'implementationCycles')}/${input.congregationId}-raiz-e-mesa-2026`)
+  const batch = writeBatch(firestore)
+  batch.set(cycleRef, {
+    organizationId: input.organizationId, congregationId: input.congregationId, playbookId: 'raiz_e_mesa_2026',
+    status: 'active', completedKeys: [], startedAt: serverTimestamp(), createdAt: serverTimestamp(), createdBy: input.actorId,
+    updatedAt: serverTimestamp(), updatedBy: input.actorId, completedAt: null,
+  })
+  await batch.commit()
+  return cycleRef.id
+}
+
+export async function completeImplementationStep(input: {
+  organizationId: string
+  cycle: JourneyImplementationCycle
+  actorId: string
+  key: string
+  requiredKeys: string[]
+}) {
+  const firestore = requireDb()
+  const cycleRef = doc(firestore, `${journeyCollectionPath(input.organizationId, 'implementationCycles')}/${input.cycle.id}`)
+  const completedKeys = [...new Set([...input.cycle.completedKeys, input.key])]
+  const isComplete = input.requiredKeys.every((key) => completedKeys.includes(key))
+  const batch = writeBatch(firestore)
+  batch.update(cycleRef, {
+    completedKeys, status: isComplete ? 'completed' : 'active',
+    completedAt: isComplete ? serverTimestamp() : null,
+    updatedAt: serverTimestamp(), updatedBy: input.actorId,
+  })
   await batch.commit()
 }
 
