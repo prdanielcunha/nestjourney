@@ -422,3 +422,46 @@ export const discipleshipRuntimeCopy = {
     error: 'No se pudo completar la operación.',
   },
 } as const
+
+
+export const journeyOverviewCopy = {
+  'pt-BR': {
+    product: 'NestJourney', title: 'Visão da Jornada',
+    subtitle: 'Um resumo operacional do que está registrado hoje — sem transformar ausência de dados em conclusões sobre pessoas.',
+    back: 'Voltar ao NestJourney', today: 'Abrir Meu Hoje', loading: 'Montando visão da jornada…',
+    noAccessTitle: 'Visão não disponível', noAccess: 'Seu perfil atual não possui uma Lens de Journey neste escopo.', retry: 'Tentar novamente',
+    congregation: 'Unidade', people: 'Pessoas', peopleDetail: 'cadastros no escopo atual',
+    careDebt: 'Care Debt', careOpen: 'Care aberto', careUnassigned: 'sem responsável', careDueSoon: 'vence em breve',
+    presence: 'Presença', openSessions: 'sessões abertas', groups: 'Grupos', nearCapacity: 'perto da capacidade',
+    discipleship: 'Discipulado', activeRelations: 'relações ativas', restricted: 'Lens restrita', unavailable: 'Fonte não consultada',
+    peopleAction: 'Journey Profile', careAction: 'Care Integrity', presenceAction: 'Presence Assist', groupsAction: 'Groups Runtime', discipleshipAction: 'Discipleship Runtime',
+    sourceRule: 'Indicadores são projeções de fontes registradas. “Restrito” significa que a Lens não consultou aquela fonte; não significa zero.',
+    error: 'Não foi possível montar esta visão.',
+  },
+  en: {
+    product: 'NestJourney', title: 'Journey Overview',
+    subtitle: 'An operational summary of what is recorded today — without turning missing data into conclusions about people.',
+    back: 'Back to NestJourney', today: 'Open My Today', loading: 'Building journey overview…',
+    noAccessTitle: 'Overview unavailable', noAccess: 'Your current profile does not have a Journey Lens in this scope.', retry: 'Try again',
+    congregation: 'Campus', people: 'People', peopleDetail: 'records in the current scope',
+    careDebt: 'Care Debt', careOpen: 'Open care', careUnassigned: 'unassigned', careDueSoon: 'due soon',
+    presence: 'Presence', openSessions: 'open sessions', groups: 'Groups', nearCapacity: 'near capacity',
+    discipleship: 'Discipleship', activeRelations: 'active relationships', restricted: 'Restricted Lens', unavailable: 'Source not queried',
+    peopleAction: 'Journey Profile', careAction: 'Care Integrity', presenceAction: 'Presence Assist', groupsAction: 'Groups Runtime', discipleshipAction: 'Discipleship Runtime',
+    sourceRule: 'Indicators are projections of recorded sources. “Restricted” means this Lens did not query that source; it does not mean zero.',
+    error: 'This overview could not be built.',
+  },
+  es: {
+    product: 'NestJourney', title: 'Visión de la Jornada',
+    subtitle: 'Un resumen operativo de lo registrado hoy — sin convertir falta de datos en conclusiones sobre personas.',
+    back: 'Volver al NestJourney', today: 'Abrir Mi Hoy', loading: 'Armando visión de la jornada…',
+    noAccessTitle: 'Visión no disponible', noAccess: 'Tu perfil actual no tiene una Lens de Journey en este alcance.', retry: 'Intentar de nuevo',
+    congregation: 'Sede', people: 'Personas', peopleDetail: 'registros en el alcance actual',
+    careDebt: 'Care Debt', careOpen: 'Cuidado abierto', careUnassigned: 'sin responsable', careDueSoon: 'vence pronto',
+    presence: 'Presencia', openSessions: 'sesiones abiertas', groups: 'Grupos', nearCapacity: 'cerca de la capacidad',
+    discipleship: 'Discipulado', activeRelations: 'relaciones activas', restricted: 'Lens restringida', unavailable: 'Fuente no consultada',
+    peopleAction: 'Journey Profile', careAction: 'Care Integrity', presenceAction: 'Presence Assist', groupsAction: 'Groups Runtime', discipleshipAction: 'Discipleship Runtime',
+    sourceRule: 'Los indicadores son proyecciones de fuentes registradas. “Restringido” significa que la Lens no consultó esa fuente; no significa cero.',
+    error: 'No se pudo montar esta visión.',
+  },
+} as const

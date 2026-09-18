@@ -9,6 +9,7 @@ import JourneyProfilePage from './JourneyProfilePage.tsx'
 import MyTodayPage from './MyTodayPage.tsx'
 import GroupsRuntimePage from './GroupsRuntimePage.tsx'
 import DiscipleshipRuntimePage from './DiscipleshipRuntimePage.tsx'
+import JourneyOverviewPage from './JourneyOverviewPage.tsx'
 
 if ('serviceWorker' in navigator && import.meta.env.PROD) {
   window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js'))
@@ -26,7 +27,9 @@ const journeyExperience = window.location.pathname === '/presence-assist'
           ? <GroupsRuntimePage />
           : window.location.pathname === '/discipleship-runtime'
             ? <DiscipleshipRuntimePage />
-            : <App />
+            : window.location.pathname === '/journey-overview'
+              ? <JourneyOverviewPage />
+              : <App />
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
