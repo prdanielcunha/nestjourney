@@ -300,3 +300,55 @@ describe('Care Integrity persistence and scope', () => {
     }))
   })
 })
+
+
+describe('Groups and Discipleship runtime rules', () => {
+  it('allows an assigned group leader to create and update a valid group, but not cross-scope', async () => {
+    await seedMembership('leader-a', 'org-a', 'group_leader', ['unit-a'])
+    const db = environment.authenticatedContext('leader-a').firestore()
+    const ref = doc(db, 'organizations/org-a/products/raiz_e_mesa/groups/group-a')
+    await assertSucceeds(setDoc(ref, {
+      organizationId: 'org-a', congregationId: 'unit-a', name: 'Casa Norte',
+      capacity: 12, participants: 0, createdAt: serverTimestamp(), createdBy: 'leader-a',
+    }))
+    await assertSucceeds(updateDoc(ref, { participants: 7 }))
+    await assertFails(updateDoc(ref, { participants: 13 }))
+    await assertFails(setDoc(doc(db, 'organizations/org-a/products/raiz_e_mesa/groups/group-b'), {
+      organizationId: 'org-a', congregationId: 'unit-b', name: 'Casa Fora',
+      capacity: 12, participants: 0, createdAt: serverTimestamp(), createdBy: 'leader-a',
+    }))
+  })
+
+  it('ordinary member cannot manage groups', async () => {
+    await seedMembership('member-a', 'org-a', 'member', ['unit-a'])
+    const db = environment.authenticatedContext('member-a').firestore()
+    await assertFails(setDoc(doc(db, 'organizations/org-a/products/raiz_e_mesa/groups/member-group'), {
+      organizationId: 'org-a', congregationId: 'unit-a', name: 'No',
+      capacity: 12, participants: 0,
+    }))
+  })
+
+  it('discipler can create and advance only their own relation without changing person or regressing meetings', async () => {
+    await seedMembership('discipler-a', 'org-a', 'discipler', ['unit-a'])
+    await seedPerson()
+    const db = environment.authenticatedContext('discipler-a').firestore()
+    const ref = doc(db, 'organizations/org-a/products/raiz_e_mesa/discipleships/d-a')
+    await assertSucceeds(setDoc(ref, {
+      organizationId: 'org-a', congregationId: 'unit-a', personId: 'person-a', personName: 'Person',
+      disciplerId: 'discipler-a', meeting: 1, status: 'active', nextMeeting: 'Agendar encontro 1',
+    }))
+    await assertSucceeds(updateDoc(ref, { meeting: 2, nextMeeting: 'Agendar encontro 2' }))
+    await assertFails(updateDoc(ref, { personId: 'person-b' }))
+    await assertFails(updateDoc(ref, { meeting: 1 }))
+    await assertFails(updateDoc(ref, { meeting: 7, status: 'completed' }))
+  })
+
+  it('discipler cannot create a relationship assigned to another user', async () => {
+    await seedMembership('discipler-a', 'org-a', 'discipler', ['unit-a'])
+    const db = environment.authenticatedContext('discipler-a').firestore()
+    await assertFails(setDoc(doc(db, 'organizations/org-a/products/raiz_e_mesa/discipleships/d-other'), {
+      organizationId: 'org-a', congregationId: 'unit-a', personId: 'person-a',
+      disciplerId: 'someone-else', meeting: 1, status: 'active',
+    }))
+  })
+})
