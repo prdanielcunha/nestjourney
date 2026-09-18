@@ -9,8 +9,8 @@ import {
   listJourneyCongregations,
   listJourneyDiscipleships,
   listJourneyGroupMemberships,
-  listJourneyGroups,
-  listJourneyPeople,
+  listJourneyGroupsForAccess,
+  listJourneyPeopleForAccess,
   loadJourneyAccess,
   type CareRequestRecord,
   type JourneyAccessContext,
@@ -62,8 +62,8 @@ export default function JourneyProfilePage() {
 
   const refreshScope = useCallback(async (nextAccess: JourneyAccessContext, unitId: string) => {
     const tasks: [Promise<JourneyPersonRecord[]>, Promise<JourneyGroupRecord[]>, Promise<CareRequestRecord[]>] = [
-      listJourneyPeople(nextAccess.organizationId, unitId),
-      listJourneyGroups(nextAccess.organizationId, unitId),
+      listJourneyPeopleForAccess(nextAccess, unitId),
+      listJourneyGroupsForAccess(nextAccess, unitId),
       nextAccess.canManageCare || nextAccess.broadJourneyAccess
         ? listCareRequests(nextAccess.organizationId, unitId)
         : Promise.resolve([]),
