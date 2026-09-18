@@ -95,6 +95,20 @@ export interface JourneyGroupMembership {
   leftBy?: string
 }
 
+export interface JourneyGroupEntryRequest {
+  id: string
+  organizationId: string
+  congregationId: string
+  groupId: string
+  personId: string
+  personName: string
+  status: 'pending' | 'accepted' | 'declined'
+  requestedAt: string
+  requestedBy: string
+  resolvedAt?: string
+  resolvedBy?: string
+}
+
 export interface JourneyDiscipleshipRecord {
   id: string
   organizationId: string
@@ -402,6 +416,10 @@ export function canManageJourneyGroupRoster(access: JourneyAccessContext, group:
   return access.isSystemAdmin || access.isOwner || GROUP_ROSTER_BROAD_ROLES.has(access.role) || group.leaderId === access.userId || group.createdBy === access.userId
 }
 
+export function canCreateJourneyGroupEntryRequest(access: JourneyAccessContext) {
+  return access.isSystemAdmin || access.isOwner || GROUP_ROSTER_BROAD_ROLES.has(access.role)
+}
+
 export async function listJourneyGroupMemberships(access: JourneyAccessContext, group: JourneyGroupRecord): Promise<JourneyGroupMembership[]> {
   if (!canManageJourneyGroupRoster(access, group)) return []
   const firestore = requireDb()
@@ -430,6 +448,147 @@ export async function listJourneyGroupMemberships(access: JourneyAccessContext, 
 
 function groupMembershipId(groupId: string, personId: string) {
   return `${groupId}__${personId}`
+}
+
+export async function listJourneyGroupEntryRequests(access: JourneyAccessContext, group: JourneyGroupRecord): Promise<JourneyGroupEntryRequest[]> {
+  if (!canManageJourneyGroupRoster(access, group)) return []
+  const firestore = requireDb()
+  const snapshot = await getDocs(query(
+    collection(firestore, journeyCollectionPath(access.organizationId, 'groupEntryRequests')),
+    where('groupId', '==', group.id),
+  ))
+  return snapshot.docs.map((item): JourneyGroupEntryRequest => {
+    const data = item.data()
+    const rawStatus = asString(data.status)
+    const status: JourneyGroupEntryRequest['status'] = rawStatus === 'accepted' ? 'accepted' : rawStatus === 'declined' ? 'declined' : 'pending'
+    return {
+      id: item.id,
+      organizationId: access.organizationId,
+      congregationId: asString(data.congregationId),
+      groupId: asString(data.groupId),
+      personId: asString(data.personId),
+      personName: asString(data.personName) || '—',
+      status,
+      requestedAt: toIso(data.requestedAt),
+      requestedBy: asString(data.requestedBy),
+      resolvedAt: data.resolvedAt ? toIso(data.resolvedAt) : undefined,
+      resolvedBy: asString(data.resolvedBy) || undefined,
+    }
+  }).filter((item) => item.congregationId === group.congregationId)
+    .sort((a, b) => {
+      const weight = (status: JourneyGroupEntryRequest['status']) => status === 'pending' ? 0 : status === 'accepted' ? 1 : 2
+      return weight(a.status) - weight(b.status) || Date.parse(b.requestedAt) - Date.parse(a.requestedAt)
+    })
+}
+
+export async function createJourneyGroupEntryRequest(input: {
+  access: JourneyAccessContext
+  group: JourneyGroupRecord
+  person: JourneyPersonRecord
+}) {
+  if (!canCreateJourneyGroupEntryRequest(input.access)) throw new Error('group_entry_request_forbidden')
+  if (!canManageJourneyGroupRoster(input.access, input.group)) throw new Error('group_entry_request_scope_forbidden')
+  if (input.person.congregationId !== input.group.congregationId) throw new Error('group_entry_request_scope_mismatch')
+
+  const firestore = requireDb()
+  const membershipRef = doc(firestore, `${journeyCollectionPath(input.access.organizationId, 'groupMemberships')}/${groupMembershipId(input.group.id, input.person.id)}`)
+  const [membershipSnapshot, requestsSnapshot] = await Promise.all([
+    getDoc(membershipRef),
+    getDocs(query(
+      collection(firestore, journeyCollectionPath(input.access.organizationId, 'groupEntryRequests')),
+      where('groupId', '==', input.group.id),
+    )),
+  ])
+  if (membershipSnapshot.exists() && asString(membershipSnapshot.data().status) === 'active') throw new Error('group_entry_already_member')
+  const alreadyPending = requestsSnapshot.docs.some((item) => {
+    const data = item.data()
+    return asString(data.personId) === input.person.id && asString(data.status) === 'pending'
+  })
+  if (alreadyPending) throw new Error('group_entry_request_exists')
+
+  const requestRef = doc(collection(firestore, journeyCollectionPath(input.access.organizationId, 'groupEntryRequests')))
+  const batch = writeBatch(firestore)
+  batch.set(requestRef, {
+    organizationId: input.access.organizationId,
+    congregationId: input.group.congregationId,
+    groupId: input.group.id,
+    personId: input.person.id,
+    personName: input.person.name,
+    status: 'pending',
+    requestedAt: serverTimestamp(),
+    requestedBy: input.access.userId,
+    resolvedAt: null,
+    resolvedBy: '',
+  })
+  await batch.commit()
+  return requestRef.id
+}
+
+export async function resolveJourneyGroupEntryRequest(input: {
+  access: JourneyAccessContext
+  group: JourneyGroupRecord
+  request: JourneyGroupEntryRequest
+  decision: 'accepted' | 'declined'
+}) {
+  if (!canManageJourneyGroupRoster(input.access, input.group)) throw new Error('group_entry_resolution_forbidden')
+  if (input.request.groupId !== input.group.id || input.request.congregationId !== input.group.congregationId) throw new Error('group_entry_resolution_scope_mismatch')
+
+  const firestore = requireDb()
+  const requestRef = doc(firestore, `${journeyCollectionPath(input.access.organizationId, 'groupEntryRequests')}/${input.request.id}`)
+  const groupRef = doc(firestore, `${journeyCollectionPath(input.access.organizationId, 'groups')}/${input.group.id}`)
+  const membershipRef = doc(firestore, `${journeyCollectionPath(input.access.organizationId, 'groupMemberships')}/${groupMembershipId(input.group.id, input.request.personId)}`)
+
+  await runTransaction(firestore, async (transaction) => {
+    const [requestSnapshot, groupSnapshot, membershipSnapshot] = await Promise.all([
+      transaction.get(requestRef),
+      transaction.get(groupRef),
+      transaction.get(membershipRef),
+    ])
+    if (!requestSnapshot.exists()) throw new Error('group_entry_request_not_found')
+    if (!groupSnapshot.exists()) throw new Error('group_not_found')
+    if (asString(requestSnapshot.data().status) !== 'pending') return
+
+    if (input.decision === 'declined') {
+      transaction.update(requestRef, {
+        status: 'declined',
+        resolvedAt: serverTimestamp(),
+        resolvedBy: input.access.userId,
+      })
+      return
+    }
+
+    const groupData = groupSnapshot.data()
+    const currentCount = Math.max(0, Number(groupData.participants ?? 0))
+    const capacity = Math.max(1, Number(groupData.capacity ?? 12))
+    const currentMembershipStatus = membershipSnapshot.exists() ? asString(membershipSnapshot.data().status) : ''
+
+    if (currentMembershipStatus !== 'active') {
+      if (currentCount >= capacity) throw new Error('group_capacity_reached')
+      transaction.set(membershipRef, {
+        organizationId: input.access.organizationId,
+        congregationId: input.group.congregationId,
+        groupId: input.group.id,
+        personId: input.request.personId,
+        personName: input.request.personName,
+        status: 'active',
+        joinedAt: serverTimestamp(),
+        joinedBy: input.access.userId,
+        leftAt: null,
+        leftBy: '',
+      })
+      transaction.update(groupRef, {
+        participants: currentCount + 1,
+        updatedAt: serverTimestamp(),
+        updatedBy: input.access.userId,
+      })
+    }
+
+    transaction.update(requestRef, {
+      status: 'accepted',
+      resolvedAt: serverTimestamp(),
+      resolvedBy: input.access.userId,
+    })
+  })
 }
 
 export async function setJourneyGroupMembership(input: {

@@ -489,7 +489,7 @@ Owner, admin e pastor podem administrar os rosters dentro do escopo de congrega�
 
 Um líder de outra Casa na mesma congregação não recebe a lista de participantes.
 
-A lista é apresentada em uma interface mobile-first de **Gerenciar pessoas**, com busca, participantes vinculados e pessoas disponíveis.
+A lista é apresentada em uma interface mobile-first de **Gerenciar pessoas**. Owner/admin/pastor podem consultar candidatos operacionais; o líder comum da Casa não navega a lista geral da congregação e trabalha somente com seus participantes e pedidos encaminhados para a Casa.
 
 ### Contagem e atomicidade
 
@@ -508,3 +508,45 @@ O Journey Profile prioriza associações ativas de `groupMemberships`.
 O antigo `person.groupId` continua apenas como fallback de compatibilidade quando ainda não existe nenhuma associação explícita. O sistema nunca busca um grupo por nome, proximidade, frequência ou outro sinal indireto.
 
 Essa estratégia permite migrar o legado gradualmente sem fabricar participantes que não foram identificados.
+
+
+## 24. Implementação corrente — Casa Entry Request Runtime V1
+
+O blueprint do aplicativo inclui explicitamente **“pedido de entrada”** no MVP de Casas de Paz. Ele não define um formulário detalhado nem exige justificativa narrativa. Por isso, esta implementação adota a forma mínima necessária para tornar esse próximo passo operacional e auditável sem inventar conteúdo pastoral.
+
+### O que é fonte e o que é decisão de produto
+
+**Fonte:** Casas de Paz possuem pedido de entrada; o MVP é interno para líderes autorizados; acesso deve seguir o mínimo necessário; o líder da Casa enxerga somente o que precisa; o produto deve evitar notas subjetivas e prontuários íntimos.
+
+**Decisão de implementação desta V1:** representar o pedido como um registro estruturado com estado `pending | accepted | declined`, pessoa, Casa, congregação, ator e timestamps. Essa estrutura é uma escolha técnica para operacionalizar o requisito sem adicionar narrativa que os materiais não pedem.
+
+### Fluxo
+
+A coleção `groupEntryRequests` registra somente:
+
+- organização e congregação;
+- `groupId` e `personId`;
+- nome operacional da pessoa para a Lens do líder da Casa;
+- estado `pending`, `accepted` ou `declined`;
+- quem encaminhou e quando;
+- quem resolveu e quando.
+
+Não existe campo de “motivo”, “perfil”, “nível espiritual”, observação livre ou justificativa da recusa.
+
+Owner/admin/pastor podem encaminhar uma pessoa já cadastrada para uma Casa dentro do mesmo escopo. Um `group_leader` comum não recebe a lista geral de candidatos da congregação; ele vê os participantes já vinculados e os pedidos que foram roteados explicitamente para a sua Casa.
+
+### Aceite e vínculo
+
+Aceitar um pedido não é apenas mudar um status visual.
+
+O repositório resolve o pedido em transação junto com o vínculo `groupMemberships` e a projeção numérica `groups.participants`. A capacidade registrada é verificada antes da entrada.
+
+As Rules também exigem que um pedido marcado como `accepted` termine o mesmo write com uma associação ativa pessoa → Casa compatível com organização, congregação, grupo e pessoa. Isso evita a afirmação “aceito” sem a fonte operacional correspondente.
+
+### Recusa
+
+Recusar encerra o pedido em `declined` sem armazenar motivo.
+
+A ausência de justificativa é intencional: o blueprint pede pedido de entrada, não um prontuário de avaliação da pessoa. Se alguma situação exigir cuidado pastoral, ela deve usar a Lens pastoral apropriada em vez de contaminar o fluxo de Casa com narrativa sensível.
+
+Pedidos resolvidos não são apagados pelo navegador e não voltam para `pending`. Um novo encaminhamento futuro nasce como um novo registro, preservando o evento anterior.
