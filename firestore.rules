@@ -705,8 +705,7 @@ service cloud.firestore {
             && (
               (request.resource.data.get('eventType', '') == 'VISITOR_REGISTERED' && canManagePeople(orgId))
               || (request.resource.data.get('eventType', '') in ['PRESENCE_SESSION_OPENED', 'PRESENCE_CONFIRMED'] && canManagePresence(orgId))
-              || (request.resource.data.get('eventType', '') == 'CARE_REQUESTED' && (canManageCare(orgId) || canManagePeople(orgId)))
-              || (request.resource.data.get('eventType', '') in ['CARE_ASSIGNED', 'CARE_RESOLVED'] && canManageCare(orgId))
+              || request.resource.data.get('eventType', '') in ['CARE_REQUESTED', 'CARE_ASSIGNED', 'CARE_RESOLVED']
             )
             && validCanonicalFact(orgId, factId);
           allow update, delete: if false;
