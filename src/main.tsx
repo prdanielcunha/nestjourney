@@ -1,40 +1,58 @@
-import { StrictMode } from 'react'
+import { StrictMode, Suspense, lazy } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
-import App from './App.tsx'
 import { EcosystemSessionGate } from './EcosystemSessionGate.tsx'
-import PresenceAssistPage from './PresenceAssistPage.tsx'
-import CareIntegrityPage from './CareIntegrityPage.tsx'
-import JourneyProfilePage from './JourneyProfilePage.tsx'
-import MyTodayPage from './MyTodayPage.tsx'
-import GroupsRuntimePage from './GroupsRuntimePage.tsx'
-import DiscipleshipRuntimePage from './DiscipleshipRuntimePage.tsx'
-import JourneyOverviewPage from './JourneyOverviewPage.tsx'
+import { resolveJourneyRoute } from './routeResolver'
+
+const LegacyRaizEMesa = lazy(() => import('./App.tsx'))
+const PresenceAssistPage = lazy(() => import('./PresenceAssistPage.tsx'))
+const CareIntegrityPage = lazy(() => import('./CareIntegrityPage.tsx'))
+const JourneyProfilePage = lazy(() => import('./JourneyProfilePage.tsx'))
+const MyTodayPage = lazy(() => import('./MyTodayPage.tsx'))
+const GroupsRuntimePage = lazy(() => import('./GroupsRuntimePage.tsx'))
+const DiscipleshipRuntimePage = lazy(() => import('./DiscipleshipRuntimePage.tsx'))
+const JourneyOverviewPage = lazy(() => import('./JourneyOverviewPage.tsx'))
 
 if ('serviceWorker' in navigator && import.meta.env.PROD) {
   window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js'))
 }
 
-const journeyExperience = window.location.pathname === '/presence-assist'
-  ? <PresenceAssistPage />
-  : window.location.pathname === '/care-integrity'
-    ? <CareIntegrityPage />
-    : window.location.pathname === '/journey-profile'
-      ? <JourneyProfilePage />
-      : window.location.pathname === '/my-today'
-        ? <MyTodayPage />
-        : window.location.pathname === '/groups-runtime'
-          ? <GroupsRuntimePage />
-          : window.location.pathname === '/discipleship-runtime'
-            ? <DiscipleshipRuntimePage />
-            : window.location.pathname === '/journey-overview'
-              ? <JourneyOverviewPage />
-              : <App />
+function JourneyRoute() {
+  switch (resolveJourneyRoute(window.location.pathname)) {
+    case 'presence':
+      return <PresenceAssistPage />
+    case 'care':
+      return <CareIntegrityPage />
+    case 'profile':
+      return <JourneyProfilePage />
+    case 'today':
+      return <MyTodayPage />
+    case 'groups':
+      return <GroupsRuntimePage />
+    case 'discipleship':
+      return <DiscipleshipRuntimePage />
+    case 'legacy':
+      return <LegacyRaizEMesa />
+    case 'overview':
+    default:
+      return <JourneyOverviewPage />
+  }
+}
+
+function RouteFallback() {
+  return <main className="journey-route-loading" aria-live="polite">
+    <img src="/icon.svg" alt="" />
+    <strong>NestJourney</strong>
+    <span>Journey & Care Engine</span>
+  </main>
+}
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <EcosystemSessionGate>
-      {journeyExperience}
+      <Suspense fallback={<RouteFallback />}>
+        <JourneyRoute />
+      </Suspense>
     </EcosystemSessionGate>
   </StrictMode>,
 )
