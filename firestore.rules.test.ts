@@ -239,39 +239,115 @@ describe('Care Integrity persistence and scope', () => {
     })
   }
 
-  it('lets a care worker create an assigned promise with facts and resolve only with an outcome', async () => {
+  function careFact(
+    factId: string,
+    eventType: 'CARE_REQUESTED' | 'CARE_ASSIGNED' | 'CARE_RESOLVED',
+    uid: string,
+    payload: Record<string, string>,
+    congregationId = 'unit-a',
+  ) {
+    return {
+      eventId: factId,
+      eventType,
+      occurredAt: serverTimestamp(),
+      recordedAt: serverTimestamp(),
+      organizationId: 'org-a',
+      actorId: uid,
+      subjectRef: `person:${payload.personId}`,
+      sourceApp: 'nestjourney',
+      scope: `congregation:${congregationId}`,
+      evidenceRef: `careRequest:${payload.careRequestId}`,
+      sensitivity: 'confidential',
+      version: 1,
+      payload,
+    }
+  }
+
+  it('accepts evidence-backed canonical requested/assigned/resolved facts with care writes', async () => {
     await seedMembership('care-a', 'org-a', 'care', ['unit-a'])
     await seedPerson()
     const db = environment.authenticatedContext('care-a').firestore()
+
     const requestRef = doc(db, 'organizations/org-a/products/raiz_e_mesa/careRequests/care-a')
-    await assertSucceeds(setDoc(requestRef, {
+    const requestedFactRef = doc(db, 'organizations/org-a/products/raiz_e_mesa/facts/care-requested-care-a')
+    const assignedFactRef = doc(db, 'organizations/org-a/products/raiz_e_mesa/facts/care-assigned-care-a')
+    const create = writeBatch(db)
+    create.set(requestRef, {
       organizationId: 'org-a', congregationId: 'unit-a', personId: 'person-a',
       careType: 'first_contact', source: 'manual', summary: 'Primeiro contato autorizado',
       status: 'open', requestedAt: serverTimestamp(), requestedBy: 'care-a', promiseHours: 48,
       dueAt: Timestamp.fromMillis(Date.now() + 48 * 60 * 60 * 1000), ownerRef: 'care-a',
       assignedAt: serverTimestamp(), assignedBy: 'care-a', resolvedAt: null, resolvedBy: '', resolutionCode: '', resolutionNote: '',
+    })
+    create.set(requestedFactRef, careFact('care-requested-care-a', 'CARE_REQUESTED', 'care-a', {
+      careRequestId: 'care-a', personId: 'person-a', careType: 'first_contact', source: 'manual',
     }))
-    await assertFails(updateDoc(requestRef, { dueAt: Timestamp.fromMillis(Date.now() + 72 * 60 * 60 * 1000) }))
+    create.set(assignedFactRef, careFact('care-assigned-care-a', 'CARE_ASSIGNED', 'care-a', {
+      careRequestId: 'care-a', personId: 'person-a', careType: 'first_contact', ownerRef: 'care-a',
+    }))
+    await assertSucceeds(create.commit())
 
-    await assertSucceeds(updateDoc(requestRef, {
+    await assertFails(updateDoc(requestRef, { dueAt: Timestamp.fromMillis(Date.now() + 72 * 60 * 60 * 1000) }))
+    const resolve = writeBatch(db)
+    resolve.update(requestRef, {
       status: 'resolved', resolvedAt: serverTimestamp(), resolvedBy: 'care-a',
       resolutionCode: 'contact_completed', resolutionNote: 'Contato concluído.',
-    }))
+    })
+    resolve.set(
+      doc(db, 'organizations/org-a/products/raiz_e_mesa/facts/care-resolved-care-a'),
+      careFact('care-resolved-care-a', 'CARE_RESOLVED', 'care-a', {
+        careRequestId: 'care-a', personId: 'person-a', careType: 'first_contact', resolutionCode: 'contact_completed',
+      }),
+    )
+    await assertSucceeds(resolve.commit())
   })
 
-  it('allows visitor registration to open an unassigned first-contact promise, but not to claim it without care capability', async () => {
+  it('allows visitor registration to open an unassigned first-contact promise with source evidence, but not to claim it without care capability', async () => {
     await seedMembership('coord-a', 'org-a', 'coordinator', ['unit-a'], { canManagePeople: true })
     await seedPerson()
     const db = environment.authenticatedContext('coord-a').firestore()
     const requestRef = doc(db, 'organizations/org-a/products/raiz_e_mesa/careRequests/visitor-care')
-    await assertSucceeds(setDoc(requestRef, {
+    const create = writeBatch(db)
+    create.set(requestRef, {
       organizationId: 'org-a', congregationId: 'unit-a', personId: 'person-a',
       careType: 'first_contact', source: 'visitor_registration', summary: '',
       status: 'open', requestedAt: serverTimestamp(), requestedBy: 'coord-a', promiseHours: 48,
       dueAt: Timestamp.fromMillis(Date.now() + 48 * 60 * 60 * 1000), ownerRef: '',
       assignedAt: null, assignedBy: '', resolvedAt: null, resolvedBy: '', resolutionCode: '', resolutionNote: '',
-    }))
+    })
+    create.set(
+      doc(db, 'organizations/org-a/products/raiz_e_mesa/facts/care-requested-visitor-care'),
+      careFact('care-requested-visitor-care', 'CARE_REQUESTED', 'coord-a', {
+        careRequestId: 'visitor-care', personId: 'person-a', careType: 'first_contact', source: 'visitor_registration',
+      }),
+    )
+    await assertSucceeds(create.commit())
     await assertFails(updateDoc(requestRef, { ownerRef: 'coord-a', assignedAt: serverTimestamp(), assignedBy: 'coord-a' }))
+  })
+
+  it('lets a scoped care worker claim an unassigned request and persist its assignment fact atomically', async () => {
+    await seedMembership('care-claim', 'org-a', 'care', ['unit-a'])
+    await seedPerson()
+    await environment.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), 'organizations/org-a/products/raiz_e_mesa/careRequests/claim-care'), {
+        organizationId: 'org-a', congregationId: 'unit-a', personId: 'person-a',
+        careType: 'prayer', source: 'visitor_registration', summary: '', status: 'open',
+        requestedAt: new Date(), requestedBy: 'source-user', promiseHours: 48,
+        dueAt: new Date(Date.now() + 48 * 60 * 60 * 1000), ownerRef: '',
+        assignedAt: null, assignedBy: '', resolvedAt: null, resolvedBy: '', resolutionCode: '', resolutionNote: '',
+      })
+    })
+    const db = environment.authenticatedContext('care-claim').firestore()
+    const requestRef = doc(db, 'organizations/org-a/products/raiz_e_mesa/careRequests/claim-care')
+    const claim = writeBatch(db)
+    claim.update(requestRef, { ownerRef: 'care-claim', assignedAt: serverTimestamp(), assignedBy: 'care-claim' })
+    claim.set(
+      doc(db, 'organizations/org-a/products/raiz_e_mesa/facts/care-assigned-claim-care'),
+      careFact('care-assigned-claim-care', 'CARE_ASSIGNED', 'care-claim', {
+        careRequestId: 'claim-care', personId: 'person-a', careType: 'prayer', ownerRef: 'care-claim',
+      }),
+    )
+    await assertSucceeds(claim.commit())
   })
 
   it('ordinary scoped member cannot create a manual Care Request through the generic tenant scope', async () => {
@@ -287,17 +363,32 @@ describe('Care Integrity persistence and scope', () => {
     }))
   })
 
-  it('keeps care requests inside the assigned congregation', async () => {
+  it('keeps care requests and facts inside the assigned congregation', async () => {
     await seedMembership('care-a', 'org-a', 'care', ['unit-a'])
     await seedPerson('person-b', 'unit-b')
     const db = environment.authenticatedContext('care-a').firestore()
-    await assertFails(setDoc(doc(db, 'organizations/org-a/products/raiz_e_mesa/careRequests/care-b'), {
+    const requestRef = doc(db, 'organizations/org-a/products/raiz_e_mesa/careRequests/care-b')
+    const create = writeBatch(db)
+    create.set(requestRef, {
       organizationId: 'org-a', congregationId: 'unit-b', personId: 'person-b',
       careType: 'prayer', source: 'manual', summary: '', status: 'open',
       requestedAt: serverTimestamp(), requestedBy: 'care-a', promiseHours: 24,
       dueAt: Timestamp.fromMillis(Date.now() + 24 * 60 * 60 * 1000), ownerRef: 'care-a',
       assignedAt: serverTimestamp(), assignedBy: 'care-a', resolvedAt: null, resolvedBy: '', resolutionCode: '', resolutionNote: '',
-    }))
+    })
+    create.set(
+      doc(db, 'organizations/org-a/products/raiz_e_mesa/facts/care-requested-care-b'),
+      careFact('care-requested-care-b', 'CARE_REQUESTED', 'care-a', {
+        careRequestId: 'care-b', personId: 'person-b', careType: 'prayer', source: 'manual',
+      }, 'unit-b'),
+    )
+    create.set(
+      doc(db, 'organizations/org-a/products/raiz_e_mesa/facts/care-assigned-care-b'),
+      careFact('care-assigned-care-b', 'CARE_ASSIGNED', 'care-a', {
+        careRequestId: 'care-b', personId: 'person-b', careType: 'prayer', ownerRef: 'care-a',
+      }, 'unit-b'),
+    )
+    await assertFails(create.commit())
   })
 })
 
