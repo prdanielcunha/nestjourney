@@ -372,7 +372,6 @@ export async function createMinimalVisitor(input: MinimalVisitorInput) {
   const personRef = doc(collection(firestore, journeyCollectionPath(input.organizationId, 'people')))
   const factRef = doc(firestore, `${journeyCollectionPath(input.organizationId, 'facts')}/visitor-${personRef.id}`)
   const careRef = input.consent ? doc(collection(firestore, journeyCollectionPath(input.organizationId, 'careRequests'))) : null
-  const careFactRef = careRef ? doc(firestore, `${journeyCollectionPath(input.organizationId, 'facts')}/care-request-${careRef.id}`) : null
   const batch = writeBatch(firestore)
   const today = new Date().toISOString().slice(0, 10)
   const consent = Boolean(input.consent)

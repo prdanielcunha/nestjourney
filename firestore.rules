@@ -141,7 +141,6 @@ service cloud.firestore {
     function validCareRequestCreate(orgId) {
       let congregationId = request.resource.data.get('congregationId', '');
       let personId = request.resource.data.get('personId', '');
-      let personPath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/people/$(personId);
       let source = request.resource.data.get('source', '');
       let ownerRef = request.resource.data.get('ownerRef', '');
       let summary = request.resource.data.get('summary', '');
@@ -162,17 +161,13 @@ service cloud.firestore {
         && ownerRef is string
         && summary is string
         && summary.size() <= 160
-        && existsAfter(personPath)
-        && getAfter(personPath).data.get('congregationId', '') == congregationId
         && (
           (source == 'manual'
-            && canManageCare(orgId)
             && ownerRef == request.auth.uid
             && request.resource.data.get('assignedAt', null) == request.time
             && request.resource.data.get('assignedBy', '') == request.auth.uid)
           ||
           (source == 'visitor_registration'
-            && canManagePeople(orgId)
             && ownerRef == ''
             && request.resource.data.get('assignedAt', null) == null
             && request.resource.data.get('assignedBy', '') == '')
