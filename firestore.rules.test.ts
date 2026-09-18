@@ -330,7 +330,11 @@ describe('Groups and Discipleship runtime rules', () => {
 
   it('discipler can create and advance only their own relation without changing person or regressing meetings', async () => {
     await seedMembership('discipler-a', 'org-a', 'discipler', ['unit-a'])
-    await seedPerson()
+    await environment.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), 'organizations/org-a/products/raiz_e_mesa/people/person-a'), {
+        organizationId: 'org-a', congregationId: 'unit-a', name: 'Person',
+      })
+    })
     const db = environment.authenticatedContext('discipler-a').firestore()
     const ref = doc(db, 'organizations/org-a/products/raiz_e_mesa/discipleships/d-a')
     await assertSucceeds(setDoc(ref, {
