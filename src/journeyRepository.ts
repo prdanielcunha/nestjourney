@@ -1,5 +1,5 @@
 import {
-  Timestamp, collection, doc, getDoc, getDocs, query, serverTimestamp, updateDoc, where, writeBatch,
+  Timestamp, collection, doc, getDoc, getDocs, query, runTransaction, serverTimestamp, updateDoc, where, writeBatch,
   type Firestore,
 } from 'firebase/firestore'
 import { db } from './firebase'
@@ -11,6 +11,7 @@ const BROAD_JOURNEY_ROLES = new Set(['owner', 'admin', 'pastor', 'data_admin'])
 const PRESENCE_ROLES = new Set(['owner', 'admin', 'pastor', 'coordinator'])
 const CARE_ROLES = new Set(['owner', 'admin', 'pastor', 'care'])
 const GROUP_ROLES = new Set(['owner', 'admin', 'pastor', 'group_leader'])
+const GROUP_ROSTER_BROAD_ROLES = new Set(['owner', 'admin', 'pastor'])
 const DISCIPLESHIP_ROLES = new Set(['owner', 'admin', 'pastor', 'discipler'])
 const IMPLEMENTATION_ROLES = new Set(['owner', 'admin', 'pastor', 'coordinator'])
 const GOVERNANCE_ROLES = new Set(['owner', 'admin', 'pastor', 'data_admin'])
@@ -77,6 +78,21 @@ export interface JourneyGroupRecord {
   capacity?: number
   participants?: number
   createdAt?: string
+  createdBy?: string
+}
+
+export interface JourneyGroupMembership {
+  id: string
+  organizationId: string
+  congregationId: string
+  groupId: string
+  personId: string
+  personName?: string
+  status: 'active' | 'left'
+  joinedAt: string
+  joinedBy: string
+  leftAt?: string
+  leftBy?: string
 }
 
 export interface JourneyDiscipleshipRecord {
@@ -377,8 +393,103 @@ export async function listJourneyGroups(organizationId: string, congregationId: 
       capacity: typeof data.capacity === 'number' ? data.capacity : undefined,
       participants: typeof data.participants === 'number' ? data.participants : undefined,
       createdAt: data.createdAt ? toIso(data.createdAt) : undefined,
+      createdBy: asString(data.createdBy) || undefined,
     }
   }).sort((a, b) => a.name.localeCompare(b.name))
+}
+
+export function canManageJourneyGroupRoster(access: JourneyAccessContext, group: JourneyGroupRecord) {
+  return access.isSystemAdmin || access.isOwner || GROUP_ROSTER_BROAD_ROLES.has(access.role) || group.leaderId === access.userId || group.createdBy === access.userId
+}
+
+export async function listJourneyGroupMemberships(access: JourneyAccessContext, group: JourneyGroupRecord): Promise<JourneyGroupMembership[]> {
+  if (!canManageJourneyGroupRoster(access, group)) return []
+  const firestore = requireDb()
+  const snapshot = await getDocs(query(
+    collection(firestore, journeyCollectionPath(access.organizationId, 'groupMemberships')),
+    where('groupId', '==', group.id),
+  ))
+  return snapshot.docs.map((item): JourneyGroupMembership => {
+    const data = item.data()
+    return {
+      id: item.id,
+      organizationId: access.organizationId,
+      congregationId: asString(data.congregationId),
+      groupId: asString(data.groupId),
+      personId: asString(data.personId),
+      personName: asString(data.personName) || undefined,
+      status: data.status === 'left' ? 'left' : 'active',
+      joinedAt: toIso(data.joinedAt),
+      joinedBy: asString(data.joinedBy),
+      leftAt: data.leftAt ? toIso(data.leftAt) : undefined,
+      leftBy: asString(data.leftBy) || undefined,
+    }
+  }).filter((item) => item.congregationId === group.congregationId)
+    .sort((a, b) => a.status.localeCompare(b.status) || (a.personName ?? '').localeCompare(b.personName ?? ''))
+}
+
+function groupMembershipId(groupId: string, personId: string) {
+  return `${groupId}__${personId}`
+}
+
+export async function setJourneyGroupMembership(input: {
+  access: JourneyAccessContext
+  group: JourneyGroupRecord
+  person: JourneyPersonRecord
+  active: boolean
+}) {
+  if (!canManageJourneyGroupRoster(input.access, input.group)) throw new Error('group_roster_forbidden')
+  if (input.person.congregationId !== input.group.congregationId) throw new Error('group_membership_scope_mismatch')
+  const firestore = requireDb()
+  const groupRef = doc(firestore, `${journeyCollectionPath(input.access.organizationId, 'groups')}/${input.group.id}`)
+  const membershipRef = doc(firestore, `${journeyCollectionPath(input.access.organizationId, 'groupMemberships')}/${groupMembershipId(input.group.id, input.person.id)}`)
+
+  await runTransaction(firestore, async (transaction) => {
+    const [groupSnapshot, membershipSnapshot] = await Promise.all([
+      transaction.get(groupRef),
+      transaction.get(membershipRef),
+    ])
+    if (!groupSnapshot.exists()) throw new Error('group_not_found')
+    const groupData = groupSnapshot.data()
+    const currentCount = Math.max(0, Number(groupData.participants ?? 0))
+    const capacity = Math.max(1, Number(groupData.capacity ?? 12))
+    const currentStatus = membershipSnapshot.exists() ? asString(membershipSnapshot.data().status) : ''
+
+    if (input.active) {
+      if (currentStatus === 'active') return
+      if (currentCount >= capacity) throw new Error('group_capacity_reached')
+      transaction.set(membershipRef, {
+        organizationId: input.access.organizationId,
+        congregationId: input.group.congregationId,
+        groupId: input.group.id,
+        personId: input.person.id,
+        personName: input.person.name,
+        status: 'active',
+        joinedAt: serverTimestamp(),
+        joinedBy: input.access.userId,
+        leftAt: null,
+        leftBy: '',
+      })
+      transaction.update(groupRef, {
+        participants: currentCount + 1,
+        updatedAt: serverTimestamp(),
+        updatedBy: input.access.userId,
+      })
+      return
+    }
+
+    if (currentStatus !== 'active') return
+    transaction.update(membershipRef, {
+      status: 'left',
+      leftAt: serverTimestamp(),
+      leftBy: input.access.userId,
+    })
+    transaction.update(groupRef, {
+      participants: Math.max(0, currentCount - 1),
+      updatedAt: serverTimestamp(),
+      updatedBy: input.access.userId,
+    })
+  })
 }
 
 export async function listJourneyDiscipleships(access: JourneyAccessContext, congregationId: string): Promise<JourneyDiscipleshipRecord[]> {

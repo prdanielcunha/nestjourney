@@ -328,6 +328,74 @@ describe('Groups and Discipleship runtime rules', () => {
     }))
   })
 
+
+  it('group leader manages only their own explicit roster with atomic participant projection', async () => {
+    await seedMembership('leader-a', 'org-a', 'group_leader', ['unit-a'])
+    await seedMembership('leader-b', 'org-a', 'group_leader', ['unit-a'])
+    await environment.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore()
+      await setDoc(doc(db, 'organizations/org-a/products/raiz_e_mesa/people/person-a'), {
+        organizationId: 'org-a', congregationId: 'unit-a', name: 'Ana',
+      })
+      await setDoc(doc(db, 'organizations/org-a/products/raiz_e_mesa/groups/group-a'), {
+        organizationId: 'org-a', congregationId: 'unit-a', name: 'Casa A',
+        leaderId: 'leader-a', capacity: 12, participants: 0, createdBy: 'leader-a',
+      })
+      await setDoc(doc(db, 'organizations/org-a/products/raiz_e_mesa/groups/group-b'), {
+        organizationId: 'org-a', congregationId: 'unit-a', name: 'Casa B',
+        leaderId: 'leader-b', capacity: 12, participants: 0, createdBy: 'leader-b',
+      })
+    })
+
+    const db = environment.authenticatedContext('leader-a').firestore()
+    const groupRef = doc(db, 'organizations/org-a/products/raiz_e_mesa/groups/group-a')
+    const membershipRef = doc(db, 'organizations/org-a/products/raiz_e_mesa/groupMemberships/group-a__person-a')
+
+    const add = writeBatch(db)
+    add.set(membershipRef, {
+      organizationId: 'org-a', congregationId: 'unit-a', groupId: 'group-a', personId: 'person-a',
+      personName: 'Ana', status: 'active', joinedAt: serverTimestamp(), joinedBy: 'leader-a',
+      leftAt: null, leftBy: '',
+    })
+    add.update(groupRef, { participants: 1 })
+    await assertSucceeds(add.commit())
+    await assertSucceeds(getDoc(membershipRef))
+
+    await assertFails(setDoc(doc(db, 'organizations/org-a/products/raiz_e_mesa/groupMemberships/group-b__person-a'), {
+      organizationId: 'org-a', congregationId: 'unit-a', groupId: 'group-b', personId: 'person-a',
+      personName: 'Ana', status: 'active', joinedAt: serverTimestamp(), joinedBy: 'leader-a',
+      leftAt: null, leftBy: '',
+    }))
+    await assertFails(updateDoc(doc(db, 'organizations/org-a/products/raiz_e_mesa/groups/group-b'), { participants: 1 }))
+
+    const leave = writeBatch(db)
+    leave.update(membershipRef, { status: 'left', leftAt: serverTimestamp(), leftBy: 'leader-a' })
+    leave.update(groupRef, { participants: 0 })
+    await assertSucceeds(leave.commit())
+    await assertFails(deleteDoc(membershipRef))
+  })
+
+  it('pastor can read a group roster while a different group leader cannot', async () => {
+    await seedMembership('leader-a', 'org-a', 'group_leader', ['unit-a'])
+    await seedMembership('leader-b', 'org-a', 'group_leader', ['unit-a'])
+    await seedMembership('pastor-a', 'org-a', 'pastor', ['unit-a'])
+    await environment.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore()
+      await setDoc(doc(db, 'organizations/org-a/products/raiz_e_mesa/groups/group-a'), {
+        organizationId: 'org-a', congregationId: 'unit-a', name: 'Casa A',
+        leaderId: 'leader-a', capacity: 12, participants: 1, createdBy: 'leader-a',
+      })
+      await setDoc(doc(db, 'organizations/org-a/products/raiz_e_mesa/groupMemberships/group-a__person-a'), {
+        organizationId: 'org-a', congregationId: 'unit-a', groupId: 'group-a', personId: 'person-a',
+        personName: 'Ana', status: 'active', joinedAt: new Date(), joinedBy: 'leader-a',
+        leftAt: null, leftBy: '',
+      })
+    })
+    const path = 'organizations/org-a/products/raiz_e_mesa/groupMemberships/group-a__person-a'
+    await assertSucceeds(getDoc(doc(environment.authenticatedContext('pastor-a').firestore(), path)))
+    await assertFails(getDoc(doc(environment.authenticatedContext('leader-b').firestore(), path)))
+  })
+
   it('discipler can create and advance only their own relation without changing person or regressing meetings', async () => {
     await seedMembership('discipler-a', 'org-a', 'discipler', ['unit-a'])
     await environment.withSecurityRulesDisabled(async (context) => {
