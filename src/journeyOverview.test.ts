@@ -6,6 +6,7 @@ import type {
   JourneyDiscipleshipRecord,
   JourneyGroupRecord,
   JourneyImplementationCycle,
+  JourneyPastoralHandoff,
   JourneyPersonRecord,
   PresenceSessionRecord,
 } from './journeyRepository'
@@ -18,6 +19,7 @@ describe('Journey Overview factual projection', () => {
   const sessions: PresenceSessionRecord[] = [{ id: 's1', organizationId: 'o', congregationId: 'c', eventRef: 'e', openedAt: '2026-09-03T00:00:00Z', expectedPeopleCount: 10, minimumCoveragePercent: 90, status: 'open', createdBy: 'u' }]
   const groups: JourneyGroupRecord[] = [{ id: 'g1', organizationId: 'o', congregationId: 'c', name: 'Casa', participants: 9, capacity: 10 }]
   const discipleships: JourneyDiscipleshipRecord[] = [{ id: 'd1', organizationId: 'o', congregationId: 'c', personId: 'p1', disciplerId: 'u', meeting: 2, status: 'active' }]
+  const pastoralHandoffs: JourneyPastoralHandoff[] = [{ id:'ph1', organizationId:'o', congregationId:'c', personId:'p1', sourceCareRequestId:'c1', status:'open', requestedAt:'2026-09-03T00:00:00Z', requestedBy:'u' }]
   const implementationCycles: JourneyImplementationCycle[] = [{
     id: 'i1', organizationId: 'o', congregationId: 'c', playbookId: 'raiz_e_mesa_2026',
     status: 'active', completedKeys: [...IMPLEMENTATION_PREPARATION_KEYS, ...implementationWeekKeys(1)],
@@ -26,8 +28,8 @@ describe('Journey Overview factual projection', () => {
 
   it('projects only available sources', () => {
     const snapshot = buildJourneyOverview({
-      availability: { people: true, care: false, presence: true, groups: true, discipleship: false, implementation: true },
-      people, careRequests, sessions, groups, discipleships, implementationCycles,
+      availability: { people: true, care: false, presence: true, groups: true, discipleship: false, implementation: true, pastoral: true },
+      people, careRequests, sessions, groups, discipleships, implementationCycles, pastoralHandoffs,
       now: new Date('2026-09-04T00:00:00Z'),
     })
     expect(snapshot.people?.count).toBe(1)
@@ -37,13 +39,14 @@ describe('Journey Overview factual projection', () => {
     expect(snapshot.discipleship).toBeNull()
     expect(snapshot.implementation?.week).toBe(2)
     expect(snapshot.implementation?.percent).toBeGreaterThan(0)
+    expect(snapshot.pastoral?.open).toBe(1)
   })
 
   it('does not turn a restricted source into a zero metric', () => {
     const snapshot = buildJourneyOverview({
-      availability: { people: false, care: false, presence: false, groups: false, discipleship: false, implementation: false },
-      people: [], careRequests: [], sessions: [], groups: [], discipleships: [], implementationCycles: [],
+      availability: { people: false, care: false, presence: false, groups: false, discipleship: false, implementation: false, pastoral: false },
+      people: [], careRequests: [], sessions: [], groups: [], discipleships: [], implementationCycles: [], pastoralHandoffs: [],
     })
-    expect(snapshot).toEqual({ people: null, care: null, presence: null, groups: null, discipleship: null, implementation: null })
+    expect(snapshot).toEqual({ people: null, care: null, presence: null, groups: null, discipleship: null, implementation: null, pastoral: null })
   })
 })

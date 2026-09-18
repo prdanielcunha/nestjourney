@@ -1,5 +1,5 @@
 import {
-  Timestamp, collection, doc, getDoc, getDocs, query, serverTimestamp, where, writeBatch,
+  Timestamp, collection, doc, getDoc, getDocs, query, serverTimestamp, updateDoc, where, writeBatch,
   type Firestore,
 } from 'firebase/firestore'
 import { db } from './firebase'
@@ -15,6 +15,7 @@ const DISCIPLESHIP_ROLES = new Set(['owner', 'admin', 'pastor', 'discipler'])
 const IMPLEMENTATION_ROLES = new Set(['owner', 'admin', 'pastor', 'coordinator'])
 const GOVERNANCE_ROLES = new Set(['owner', 'admin', 'pastor', 'data_admin'])
 const PRIVACY_ROLES = new Set(['owner', 'admin', 'data_admin'])
+const PASTORAL_ROLES = new Set(['owner', 'pastor'])
 
 export interface JourneyAccessContext {
   organizationId: string
@@ -32,6 +33,7 @@ export interface JourneyAccessContext {
   canManageImplementation: boolean
   canViewGovernance: boolean
   canManagePrivacy: boolean
+  canManagePastoral: boolean
   broadJourneyAccess: boolean
 }
 
@@ -188,6 +190,19 @@ export interface JourneyAuditEvent {
   createdAt: string
 }
 
+export interface JourneyPastoralHandoff {
+  id: string
+  organizationId: string
+  congregationId: string
+  personId: string
+  sourceCareRequestId: string
+  status: 'open' | 'resolved'
+  requestedAt: string
+  requestedBy: string
+  resolvedAt?: string
+  resolvedBy?: string
+}
+
 function requireDb(): Firestore {
   if (!db) throw new Error('firebase_not_configured')
   return db
@@ -272,6 +287,7 @@ export async function loadJourneyAccess(userId: string, organizationId: string):
     canManageImplementation: isSystemAdmin || isOwner || IMPLEMENTATION_ROLES.has(role) || permissions.canManageImplementation === true,
     canViewGovernance: isSystemAdmin || isOwner || GOVERNANCE_ROLES.has(role) || permissions.canViewGovernance === true,
     canManagePrivacy: isSystemAdmin || isOwner || PRIVACY_ROLES.has(role) || permissions.canManagePrivacy === true,
+    canManagePastoral: isSystemAdmin || isOwner || PASTORAL_ROLES.has(role) || permissions.canManagePastoral === true,
     broadJourneyAccess: isSystemAdmin || isOwner || BROAD_JOURNEY_ROLES.has(role),
   }
 }
@@ -514,6 +530,47 @@ export async function updateJourneyDiscipleship(input: {
     })
   }
   await batch.commit()
+}
+
+export async function listPastoralHandoffs(organizationId: string, congregationId: string): Promise<JourneyPastoralHandoff[]> {
+  const firestore = requireDb()
+  const snapshot = await getDocs(query(
+    collection(firestore, journeyCollectionPath(organizationId, 'pastoralHandoffs')),
+    where('congregationId', '==', congregationId),
+  ))
+
+  return snapshot.docs.map((item): JourneyPastoralHandoff => {
+    const data = item.data()
+    return {
+      id: item.id,
+      organizationId,
+      congregationId,
+      personId: asString(data.personId),
+      sourceCareRequestId: asString(data.sourceCareRequestId),
+      status: data.status === 'resolved' ? 'resolved' : 'open',
+      requestedAt: toIso(data.requestedAt),
+      requestedBy: asString(data.requestedBy),
+      resolvedAt: data.resolvedAt ? toIso(data.resolvedAt) : undefined,
+      resolvedBy: asString(data.resolvedBy) || undefined,
+    }
+  }).sort((a, b) => {
+    if (a.status !== b.status) return a.status === 'open' ? -1 : 1
+    return Date.parse(b.requestedAt) - Date.parse(a.requestedAt)
+  })
+}
+
+export async function resolvePastoralHandoff(input: {
+  organizationId: string
+  handoff: JourneyPastoralHandoff
+  actorId: string
+}) {
+  const firestore = requireDb()
+  const handoffRef = doc(firestore, `${journeyCollectionPath(input.organizationId, 'pastoralHandoffs')}/${input.handoff.id}`)
+  await updateDoc(handoffRef, {
+    status: 'resolved',
+    resolvedAt: serverTimestamp(),
+    resolvedBy: input.actorId,
+  })
 }
 
 export async function listPrivacyRequests(organizationId: string, congregationId: string): Promise<JourneyPrivacyRequest[]> {
