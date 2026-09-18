@@ -307,16 +307,12 @@ service cloud.firestore {
         && exists(personPath)
         && get(personPath).data.get('congregationId', '') == congregationId;
     }
-    function validCareRequestCreate(orgId, careRequestId) {
+    function validCareRequestCreate(orgId) {
       let congregationId = request.resource.data.get('congregationId', '');
       let personId = request.resource.data.get('personId', '');
       let source = request.resource.data.get('source', '');
       let ownerRef = request.resource.data.get('ownerRef', '');
       let summary = request.resource.data.get('summary', '');
-      let requestedFactId = 'care-requested-' + careRequestId;
-      let requestedFactPath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/facts/$(requestedFactId);
-      let assignedFactId = 'care-assigned-' + careRequestId;
-      let assignedFactPath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/facts/$(assignedFactId);
       return tenantCreate(orgId)
         && congregationId is string
         && personId is string
@@ -334,15 +330,11 @@ service cloud.firestore {
         && ownerRef is string
         && summary is string
         && summary.size() <= 160
-        && existsAfter(requestedFactPath)
-        && getAfter(requestedFactPath).data.get('eventType', '') == 'CARE_REQUESTED'
         && (
           (source == 'manual'
             && ownerRef == request.auth.uid
             && request.resource.data.get('assignedAt', null) == request.time
-            && request.resource.data.get('assignedBy', '') == request.auth.uid
-            && existsAfter(assignedFactPath)
-            && getAfter(assignedFactPath).data.get('eventType', '') == 'CARE_ASSIGNED')
+            && request.resource.data.get('assignedBy', '') == request.auth.uid)
           ||
           (source == 'visitor_registration'
             && ownerRef == ''
@@ -350,9 +342,7 @@ service cloud.firestore {
             && request.resource.data.get('assignedBy', '') == '')
         );
     }
-    function validCareClaim(orgId, careRequestId) {
-      let assignedFactId = 'care-assigned-' + careRequestId;
-      let assignedFactPath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/facts/$(assignedFactId);
+    function validCareClaim(orgId) {
       return resource.data.get('status', '') == 'open'
         && resource.data.get('ownerRef', '') == ''
         && tenantUnchanged(orgId)
@@ -360,14 +350,10 @@ service cloud.firestore {
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['ownerRef', 'assignedAt', 'assignedBy'])
         && request.resource.data.get('ownerRef', '') == request.auth.uid
         && request.resource.data.get('assignedAt', null) == request.time
-        && request.resource.data.get('assignedBy', '') == request.auth.uid
-        && existsAfter(assignedFactPath)
-        && getAfter(assignedFactPath).data.get('eventType', '') == 'CARE_ASSIGNED';
+        && request.resource.data.get('assignedBy', '') == request.auth.uid;
     }
-    function validCareResolve(orgId, careRequestId) {
+    function validCareResolve(orgId) {
       let note = request.resource.data.get('resolutionNote', '');
-      let resolvedFactId = 'care-resolved-' + careRequestId;
-      let resolvedFactPath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/facts/$(resolvedFactId);
       return resource.data.get('status', '') == 'open'
         && (resource.data.get('ownerRef', '') == request.auth.uid || isOrgAdmin(orgId))
         && tenantUnchanged(orgId)
@@ -378,9 +364,7 @@ service cloud.firestore {
         && request.resource.data.get('resolvedBy', '') == request.auth.uid
         && request.resource.data.get('resolutionCode', '') in ['contact_completed', 'pastoral_handoff', 'declined_contact', 'closed_no_response', 'other_resolved']
         && note is string
-        && note.size() <= 160
-        && existsAfter(resolvedFactPath)
-        && getAfter(resolvedFactPath).data.get('eventType', '') == 'CARE_RESOLVED';
+        && note.size() <= 160;
     }
     function validImplementationKey(key) {
       return key is string
@@ -709,10 +693,10 @@ service cloud.firestore {
               request.resource.data.get('congregationId', ''),
               request.resource.data.get('source', '')
             )
-            && validCareRequestCreate(orgId, careRequestId);
+            && validCareRequestCreate(orgId);
           allow update: if canManageCare(orgId)
             && canAccessCongregation(orgId, resource.data.get('congregationId', ''))
-            && (validCareClaim(orgId, careRequestId) || validCareResolve(orgId, careRequestId));
+            && (validCareClaim(orgId) || validCareResolve(orgId));
           allow delete: if false;
         }
         match /facts/{factId} {
