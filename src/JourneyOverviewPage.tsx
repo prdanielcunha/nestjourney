@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { ChevronLeft, Clock3, HeartHandshake, House, Leaf, ShieldCheck, UserCheck, Users } from 'lucide-react'
+import { ChevronLeft, HeartHandshake, House, Leaf, ShieldCheck, UserCheck, Users } from 'lucide-react'
 import { auth } from './firebase'
 import { buildJourneyOverview } from './journeyOverview'
 import {
