@@ -461,3 +461,50 @@ O produto não transforma a fila pastoral em canal de emergência. Os manuais de
 A interface deixa explícito que nesses casos a equipe não deve aguardar o aplicativo: deve acionar o pastor responsável e seguir os protocolos legais e de proteção aplicáveis.
 
 Essa separação evita um erro perigoso de UX: um registro em banco não substitui uma ação humana imediata.
+
+
+## 23. Implementação corrente — Group Membership Runtime V1
+
+O blueprint do aplicativo define Casas de Paz com **casa, dia, bairro, líder, capacidade, participantes, presença e pedido de entrada**. O Manual Mestre também estabelece que o líder da Casa deve enxergar somente os participantes da sua própria Casa. Esta slice começa a substituir a contagem agregada por vínculos explícitos pessoa → Casa, sem inferir pertencimento.
+
+### Fonte canônica de vínculo
+
+A coleção `groupMemberships` passa a registrar:
+
+- organização e congregação;
+- `groupId` e `personId`;
+- estado `active` ou `left`;
+- quem criou/encerrou o vínculo e quando.
+
+Não há campo de nota livre. Participação em Casa não é usada como indicador de conversão, maturidade, caráter, interesse espiritual ou saúde da pessoa.
+
+O id da associação é determinístico por grupo + pessoa. Isso impede duplicatas silenciosas do mesmo vínculo ativo.
+
+### Roster e escopo
+
+Owner, admin e pastor podem administrar os rosters dentro do escopo de congregação. Um `group_leader` comum só consegue abrir e alterar o roster quando:
+
+- é o `leaderId` daquela Casa; ou
+- é o usuário que criou a Casa, como compatibilidade para grupos antigos criados antes de `leaderId` ser preenchido.
+
+Um líder de outra Casa na mesma congregação não recebe a lista de participantes.
+
+A lista é apresentada em uma interface mobile-first de **Gerenciar pessoas**, com busca, participantes vinculados e pessoas disponíveis.
+
+### Contagem e atomicidade
+
+Adicionar ou encerrar um vínculo ocorre em transação junto com a projeção numérica `groups.participants`.
+
+O repositório do aplicativo atualiza a associação e a projeção `groups.participants` na mesma transação e impede novas entradas quando a capacidade registrada foi atingida.
+
+As Rules mantêm as fronteiras críticas: o vínculo precisa pertencer à mesma congregação da pessoa e da Casa, somente o roster autorizado pode alterá-lo e o navegador não pode fazer hard delete da associação.
+
+Assim, `participants` continua útil para painéis e alertas de capacidade, enquanto o vínculo individual passa a possuir fonte explícita.
+
+### Journey Profile
+
+O Journey Profile prioriza associações ativas de `groupMemberships`.
+
+O antigo `person.groupId` continua apenas como fallback de compatibilidade quando ainda não existe nenhuma associação explícita. O sistema nunca busca um grupo por nome, proximidade, frequência ou outro sinal indireto.
+
+Essa estratégia permite migrar o legado gradualmente sem fabricar participantes que não foram identificados.

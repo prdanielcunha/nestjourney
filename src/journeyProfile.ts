@@ -1,5 +1,5 @@
 import { evaluateCarePromise } from './intelligence'
-import { careRequestToPromise, type CareRequestRecord, type JourneyDiscipleshipRecord, type JourneyGroupRecord, type JourneyPersonRecord } from './journeyRepository'
+import { careRequestToPromise, type CareRequestRecord, type JourneyDiscipleshipRecord, type JourneyGroupMembership, type JourneyGroupRecord, type JourneyPersonRecord } from './journeyRepository'
 
 export interface JourneyProfileSnapshot {
   person: JourneyPersonRecord
@@ -9,7 +9,7 @@ export interface JourneyProfileSnapshot {
     resolved: number
     nextDueAt?: string
   }
-  group?: JourneyGroupRecord
+  groups: JourneyGroupRecord[]
   discipleship?: JourneyDiscipleshipRecord
 }
 
@@ -17,6 +17,7 @@ export function buildJourneyProfileSnapshot(input: {
   person: JourneyPersonRecord
   careRequests: CareRequestRecord[]
   groups: JourneyGroupRecord[]
+  memberships: JourneyGroupMembership[]
   discipleships: JourneyDiscipleshipRecord[]
   now?: Date
 }): JourneyProfileSnapshot {
@@ -31,9 +32,17 @@ export function buildJourneyProfileSnapshot(input: {
     .filter((value) => !Number.isNaN(Date.parse(value)))
     .sort((a, b) => Date.parse(a) - Date.parse(b))[0]
 
-  const group = input.person.groupId
-    ? input.groups.find((item) => item.id === input.person.groupId)
-    : undefined
+  const explicitGroupIds = input.memberships
+    .filter((item) => item.personId === input.person.id && item.status === 'active')
+    .map((item) => item.groupId)
+  const groupIds = explicitGroupIds.length
+    ? explicitGroupIds
+    : input.person.groupId
+      ? [input.person.groupId]
+      : []
+  const groups = [...new Set(groupIds)]
+    .map((groupId) => input.groups.find((item) => item.id === groupId))
+    .filter((item): item is JourneyGroupRecord => Boolean(item))
 
   const discipleship = input.discipleships
     .filter((item) => item.personId === input.person.id)
@@ -42,5 +51,5 @@ export function buildJourneyProfileSnapshot(input: {
       return weight(a.status) - weight(b.status) || b.meeting - a.meeting
     })[0]
 
-  return { person: input.person, care: { open, debt, resolved, nextDueAt }, group, discipleship }
+  return { person: input.person, care: { open, debt, resolved, nextDueAt }, groups, discipleship }
 }
