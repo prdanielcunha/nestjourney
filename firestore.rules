@@ -68,6 +68,24 @@ service cloud.firestore {
     function isOrgAdmin(orgId) {
       return isSystemAdmin() || role(orgId, ['owner', 'admin', 'pastor', 'data_admin']);
     }
+    function canManagePresence(orgId) {
+      return isSystemAdmin()
+        || role(orgId, ['owner', 'admin', 'pastor', 'coordinator'])
+        || hasPermission(orgId, 'canManagePresence');
+    }
+    function canManagePeople(orgId) {
+      return isOrgAdmin(orgId) || hasPermission(orgId, 'canManagePeople');
+    }
+    function canManageCare(orgId) {
+      return isSystemAdmin()
+        || role(orgId, ['owner', 'admin', 'pastor', 'care'])
+        || hasPermission(orgId, 'canManageCare');
+    }
+    function canManageGroups(orgId) {
+      return isSystemAdmin()
+        || role(orgId, ['owner', 'admin', 'pastor', 'group_leader'])
+        || hasPermission(orgId, 'canManageGroups');
+    }
     function assignedToCongregation(orgId, congregationId) {
       return membershipIsActive(orgId) && congregationId is string
         && congregationId in membership(orgId).get('congregationIds', []);
@@ -75,6 +93,39 @@ service cloud.firestore {
     function canAccessCongregation(orgId, congregationId) {
       return hasProductAccess(orgId)
         && (isOrgAdmin(orgId) || assignedToCongregation(orgId, congregationId));
+    }
+    function canCreateCareInScope(orgId, congregationId, source) {
+      let active = membershipIsActive(orgId);
+      let memberData = active ? membership(orgId) : {};
+      let roleName = active
+        ? memberData.get('organizationRole', memberData.get('role', ''))
+        : '';
+      let permissions = active ? memberData.get('permissions', {}) : {};
+      let privileged = isSystemAdmin() || isOwner(orgId);
+      let inScope = privileged || (
+        active && (
+          roleName in ['owner', 'admin', 'pastor', 'data_admin']
+          || (congregationId is string && congregationId in memberData.get('congregationIds', []))
+        )
+      );
+      let hasCareCapability = privileged || (
+        active && (
+          roleName in ['owner', 'admin', 'pastor', 'care']
+          || permissions.get('canManageCare', false) == true
+        )
+      );
+      let hasPeopleCapability = privileged || (
+        active && (
+          roleName in ['owner', 'admin', 'pastor', 'data_admin']
+          || permissions.get('canManagePeople', false) == true
+        )
+      );
+      return hasProductAccess(orgId)
+        && inScope
+        && (
+          (source == 'manual' && hasCareCapability)
+          || (source == 'visitor_registration' && hasPeopleCapability)
+        );
     }
     function tenantCreate(orgId) {
       return request.resource.data.get('organizationId', '') == orgId;
@@ -91,6 +142,175 @@ service cloud.firestore {
         && request.resource.data.get('actorId', '') == request.auth.uid
         && request.resource.data.get('action', '') is string
         && request.resource.data.get('createdAt', null) == request.time;
+    }
+    function validPresenceSessionCreate(orgId) {
+      return tenantCreate(orgId)
+        && request.resource.data.get('congregationId', '') is string
+        && request.resource.data.get('createdBy', '') == request.auth.uid
+        && request.resource.data.get('openedAt', null) == request.time
+        && request.resource.data.get('status', '') == 'open'
+        && request.resource.data.get('expectedPeopleCount', -1) is number
+        && request.resource.data.get('expectedPeopleCount', -1) >= 0
+        && request.resource.data.get('minimumCoveragePercent', -1) is number
+        && request.resource.data.get('minimumCoveragePercent', -1) >= 0
+        && request.resource.data.get('minimumCoveragePercent', -1) <= 100;
+    }
+    function validPresenceCheckCreate(orgId) {
+      let sessionId = request.resource.data.get('sessionId', '');
+      let congregationId = request.resource.data.get('congregationId', '');
+      let personId = request.resource.data.get('personId', '');
+      let sessionPath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/presenceSessions/$(sessionId);
+      let personPath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/people/$(personId);
+      return tenantCreate(orgId)
+        && sessionId is string
+        && congregationId is string
+        && personId is string
+        && request.resource.data.get('actorId', '') == request.auth.uid
+        && request.resource.data.get('recordedAt', null) == request.time
+        && request.resource.data.get('state', '') in ['present_confirmed', 'absent_confirmed', 'unverified']
+        && request.resource.data.get('source', '') == 'human_check'
+        && request.resource.data.get('correctedFromCheckId', '') == ''
+        && exists(sessionPath)
+        && get(sessionPath).data.get('congregationId', '') == congregationId
+        && get(sessionPath).data.get('status', '') == 'open'
+        && exists(personPath)
+        && get(personPath).data.get('congregationId', '') == congregationId;
+    }
+    function validCareRequestCreate(orgId) {
+      let congregationId = request.resource.data.get('congregationId', '');
+      let personId = request.resource.data.get('personId', '');
+      let source = request.resource.data.get('source', '');
+      let ownerRef = request.resource.data.get('ownerRef', '');
+      let summary = request.resource.data.get('summary', '');
+      return tenantCreate(orgId)
+        && congregationId is string
+        && personId is string
+        && request.resource.data.get('careType', '') in ['first_contact', 'prayer', 'pastoral_contact', 'group_interest', 'absence_check', 'operational_followup']
+        && source in ['manual', 'visitor_registration']
+        && request.resource.data.get('status', '') == 'open'
+        && request.resource.data.get('requestedAt', null) == request.time
+        && request.resource.data.get('requestedBy', '') == request.auth.uid
+        && request.resource.data.get('promiseHours', 0) is number
+        && request.resource.data.get('promiseHours', 0) >= 1
+        && request.resource.data.get('promiseHours', 0) <= 168
+        && request.resource.data.get('dueAt', null) is timestamp
+        && request.resource.data.get('dueAt', null) > request.time
+        && request.resource.data.get('dueAt', null) <= request.time + duration.value(168, 'h')
+        && ownerRef is string
+        && summary is string
+        && summary.size() <= 160
+        && (
+          (source == 'manual'
+            && ownerRef == request.auth.uid
+            && request.resource.data.get('assignedAt', null) == request.time
+            && request.resource.data.get('assignedBy', '') == request.auth.uid)
+          ||
+          (source == 'visitor_registration'
+            && ownerRef == ''
+            && request.resource.data.get('assignedAt', null) == null
+            && request.resource.data.get('assignedBy', '') == '')
+        );
+    }
+    function validCareClaim(orgId) {
+      return resource.data.get('status', '') == 'open'
+        && resource.data.get('ownerRef', '') == ''
+        && tenantUnchanged(orgId)
+        && congregationUnchanged()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['ownerRef', 'assignedAt', 'assignedBy'])
+        && request.resource.data.get('ownerRef', '') == request.auth.uid
+        && request.resource.data.get('assignedAt', null) == request.time
+        && request.resource.data.get('assignedBy', '') == request.auth.uid;
+    }
+    function validCareResolve(orgId) {
+      let note = request.resource.data.get('resolutionNote', '');
+      return resource.data.get('status', '') == 'open'
+        && (resource.data.get('ownerRef', '') == request.auth.uid || isOrgAdmin(orgId))
+        && tenantUnchanged(orgId)
+        && congregationUnchanged()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'resolvedAt', 'resolvedBy', 'resolutionCode', 'resolutionNote'])
+        && request.resource.data.get('status', '') == 'resolved'
+        && request.resource.data.get('resolvedAt', null) == request.time
+        && request.resource.data.get('resolvedBy', '') == request.auth.uid
+        && request.resource.data.get('resolutionCode', '') in ['contact_completed', 'pastoral_handoff', 'declined_contact', 'closed_no_response', 'other_resolved']
+        && note is string
+        && note.size() <= 160;
+    }
+    function validGroupState() {
+      let capacity = request.resource.data.get('capacity', 0);
+      let participants = request.resource.data.get('participants', 0);
+      return capacity is number
+        && participants is number
+        && capacity >= 1
+        && capacity <= 100
+        && participants >= 0
+        && participants <= capacity;
+    }
+    function validDiscipleshipCreate() {
+      return request.resource.data.get('personId', '') is string
+        && request.resource.data.get('personId', '').size() > 0
+        && request.resource.data.get('disciplerId', '') is string
+        && request.resource.data.get('disciplerId', '').size() > 0
+        && request.resource.data.get('meeting', 0) == 1
+        && request.resource.data.get('status', '') == 'active';
+    }
+    function validDiscipleshipUpdate() {
+      let meeting = request.resource.data.get('meeting', 0);
+      let previousMeeting = resource.data.get('meeting', 0);
+      let status = request.resource.data.get('status', '');
+      return request.resource.data.get('personId', '') == resource.data.get('personId', '')
+        && meeting is number
+        && previousMeeting is number
+        && meeting >= previousMeeting
+        && meeting <= previousMeeting + 1
+        && meeting >= 1
+        && meeting <= 7
+        && status in ['active', 'paused', 'completed']
+        && (status != 'completed' || meeting == 7);
+    }
+    function validCanonicalFact(orgId) {
+      let eventType = request.resource.data.get('eventType', '');
+      let payload = request.resource.data.get('payload', {});
+      let personId = payload.get('personId', '');
+      let sessionId = payload.get('sessionId', '');
+      let checkId = payload.get('checkId', '');
+      let personPath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/people/$(personId);
+      let sessionPath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/presenceSessions/$(sessionId);
+      let checkPath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/presenceChecks/$(checkId);
+      return tenantCreate(orgId)
+        && request.resource.data.get('actorId', '') == request.auth.uid
+        && request.resource.data.get('sourceApp', '') == 'nestjourney'
+        && request.resource.data.get('version', 0) == 1
+        && request.resource.data.get('recordedAt', null) == request.time
+        && request.resource.data.get('occurredAt', null) == request.time
+        && request.resource.data.get('subjectRef', '') is string
+        && request.resource.data.get('scope', '') is string
+        && request.resource.data.get('evidenceRef', '') is string
+        && request.resource.data.get('evidenceRef', '').size() > 0
+        && request.resource.data.get('sensitivity', '') in ['public', 'internal', 'confidential', 'restricted']
+        && eventType in ['VISITOR_REGISTERED', 'PRESENCE_SESSION_OPENED', 'PRESENCE_CONFIRMED']
+        && (
+          (eventType == 'VISITOR_REGISTERED'
+            && personId is string
+            && request.resource.data.get('subjectRef', '') == 'person:' + personId
+            && request.resource.data.get('evidenceRef', '') == 'person:' + personId
+            && existsAfter(personPath)
+            && request.resource.data.get('scope', '') == 'congregation:' + getAfter(personPath).data.get('congregationId', ''))
+          ||
+          (eventType == 'PRESENCE_SESSION_OPENED'
+            && sessionId is string
+            && request.resource.data.get('subjectRef', '') == 'presenceSession:' + sessionId
+            && request.resource.data.get('evidenceRef', '') == 'presenceSession:' + sessionId
+            && existsAfter(sessionPath)
+            && request.resource.data.get('scope', '') == 'congregation:' + getAfter(sessionPath).data.get('congregationId', ''))
+          ||
+          (eventType == 'PRESENCE_CONFIRMED'
+            && checkId is string
+            && request.resource.data.get('evidenceRef', '') == 'presenceCheck:' + checkId
+            && existsAfter(checkPath)
+            && getAfter(checkPath).data.get('state', '') != 'unverified'
+            && request.resource.data.get('subjectRef', '') == 'person:' + getAfter(checkPath).data.get('personId', '')
+            && request.resource.data.get('scope', '') == 'congregation:' + getAfter(checkPath).data.get('congregationId', ''))
+        );
     }
 
     match /organizations/{orgId} {
@@ -116,20 +336,71 @@ service cloud.firestore {
           allow create: if tenantCreate(orgId)
             && request.resource.data.get('deletedAt', null) == null
             && canAccessCongregation(orgId, request.resource.data.get('congregationId', ''))
-            && (isOrgAdmin(orgId) || hasPermission(orgId, 'canManagePeople'));
+            && canManagePeople(orgId);
           allow update: if tenantUnchanged(orgId) && congregationUnchanged()
             && canAccessCongregation(orgId, resource.data.get('congregationId', ''))
-            && (isOrgAdmin(orgId) || hasPermission(orgId, 'canManagePeople'));
+            && canManagePeople(orgId);
           allow delete: if false;
+        }
+        match /presenceSessions/{sessionId} {
+          allow read: if canManagePresence(orgId)
+            && canAccessCongregation(orgId, resource.data.get('congregationId', ''));
+          allow create: if canManagePresence(orgId)
+            && canAccessCongregation(orgId, request.resource.data.get('congregationId', ''))
+            && validPresenceSessionCreate(orgId);
+          allow update: if canManagePresence(orgId)
+            && resource.data.get('status', '') == 'open'
+            && tenantUnchanged(orgId)
+            && congregationUnchanged()
+            && canAccessCongregation(orgId, resource.data.get('congregationId', ''))
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'closedAt', 'closedBy'])
+            && request.resource.data.get('status', '') == 'closed'
+            && request.resource.data.get('closedAt', null) == request.time
+            && request.resource.data.get('closedBy', '') == request.auth.uid;
+          allow delete: if false;
+        }
+        match /presenceChecks/{checkId} {
+          allow read: if canManagePresence(orgId)
+            && canAccessCongregation(orgId, resource.data.get('congregationId', ''));
+          allow create: if canManagePresence(orgId)
+            && canAccessCongregation(orgId, request.resource.data.get('congregationId', ''))
+            && validPresenceCheckCreate(orgId);
+          allow update, delete: if false;
+        }
+        match /careRequests/{careRequestId} {
+          allow read: if canManageCare(orgId)
+            && canAccessCongregation(orgId, resource.data.get('congregationId', ''));
+          allow create: if canCreateCareInScope(
+              orgId,
+              request.resource.data.get('congregationId', ''),
+              request.resource.data.get('source', '')
+            )
+            && validCareRequestCreate(orgId);
+          allow update: if canManageCare(orgId)
+            && canAccessCongregation(orgId, resource.data.get('congregationId', ''))
+            && (validCareClaim(orgId) || validCareResolve(orgId));
+          allow delete: if false;
+        }
+        match /facts/{factId} {
+          allow read: if isOrgAdmin(orgId);
+          allow create: if hasMembership(orgId)
+            && (
+              (request.resource.data.get('eventType', '') == 'VISITOR_REGISTERED' && canManagePeople(orgId))
+              || (request.resource.data.get('eventType', '') in ['PRESENCE_SESSION_OPENED', 'PRESENCE_CONFIRMED'] && canManagePresence(orgId))
+            )
+            && validCanonicalFact(orgId);
+          allow update, delete: if false;
         }
         match /groups/{groupId} {
           allow read: if canAccessCongregation(orgId, resource.data.get('congregationId', ''));
           allow create: if tenantCreate(orgId)
             && canAccessCongregation(orgId, request.resource.data.get('congregationId', ''))
-            && (isOrgAdmin(orgId) || hasPermission(orgId, 'canManageGroups'));
+            && canManageGroups(orgId)
+            && validGroupState();
           allow update: if tenantUnchanged(orgId) && congregationUnchanged()
             && canAccessCongregation(orgId, resource.data.get('congregationId', ''))
-            && (isOrgAdmin(orgId) || hasPermission(orgId, 'canManageGroups'));
+            && canManageGroups(orgId)
+            && validGroupState();
           allow delete: if false;
         }
         match /discipleships/{discipleshipId} {
@@ -137,11 +408,13 @@ service cloud.firestore {
             && (isOrgAdmin(orgId) || resource.data.get('disciplerId', '') == request.auth.uid);
           allow create: if tenantCreate(orgId)
             && canAccessCongregation(orgId, request.resource.data.get('congregationId', ''))
-            && (isOrgAdmin(orgId) || request.resource.data.get('disciplerId', '') == request.auth.uid);
+            && (isOrgAdmin(orgId) || request.resource.data.get('disciplerId', '') == request.auth.uid)
+            && validDiscipleshipCreate();
           allow update: if tenantUnchanged(orgId) && congregationUnchanged()
             && canAccessCongregation(orgId, resource.data.get('congregationId', ''))
             && (isOrgAdmin(orgId) || resource.data.get('disciplerId', '') == request.auth.uid)
-            && request.resource.data.get('disciplerId', '') == resource.data.get('disciplerId', '');
+            && request.resource.data.get('disciplerId', '') == resource.data.get('disciplerId', '')
+            && validDiscipleshipUpdate();
           allow delete: if false;
         }
         match /pastoral/{pastoralId} {
