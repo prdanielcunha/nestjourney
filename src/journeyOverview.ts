@@ -5,6 +5,7 @@ import {
   type JourneyDiscipleshipRecord,
   type JourneyGroupRecord,
   type JourneyImplementationCycle,
+  type JourneyPastoralHandoff,
   type JourneyPersonRecord,
   type PresenceSessionRecord,
 } from './journeyRepository'
@@ -17,6 +18,7 @@ export interface JourneyOverviewAvailability {
   groups: boolean
   discipleship: boolean
   implementation: boolean
+  pastoral: boolean
 }
 
 export interface JourneyOverviewSnapshot {
@@ -26,6 +28,7 @@ export interface JourneyOverviewSnapshot {
   groups: { count: number; nearCapacity: number } | null
   discipleship: { active: number; paused: number; completed: number } | null
   implementation: { status: 'active' | 'completed'; percent: number; week: number } | null
+  pastoral: { open: number; resolved: number } | null
 }
 
 export function buildJourneyOverview(input: {
@@ -36,6 +39,7 @@ export function buildJourneyOverview(input: {
   groups: JourneyGroupRecord[]
   discipleships: JourneyDiscipleshipRecord[]
   implementationCycles: JourneyImplementationCycle[]
+  pastoralHandoffs: JourneyPastoralHandoff[]
   now?: Date
 }): JourneyOverviewSnapshot {
   const careEvaluations = input.availability.care
@@ -71,6 +75,10 @@ export function buildJourneyOverview(input: {
       status: implementation.status,
       percent: implementationProgress(implementation.completedKeys).percent,
       week: implementationWeekForProgress(implementation.completedKeys),
+    } : null,
+    pastoral: input.availability.pastoral ? {
+      open: input.pastoralHandoffs.filter((item) => item.status === 'open').length,
+      resolved: input.pastoralHandoffs.filter((item) => item.status === 'resolved').length,
     } : null,
   }
 }
