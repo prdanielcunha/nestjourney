@@ -19,3 +19,9 @@
 .runtime-icon-button:disabled{opacity:.4;cursor:not-allowed}
 .runtime-roster-empty{padding:18px 12px;margin:0;color:#72798a;font-size:10px;line-height:1.45}
 @media(max-width:680px){.runtime-roster-columns{grid-template-columns:1fr}.runtime-roster-list{max-height:250px}.runtime-count{flex-wrap:wrap}.runtime-count .runtime-button.compact{width:100%;margin-left:0;margin-top:4px}.runtime-count-note{width:100%;max-width:none;text-align:left}}
+
+.runtime-entry-panel{margin:0 0 12px;border:1px solid #282c39;background:#10131a;border-radius:14px;overflow:hidden}
+.runtime-entry-panel .runtime-roster-list{max-height:210px}
+.runtime-inline-actions{display:flex;align-items:center;gap:6px}
+.runtime-icon-button.accept{color:#9fe2c6;border-color:rgba(93,211,165,.28);background:rgba(93,211,165,.07)}
+@media(max-width:680px){.runtime-entry-panel .runtime-roster-list{max-height:220px}}
