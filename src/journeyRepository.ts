@@ -11,7 +11,8 @@ const BROAD_JOURNEY_ROLES = new Set(['owner', 'admin', 'pastor', 'data_admin'])
 const PRESENCE_ROLES = new Set(['owner', 'admin', 'pastor', 'coordinator'])
 const CARE_ROLES = new Set(['owner', 'admin', 'pastor', 'care'])
 const GROUP_ROLES = new Set(['owner', 'admin', 'pastor', 'group_leader'])
-const DISCIPLESHIP_ROLES = new Set(['owner', 'admin', 'pastor', 'discipler'])\nconst IMPLEMENTATION_ROLES = new Set(['owner', 'admin', 'pastor', 'coordinator'])
+const DISCIPLESHIP_ROLES = new Set(['owner', 'admin', 'pastor', 'discipler'])
+const IMPLEMENTATION_ROLES = new Set(['owner', 'admin', 'pastor', 'coordinator'])
 
 export interface JourneyAccessContext {
   organizationId: string
@@ -26,6 +27,7 @@ export interface JourneyAccessContext {
   canManageCare: boolean
   canManageGroups: boolean
   canManageDiscipleship: boolean
+  canManageImplementation: boolean
   broadJourneyAccess: boolean
 }
 
@@ -234,6 +236,7 @@ export async function loadJourneyAccess(userId: string, organizationId: string):
     canManageCare: isSystemAdmin || isOwner || CARE_ROLES.has(role) || permissions.canManageCare === true,
     canManageGroups: isSystemAdmin || isOwner || GROUP_ROLES.has(role) || permissions.canManageGroups === true,
     canManageDiscipleship: isSystemAdmin || isOwner || DISCIPLESHIP_ROLES.has(role) || permissions.canManageDiscipleship === true,
+    canManageImplementation: isSystemAdmin || isOwner || IMPLEMENTATION_ROLES.has(role) || permissions.canManageImplementation === true,
     broadJourneyAccess: isSystemAdmin || isOwner || BROAD_JOURNEY_ROLES.has(role),
   }
 }
@@ -528,6 +531,7 @@ export async function completeImplementationStep(input: {
   batch.update(cycleRef, {
     completedKeys, status: isComplete ? 'completed' : 'active',
     completedAt: isComplete ? serverTimestamp() : null,
+    lastCompletedKey: input.key,
     updatedAt: serverTimestamp(), updatedBy: input.actorId,
   })
   await batch.commit()
