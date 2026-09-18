@@ -82,6 +82,7 @@ export default function GovernanceRuntimePage() {
       const nextAccess=await loadJourneyAccess(user.uid,organizationId)
       setAccess(nextAccess)
       if(!nextAccess.canViewGovernance)return
+      if(!nextAccess.canManagePrivacy)setTab('audit')
       const units=await listJourneyCongregations(nextAccess)
       setCongregations(units)
       const unitId=units[0]?.id??''
