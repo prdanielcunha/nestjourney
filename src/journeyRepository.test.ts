@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { normalizeLocale } from './i18n'
+import { careIntegrityCopy, normalizeLocale } from './i18n'
 import { latestChecksByPerson } from './journeyRepository'
 import { journeyCollectionPath, journeyProductPath, NESTJOURNEY_PRODUCT_ID, NESTJOURNEY_STORAGE_KEY } from './productIdentity'
 import type { PresenceCheck } from './intelligence'

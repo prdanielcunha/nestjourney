@@ -244,44 +244,19 @@ describe('Care Integrity persistence and scope', () => {
     await seedPerson()
     const db = environment.authenticatedContext('care-a').firestore()
     const requestRef = doc(db, 'organizations/org-a/products/raiz_e_mesa/careRequests/care-a')
-    const requestedFact = doc(db, 'organizations/org-a/products/raiz_e_mesa/facts/care-requested-a')
-    const assignedFact = doc(db, 'organizations/org-a/products/raiz_e_mesa/facts/care-assigned-a')
-    const batch = writeBatch(db)
-    batch.set(requestRef, {
+    await assertSucceeds(setDoc(requestRef, {
       organizationId: 'org-a', congregationId: 'unit-a', personId: 'person-a',
       careType: 'first_contact', source: 'manual', summary: 'Primeiro contato autorizado',
       status: 'open', requestedAt: serverTimestamp(), requestedBy: 'care-a', promiseHours: 48,
       dueAt: Timestamp.fromMillis(Date.now() + 48 * 60 * 60 * 1000), ownerRef: 'care-a',
       assignedAt: serverTimestamp(), assignedBy: 'care-a', resolvedAt: null, resolvedBy: '', resolutionCode: '', resolutionNote: '',
-    })
-    batch.set(requestedFact, {
-      eventId: 'care-requested-a', eventType: 'CARE_REQUESTED', occurredAt: serverTimestamp(), recordedAt: serverTimestamp(),
-      organizationId: 'org-a', actorId: 'care-a', subjectRef: 'person:person-a', sourceApp: 'nestjourney',
-      scope: 'congregation:unit-a', evidenceRef: 'careRequest:care-a', sensitivity: 'confidential', version: 1,
-      payload: { requestId: 'care-a', personId: 'person-a', careType: 'first_contact' },
-    })
-    batch.set(assignedFact, {
-      eventId: 'care-assigned-a', eventType: 'CARE_ASSIGNED', occurredAt: serverTimestamp(), recordedAt: serverTimestamp(),
-      organizationId: 'org-a', actorId: 'care-a', subjectRef: 'person:person-a', sourceApp: 'nestjourney',
-      scope: 'congregation:unit-a', evidenceRef: 'careRequest:care-a', sensitivity: 'confidential', version: 1,
-      payload: { requestId: 'care-a', personId: 'person-a', ownerRef: 'care-a' },
-    })
-    await assertSucceeds(batch.commit())
+    }))
     await assertFails(updateDoc(requestRef, { dueAt: Timestamp.fromMillis(Date.now() + 72 * 60 * 60 * 1000) }))
 
-    const resolvedFact = doc(db, 'organizations/org-a/products/raiz_e_mesa/facts/care-resolved-a')
-    const resolveBatch = writeBatch(db)
-    resolveBatch.update(requestRef, {
+    await assertSucceeds(updateDoc(requestRef, {
       status: 'resolved', resolvedAt: serverTimestamp(), resolvedBy: 'care-a',
       resolutionCode: 'contact_completed', resolutionNote: 'Contato concluído.',
-    })
-    resolveBatch.set(resolvedFact, {
-      eventId: 'care-resolved-a', eventType: 'CARE_RESOLVED', occurredAt: serverTimestamp(), recordedAt: serverTimestamp(),
-      organizationId: 'org-a', actorId: 'care-a', subjectRef: 'person:person-a', sourceApp: 'nestjourney',
-      scope: 'congregation:unit-a', evidenceRef: 'careRequest:care-a', sensitivity: 'confidential', version: 1,
-      payload: { requestId: 'care-a', personId: 'person-a', resolutionCode: 'contact_completed' },
-    })
-    await assertSucceeds(resolveBatch.commit())
+    }))
   })
 
   it('allows visitor registration to open an unassigned first-contact promise, but not to claim it without care capability', async () => {
@@ -289,22 +264,13 @@ describe('Care Integrity persistence and scope', () => {
     await seedPerson()
     const db = environment.authenticatedContext('coord-a').firestore()
     const requestRef = doc(db, 'organizations/org-a/products/raiz_e_mesa/careRequests/visitor-care')
-    const factRef = doc(db, 'organizations/org-a/products/raiz_e_mesa/facts/visitor-care-requested')
-    const batch = writeBatch(db)
-    batch.set(requestRef, {
+    await assertSucceeds(setDoc(requestRef, {
       organizationId: 'org-a', congregationId: 'unit-a', personId: 'person-a',
       careType: 'first_contact', source: 'visitor_registration', summary: '',
       status: 'open', requestedAt: serverTimestamp(), requestedBy: 'coord-a', promiseHours: 48,
       dueAt: Timestamp.fromMillis(Date.now() + 48 * 60 * 60 * 1000), ownerRef: '',
       assignedAt: null, assignedBy: '', resolvedAt: null, resolvedBy: '', resolutionCode: '', resolutionNote: '',
-    })
-    batch.set(factRef, {
-      eventId: 'visitor-care-requested', eventType: 'CARE_REQUESTED', occurredAt: serverTimestamp(), recordedAt: serverTimestamp(),
-      organizationId: 'org-a', actorId: 'coord-a', subjectRef: 'person:person-a', sourceApp: 'nestjourney',
-      scope: 'congregation:unit-a', evidenceRef: 'careRequest:visitor-care', sensitivity: 'confidential', version: 1,
-      payload: { requestId: 'visitor-care', personId: 'person-a', careType: 'first_contact' },
-    })
-    await assertSucceeds(batch.commit())
+    }))
     await assertFails(updateDoc(requestRef, { ownerRef: 'coord-a', assignedAt: serverTimestamp(), assignedBy: 'coord-a' }))
   })
 

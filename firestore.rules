@@ -202,38 +202,6 @@ service cloud.firestore {
         && note is string
         && note.size() <= 160;
     }
-    function validCareFact(orgId) {
-      let eventType = request.resource.data.get('eventType', '');
-      let payload = request.resource.data.get('payload', {});
-      let requestId = payload.get('requestId', '');
-      let carePath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/careRequests/$(requestId);
-      return tenantCreate(orgId)
-        && request.resource.data.get('actorId', '') == request.auth.uid
-        && request.resource.data.get('sourceApp', '') == 'nestjourney'
-        && request.resource.data.get('version', 0) == 1
-        && request.resource.data.get('recordedAt', null) == request.time
-        && request.resource.data.get('occurredAt', null) == request.time
-        && request.resource.data.get('sensitivity', '') in ['confidential', 'restricted']
-        && eventType in ['CARE_REQUESTED', 'CARE_ASSIGNED', 'CARE_RESOLVED']
-        && requestId is string
-        && existsAfter(carePath)
-        && request.resource.data.get('evidenceRef', '') == 'careRequest:' + requestId
-        && request.resource.data.get('subjectRef', '') == 'person:' + getAfter(carePath).data.get('personId', '')
-        && request.resource.data.get('scope', '') == 'congregation:' + getAfter(carePath).data.get('congregationId', '')
-        && (
-          (eventType == 'CARE_REQUESTED'
-            && getAfter(carePath).data.get('requestedBy', '') == request.auth.uid)
-          ||
-          (eventType == 'CARE_ASSIGNED'
-            && getAfter(carePath).data.get('ownerRef', '') == request.auth.uid
-            && getAfter(carePath).data.get('assignedBy', '') == request.auth.uid)
-          ||
-          (eventType == 'CARE_RESOLVED'
-            && getAfter(carePath).data.get('status', '') == 'resolved'
-            && getAfter(carePath).data.get('resolvedBy', '') == request.auth.uid)
-        );
-    }
-
     function validCanonicalFact(orgId) {
       let eventType = request.resource.data.get('eventType', '');
       let payload = request.resource.data.get('payload', {});
@@ -348,22 +316,10 @@ service cloud.firestore {
           allow read: if isOrgAdmin(orgId);
           allow create: if hasMembership(orgId)
             && (
-              (
-                (
-                  (request.resource.data.get('eventType', '') == 'VISITOR_REGISTERED' && canManagePeople(orgId))
-                  || (request.resource.data.get('eventType', '') in ['PRESENCE_SESSION_OPENED', 'PRESENCE_CONFIRMED'] && canManagePresence(orgId))
-                )
-                && validCanonicalFact(orgId)
-              )
-              ||
-              (
-                (
-                  (request.resource.data.get('eventType', '') == 'CARE_REQUESTED' && (canManageCare(orgId) || canManagePeople(orgId)))
-                  || (request.resource.data.get('eventType', '') in ['CARE_ASSIGNED', 'CARE_RESOLVED'] && canManageCare(orgId))
-                )
-                && validCareFact(orgId)
-              )
-            );
+              (request.resource.data.get('eventType', '') == 'VISITOR_REGISTERED' && canManagePeople(orgId))
+              || (request.resource.data.get('eventType', '') in ['PRESENCE_SESSION_OPENED', 'PRESENCE_CONFIRMED'] && canManagePresence(orgId))
+            )
+            && validCanonicalFact(orgId);
           allow update, delete: if false;
         }
         match /groups/{groupId} {

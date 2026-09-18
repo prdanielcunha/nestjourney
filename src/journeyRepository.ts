@@ -400,7 +400,7 @@ export async function createMinimalVisitor(input: MinimalVisitorInput) {
     payload: { personId: personRef.id, consent },
   })
 
-  if (careRef && careFactRef) {
+  if (careRef) {
     const promiseHours = 48
     batch.set(careRef, {
       organizationId: input.organizationId, congregationId: input.congregationId, personId: personRef.id,
@@ -408,12 +408,6 @@ export async function createMinimalVisitor(input: MinimalVisitorInput) {
       requestedAt: serverTimestamp(), requestedBy: input.actorId, promiseHours,
       dueAt: Timestamp.fromMillis(Date.now() + promiseHours * 60 * 60 * 1000),
       ownerRef: '', assignedAt: null, assignedBy: '', resolvedAt: null, resolvedBy: '', resolutionCode: '', resolutionNote: '',
-    })
-    batch.set(careFactRef, {
-      eventId: careFactRef.id, eventType: 'CARE_REQUESTED', occurredAt: serverTimestamp(), recordedAt: serverTimestamp(),
-      organizationId: input.organizationId, actorId: input.actorId, subjectRef: `person:${personRef.id}`, sourceApp: 'nestjourney',
-      scope: `congregation:${input.congregationId}`, evidenceRef: `careRequest:${careRef.id}`, sensitivity: 'confidential', version: 1,
-      payload: { requestId: careRef.id, personId: personRef.id, careType: 'first_contact' },
     })
   }
 
@@ -454,8 +448,6 @@ export async function createCareRequest(input: {
 }) {
   const firestore = requireDb()
   const requestRef = doc(collection(firestore, journeyCollectionPath(input.organizationId, 'careRequests')))
-  const requestedFactRef = doc(firestore, `${journeyCollectionPath(input.organizationId, 'facts')}/care-request-${requestRef.id}`)
-  const assignedFactRef = doc(firestore, `${journeyCollectionPath(input.organizationId, 'facts')}/care-assigned-${requestRef.id}`)
   const batch = writeBatch(firestore)
   const promiseHours = Math.max(1, Math.min(168, Math.floor(input.promiseHours ?? 48)))
   const summary = String(input.summary ?? '').trim().slice(0, 160)
@@ -465,18 +457,6 @@ export async function createCareRequest(input: {
     dueAt: Timestamp.fromMillis(Date.now() + promiseHours * 60 * 60 * 1000), ownerRef: input.actorId,
     assignedAt: serverTimestamp(), assignedBy: input.actorId, resolvedAt: null, resolvedBy: '', resolutionCode: '', resolutionNote: '',
   })
-  batch.set(requestedFactRef, {
-    eventId: requestedFactRef.id, eventType: 'CARE_REQUESTED', occurredAt: serverTimestamp(), recordedAt: serverTimestamp(),
-    organizationId: input.organizationId, actorId: input.actorId, subjectRef: `person:${input.personId}`, sourceApp: 'nestjourney',
-    scope: `congregation:${input.congregationId}`, evidenceRef: `careRequest:${requestRef.id}`, sensitivity: 'confidential', version: 1,
-    payload: { requestId: requestRef.id, personId: input.personId, careType: input.careType },
-  })
-  batch.set(assignedFactRef, {
-    eventId: assignedFactRef.id, eventType: 'CARE_ASSIGNED', occurredAt: serverTimestamp(), recordedAt: serverTimestamp(),
-    organizationId: input.organizationId, actorId: input.actorId, subjectRef: `person:${input.personId}`, sourceApp: 'nestjourney',
-    scope: `congregation:${input.congregationId}`, evidenceRef: `careRequest:${requestRef.id}`, sensitivity: 'confidential', version: 1,
-    payload: { requestId: requestRef.id, personId: input.personId, ownerRef: input.actorId },
-  })
   await batch.commit()
   return requestRef.id
 }
@@ -484,31 +464,17 @@ export async function createCareRequest(input: {
 export async function claimCareRequest(input: { organizationId: string; request: CareRequestRecord; actorId: string }) {
   const firestore = requireDb()
   const requestRef = doc(firestore, `${journeyCollectionPath(input.organizationId, 'careRequests')}/${input.request.id}`)
-  const factRef = doc(firestore, `${journeyCollectionPath(input.organizationId, 'facts')}/care-assigned-${input.request.id}-${input.actorId}`)
   const batch = writeBatch(firestore)
   batch.update(requestRef, { ownerRef: input.actorId, assignedAt: serverTimestamp(), assignedBy: input.actorId })
-  batch.set(factRef, {
-    eventId: factRef.id, eventType: 'CARE_ASSIGNED', occurredAt: serverTimestamp(), recordedAt: serverTimestamp(),
-    organizationId: input.organizationId, actorId: input.actorId, subjectRef: `person:${input.request.personId}`, sourceApp: 'nestjourney',
-    scope: `congregation:${input.request.congregationId}`, evidenceRef: `careRequest:${input.request.id}`, sensitivity: 'confidential', version: 1,
-    payload: { requestId: input.request.id, personId: input.request.personId, ownerRef: input.actorId },
-  })
   await batch.commit()
 }
 
 export async function resolveCareRequest(input: { organizationId: string; request: CareRequestRecord; actorId: string; resolutionCode: CareResolutionCode; resolutionNote?: string }) {
   const firestore = requireDb()
   const requestRef = doc(firestore, `${journeyCollectionPath(input.organizationId, 'careRequests')}/${input.request.id}`)
-  const factRef = doc(firestore, `${journeyCollectionPath(input.organizationId, 'facts')}/care-resolved-${input.request.id}`)
   const batch = writeBatch(firestore)
   const resolutionNote = String(input.resolutionNote ?? '').trim().slice(0, 160)
   batch.update(requestRef, { status: 'resolved', resolvedAt: serverTimestamp(), resolvedBy: input.actorId, resolutionCode: input.resolutionCode, resolutionNote })
-  batch.set(factRef, {
-    eventId: factRef.id, eventType: 'CARE_RESOLVED', occurredAt: serverTimestamp(), recordedAt: serverTimestamp(),
-    organizationId: input.organizationId, actorId: input.actorId, subjectRef: `person:${input.request.personId}`, sourceApp: 'nestjourney',
-    scope: `congregation:${input.request.congregationId}`, evidenceRef: `careRequest:${input.request.id}`, sensitivity: 'confidential', version: 1,
-    payload: { requestId: input.request.id, personId: input.request.personId, resolutionCode: input.resolutionCode },
-  })
   await batch.commit()
 }
 

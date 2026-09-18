@@ -220,7 +220,7 @@ Ela implementa:
 - limite visual de carga com referência inicial de 8–10 acompanhamentos leves por cuidador na semana;
 - Care Debt derivado deterministicamente de `dueAt + ausência de resolução`;
 - resolução estruturada com outcome e nota operacional curta;
-- facts `CARE_REQUESTED`, `CARE_ASSIGNED` e `CARE_RESOLVED` vinculados à evidência;
+- transições de Care persistidas como fonte operacional monotônica; os facts canônicos `CARE_REQUESTED`, `CARE_ASSIGNED` e `CARE_RESOLVED` ficam reservados à projeção confiável/server-side nesta fase;
 - bloqueio de edição silenciosa de prazo, troca de tenant, troca de congregação e hard delete;
 - segregação de escopo por congregação e capability;
 - PT-BR, EN e ES;
@@ -234,4 +234,4 @@ A equipe de Cuidado vê a pendência, assume explicitamente a responsabilidade e
 
 ### Limite desta fase
 
-`CARE_PROMISE_DUE` e `CARE_DEBT_OPENED` continuam previstos no contrato canônico, mas não são emitidos pelo navegador. O estado de dívida é calculado deterministicamente para a experiência atual; a emissão de eventos temporais canônicos deve ser feita por processo confiável/server-side em fase posterior, evitando que o relógio do dispositivo do usuário se torne autoridade do Fact Stream.
+`CARE_REQUESTED`, `CARE_ASSIGNED`, `CARE_RESOLVED`, `CARE_PROMISE_DUE` e `CARE_DEBT_OPENED` continuam previstos no contrato canônico, mas a vertical slice do navegador persiste apenas a fonte operacional de Care. A projeção desses facts fica reservada a processo confiável/server-side. O estado de dívida é calculado deterministicamente para a experiência atual, evitando que o navegador ou o relógio do dispositivo do usuário se tornem autoridade do Fact Stream.
