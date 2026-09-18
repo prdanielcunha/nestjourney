@@ -235,3 +235,47 @@ A equipe de Cuidado vê a pendência, assume explicitamente a responsabilidade e
 ### Limite desta fase
 
 `CARE_REQUESTED`, `CARE_ASSIGNED`, `CARE_RESOLVED`, `CARE_PROMISE_DUE` e `CARE_DEBT_OPENED` continuam previstos no contrato canônico, mas a vertical slice do navegador persiste apenas a fonte operacional de Care. A projeção desses facts fica reservada a processo confiável/server-side. O estado de dívida é calculado deterministicamente para a experiência atual, evitando que o navegador ou o relógio do dispositivo do usuário se tornem autoridade do Fact Stream.
+
+
+## 15. Implementação corrente — Journey Profile V1
+
+A terceira vertical slice é o **Journey Profile**, disponível em `/journey-profile`.
+
+O objetivo não é construir um CRM de pessoas nem um prontuário pastoral. O Profile é uma **projeção factual de jornada** que reúne, para uma pessoa autorizada a consultar aquele escopo:
+
+- cadastro mínimo de People;
+- primeira visita e quantidade de visitas/presenças já registradas;
+- autorização de contato;
+- Care Requests abertos, vencidos e resolvidos;
+- vínculo de grupo somente quando existe `groupId` explícito;
+- relação de discipulado somente quando existe documento de `discipleships`;
+- acesso condicionado à Lens/capability do usuário.
+
+A regra central continua sendo **NO SOURCE → NO CLAIM**. O Profile não tenta inferir grupo por nome, discipulado por proximidade, afastamento por falta de presença, interesse espiritual, maturidade, humor ou qualquer outro estado subjetivo.
+
+### Lenses e minimização
+
+O Profile consulta somente as fontes que a Lens atual pode ler. Por exemplo, alguém de Cuidado pode enxergar People e Care dentro do escopo permitido sem receber automaticamente acesso a dados de discipulado fora de sua responsabilidade.
+
+A ausência de fonte é exibida como **não registrado**, nunca como conclusão negativa sobre a pessoa.
+
+## 16. Implementação corrente — My Today V1
+
+A quarta vertical slice é **My Today**, disponível em `/my-today`.
+
+Ela funciona como uma inbox operacional cross-module e prioriza somente itens derivados de registros objetivos:
+
+- Care Debt;
+- Care Promise vencendo em breve;
+- Care Request ainda sem responsável;
+- Presence Session aberta;
+- grupo com ocupação factual igual ou superior a 85% da capacidade registrada;
+- próximo passo explícito de uma relação de discipulado ativa.
+
+A ordenação é determinística e não usa score espiritual ou IA interpretativa. Quando o usuário não tem capability para uma fonte, essa fonte simplesmente não entra na Lens.
+
+### O que My Today não faz
+
+My Today não tenta responder “quem está frio”, “quem perdeu interesse”, “quem está desanimado” ou “quem precisa de discipulado” com base em sinais indiretos. Ele mostra somente compromissos e estados operacionais já registrados, com deep links para Presence Assist, Care Integrity e Journey Profile.
+
+Essa slice prepara o produto para o futuro **Resolve Loop**, no qual uma ação recomendada só poderá existir quando houver uma fonte de verdade e uma operação concreta que possa fechar a pendência.
