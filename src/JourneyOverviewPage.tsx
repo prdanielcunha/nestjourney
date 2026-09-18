@@ -3,13 +3,14 @@ import { ClipboardCheck, HeartHandshake, House, Leaf, ShieldAlert, ShieldCheck, 
 import { auth } from './firebase'
 import { buildJourneyOverview } from './journeyOverview'
 import {
+  canBrowseJourneyPeopleDirectory,
   getActiveJourneyOrganizationId,
   listCareRequests,
   listImplementationCycles,
   listJourneyCongregations,
   listJourneyDiscipleships,
-  listJourneyGroups,
-  listJourneyPeople,
+  listJourneyGroupsForAccess,
+  listJourneyPeopleForAccess,
   listPastoralHandoffs,
   listPresenceSessions,
   loadJourneyAccess,
@@ -34,7 +35,7 @@ export default function JourneyOverviewPage() {
 
   const canView=Boolean(access&&(access.broadJourneyAccess||access.canManagePeople||access.canManageCare||access.canManagePresence||access.canManageGroups||access.canManageDiscipleship||access.canManageImplementation||access.canManagePastoral))
   const availability=useMemo(()=>({
-    people:Boolean(access),
+    people:Boolean(access&&canBrowseJourneyPeopleDirectory(access)),
     care:Boolean(access&&(access.canManageCare||access.broadJourneyAccess)),
     presence:Boolean(access&&access.canManagePresence),
     groups:Boolean(access),
@@ -46,8 +47,8 @@ export default function JourneyOverviewPage() {
 
   const refresh=useCallback(async(nextAccess:JourneyAccessContext,unitId:string)=>{
     const [nextPeople,nextGroups,nextCare,nextSessions,nextDiscipleships,nextImplementation,nextPastoral]=await Promise.all([
-      listJourneyPeople(nextAccess.organizationId,unitId),
-      listJourneyGroups(nextAccess.organizationId,unitId),
+      listJourneyPeopleForAccess(nextAccess,unitId),
+      listJourneyGroupsForAccess(nextAccess,unitId),
       nextAccess.canManageCare||nextAccess.broadJourneyAccess?listCareRequests(nextAccess.organizationId,unitId):Promise.resolve([]),
       nextAccess.canManagePresence?listPresenceSessions(nextAccess.organizationId,unitId):Promise.resolve([]),
       nextAccess.canManageDiscipleship||nextAccess.broadJourneyAccess?listJourneyDiscipleships(nextAccess,unitId):Promise.resolve([]),
