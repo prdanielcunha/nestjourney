@@ -230,6 +230,7 @@ export const careIntegrityCopy = {
     create: 'Crear compromiso', outcome: 'Resultado',
     resolutionPlaceholder: 'Registra solo el resultado operativo, sin transcribir conversaciones sensibles.',
     outcomeRule: 'Un mensaje enviado por sí solo no prueba que la necesidad fue resuelta. Registra el resultado real.',
+    pastoralHandoffRule: 'El encaminamiento pastoral registra solo el marcador “necesita contacto pastoral”. No describas aquí el problema, confesión ni historia íntima.',
     resolve: 'Concluir cuidado', error: 'No se pudo completar la operación.',
     careTypes: { first_contact: 'Primer contacto', prayer: 'Pedido de oración', pastoral_contact: 'Contacto pastoral', group_interest: 'Interés en grupo', absence_check: 'Contacto por ausencia', operational_followup: 'Seguimiento operativo' },
     resolutions: { contact_completed: 'Contacto concluido', pastoral_handoff: 'Derivado al pastor', declined_contact: 'La persona no desea contacto', closed_no_response: 'Cerrado sin respuesta', other_resolved: 'Otro resultado concluido' },
