@@ -419,3 +419,45 @@ Solicitações de privacidade:
 - geram um evento de auditoria no mesmo batch.
 
 A execução final de exclusões ou outras mutações destrutivas fica fora do navegador até existir um comando confiável que consiga considerar relacionamentos e políticas de retenção sem deixar referências órfãs.
+
+
+## 22. Implementação corrente — Pastoral Handoff Runtime V1
+
+O MVP previsto nos materiais do Raiz e Mesa inclui um **pastoral restrito** com somente um marcador de “precisa contato pastoral”; detalhes sensíveis ficam fora do fluxo comum. O Manual de Cuidado e Conexão reforça a mesma fronteira: a equipe registra o necessário e encaminha ao pastor sem transcrever o problema íntimo.
+
+A vertical slice fica disponível em `/pastoral-handoff`.
+
+### Fluxo
+
+Quando um Care Request é encerrado com o outcome `pastoral_handoff`, o mesmo batch:
+
+- resolve o compromisso de Care;
+- zera a nota de resolução desse outcome;
+- cria um documento determinístico em `pastoralHandoffs/{careRequestId}`;
+- registra somente organização, congregação, pessoa, referência ao Care Request, ator, timestamps e estado operacional;
+- não armazena motivo livre, diagnóstico, trauma, confissão, história familiar ou pedido detalhado.
+
+A Rules valida o handoff com `getAfter()`: o marcador só pode nascer se o Care Request correspondente estiver sendo resolvido no mesmo write com `resolutionCode = pastoral_handoff` pelo mesmo ator.
+
+### Lens pastoral
+
+`canManagePastoral` é restrita por padrão a owner/pastor e administradores do ecossistema, ou a uma permissão explícita. Um admin comum da organização não recebe acesso pastoral automaticamente.
+
+A equipe de Cuidado pode **criar** o marcador somente como consequência do handoff válido, mas não pode ler a fila reservada.
+
+O pastor pode:
+
+- visualizar somente os marcadores da congregação em seu escopo;
+- enxergar quem precisa de contato;
+- registrar que o contato pastoral foi realizado;
+- não adicionar narrativa ao marcador.
+
+Journey Overview mostra a quantidade de encaminhamentos abertos somente para a Lens pastoral. My Today também apresenta o marcador como pendência factual quando essa Lens está disponível.
+
+### Emergências e proteção
+
+O produto não transforma a fila pastoral em canal de emergência. Os manuais determinam encaminhamento imediato em risco de suicídio/autoagressão, violência, abuso, risco infantil, emergência médica, alegação de crime ou situação insegura.
+
+A interface deixa explícito que nesses casos a equipe não deve aguardar o aplicativo: deve acionar o pastor responsável e seguir os protocolos legais e de proteção aplicáveis.
+
+Essa separação evita um erro perigoso de UX: um registro em banco não substitui uma ação humana imediata.

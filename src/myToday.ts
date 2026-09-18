@@ -1,7 +1,7 @@
 import { evaluateCarePromise } from './intelligence'
-import { careRequestToPromise, type CareRequestRecord, type JourneyDiscipleshipRecord, type JourneyGroupRecord, type JourneyPersonRecord, type PresenceSessionRecord } from './journeyRepository'
+import { careRequestToPromise, type CareRequestRecord, type JourneyDiscipleshipRecord, type JourneyGroupRecord, type JourneyPastoralHandoff, type JourneyPersonRecord, type PresenceSessionRecord } from './journeyRepository'
 
-export type MyTodayKind = 'care_debt' | 'care_due_soon' | 'care_unassigned' | 'presence_open' | 'group_attention' | 'discipleship_next'
+export type MyTodayKind = 'care_debt' | 'care_due_soon' | 'care_unassigned' | 'presence_open' | 'group_attention' | 'discipleship_next' | 'pastoral_handoff'
 
 export interface MyTodayItem {
   id: string
@@ -23,6 +23,7 @@ export function buildMyTodayItems(input: {
   groups: JourneyGroupRecord[]
   discipleships: JourneyDiscipleshipRecord[]
   sessions: PresenceSessionRecord[]
+  pastoralHandoffs: JourneyPastoralHandoff[]
   actorId: string
   broadAccess: boolean
   now?: Date
@@ -43,6 +44,11 @@ export function buildMyTodayItems(input: {
     } else if (!request.ownerRef) {
       items.push({ id: `care-owner:${request.id}`, kind: 'care_unassigned', priority: 2, personId: request.personId, personName: person?.name, titleRef: request.id, dueAt: request.dueAt })
     }
+  }
+
+  for (const handoff of input.pastoralHandoffs.filter((item) => item.status === 'open')) {
+    const person = people.get(handoff.personId)
+    items.push({ id: `pastoral:${handoff.id}`, kind: 'pastoral_handoff', priority: 2, personId: handoff.personId, personName: person?.name, titleRef: handoff.id, targetId: handoff.id })
   }
 
   for (const session of input.sessions.filter((item) => item.status === 'open')) {
