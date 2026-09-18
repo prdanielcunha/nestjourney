@@ -60,11 +60,15 @@ export interface JourneyGroupRecord {
   congregationId: string
   name: string
   leader?: string
+  leaderId?: string
+  host?: string
+  apprentice?: string
   neighborhood?: string
   weekday?: string
   time?: string
   capacity?: number
   participants?: number
+  createdAt?: string
 }
 
 export interface JourneyDiscipleshipRecord {
@@ -295,11 +299,15 @@ export async function listJourneyGroups(organizationId: string, congregationId: 
       congregationId,
       name: asString(data.name) || '—',
       leader: asString(data.leader || data.leaderName) || undefined,
+      leaderId: asString(data.leaderId) || undefined,
+      host: asString(data.host) || undefined,
+      apprentice: asString(data.apprentice) || undefined,
       neighborhood: asString(data.neighborhood) || undefined,
       weekday: asString(data.weekday) || undefined,
       time: asString(data.time) || undefined,
       capacity: typeof data.capacity === 'number' ? data.capacity : undefined,
       participants: typeof data.participants === 'number' ? data.participants : undefined,
+      createdAt: data.createdAt ? toIso(data.createdAt) : undefined,
     }
   }).sort((a, b) => a.name.localeCompare(b.name))
 }
@@ -330,6 +338,129 @@ export async function listJourneyDiscipleships(access: JourneyAccessContext, con
       startedAt: data.startedAt ? toIso(data.startedAt) : undefined,
     }
   }).sort((a, b) => a.status.localeCompare(b.status) || a.meeting - b.meeting)
+}
+
+export async function createJourneyGroup(input: {
+  organizationId: string
+  congregationId: string
+  actorId: string
+  name: string
+  leader?: string
+  leaderId?: string
+  host?: string
+  apprentice?: string
+  neighborhood?: string
+  weekday?: string
+  time?: string
+  capacity?: number
+}) {
+  const firestore = requireDb()
+  const groupRef = doc(collection(firestore, journeyCollectionPath(input.organizationId, 'groups')))
+  const batch = writeBatch(firestore)
+  batch.set(groupRef, {
+    organizationId: input.organizationId,
+    congregationId: input.congregationId,
+    name: input.name.trim(),
+    leader: String(input.leader ?? '').trim(),
+    leaderId: String(input.leaderId ?? '').trim(),
+    host: String(input.host ?? '').trim(),
+    apprentice: String(input.apprentice ?? '').trim(),
+    neighborhood: String(input.neighborhood ?? '').trim(),
+    weekday: String(input.weekday ?? '').trim(),
+    time: String(input.time ?? '').trim(),
+    capacity: Math.max(1, Math.min(100, Math.floor(input.capacity ?? 12))),
+    participants: 0,
+    createdAt: serverTimestamp(),
+    createdBy: input.actorId,
+    updatedAt: serverTimestamp(),
+    updatedBy: input.actorId,
+  })
+  await batch.commit()
+  return groupRef.id
+}
+
+export async function updateJourneyGroup(input: {
+  organizationId: string
+  groupId: string
+  actorId: string
+  patch: Partial<Pick<JourneyGroupRecord, 'name' | 'leader' | 'leaderId' | 'host' | 'apprentice' | 'neighborhood' | 'weekday' | 'time' | 'capacity' | 'participants'>>
+}) {
+  const firestore = requireDb()
+  const groupRef = doc(firestore, `${journeyCollectionPath(input.organizationId, 'groups')}/${input.groupId}`)
+  const patch: Record<string, unknown> = { updatedAt: serverTimestamp(), updatedBy: input.actorId }
+  for (const [key, value] of Object.entries(input.patch)) {
+    if (value === undefined) continue
+    if (key === 'capacity') patch[key] = Math.max(1, Math.min(100, Math.floor(Number(value))))
+    else if (key === 'participants') patch[key] = Math.max(0, Math.floor(Number(value)))
+    else patch[key] = typeof value === 'string' ? value.trim() : value
+  }
+  const batch = writeBatch(firestore)
+  batch.update(groupRef, patch)
+  await batch.commit()
+}
+
+export async function createJourneyDiscipleship(input: {
+  organizationId: string
+  congregationId: string
+  person: JourneyPersonRecord
+  actorId: string
+  disciplerName?: string
+}) {
+  const firestore = requireDb()
+  const relationRef = doc(collection(firestore, journeyCollectionPath(input.organizationId, 'discipleships')))
+  const batch = writeBatch(firestore)
+  batch.set(relationRef, {
+    organizationId: input.organizationId,
+    congregationId: input.congregationId,
+    personId: input.person.id,
+    personName: input.person.name,
+    disciplerId: input.actorId,
+    disciplerName: String(input.disciplerName ?? '').trim(),
+    meeting: 1,
+    completedMeetings: [],
+    status: 'active',
+    nextMeeting: 'Agendar encontro 1',
+    startedAt: serverTimestamp(),
+    createdAt: serverTimestamp(),
+    createdBy: input.actorId,
+    updatedAt: serverTimestamp(),
+    updatedBy: input.actorId,
+  })
+  await batch.commit()
+  return relationRef.id
+}
+
+export async function updateJourneyDiscipleship(input: {
+  organizationId: string
+  relation: JourneyDiscipleshipRecord
+  actorId: string
+  action: 'advance' | 'pause' | 'resume'
+}) {
+  const firestore = requireDb()
+  const relationRef = doc(firestore, `${journeyCollectionPath(input.organizationId, 'discipleships')}/${input.relation.id}`)
+  const batch = writeBatch(firestore)
+  if (input.action === 'advance') {
+    const currentMeeting = Math.max(1, Math.min(7, input.relation.meeting || 1))
+    const nextMeeting = Math.min(7, currentMeeting + 1)
+    const completed = currentMeeting >= 7
+    batch.update(relationRef, {
+      meeting: nextMeeting,
+      status: completed ? 'completed' : 'active',
+      nextMeeting: completed ? 'Ciclo concluído' : `Agendar encontro ${nextMeeting}`,
+      lastCompletedMeeting: currentMeeting,
+      lastCompletedAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+      updatedBy: input.actorId,
+    })
+  } else {
+    const status = input.action === 'pause' ? 'paused' : 'active'
+    batch.update(relationRef, {
+      status,
+      updatedAt: serverTimestamp(),
+      updatedBy: input.actorId,
+    })
+  }
+  await batch.commit()
 }
 
 export async function listPresenceSessions(organizationId: string, congregationId: string): Promise<PresenceSessionRecord[]> {

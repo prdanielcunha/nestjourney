@@ -349,3 +349,76 @@ export const myTodayCopy = {
     error: 'No se pudo montar esta visión.',
   },
 } as const
+
+
+export const groupsRuntimeCopy = {
+  'pt-BR': {
+    product: 'NestJourney', title: 'Grupos', subtitle: 'Estrutura real de comunidade, capacidade e responsáveis — sem transformar presença em julgamento.',
+    back: 'Voltar ao NestJourney', loading: 'Carregando grupos…', noAccessTitle: 'Acesso não disponível',
+    noAccess: 'Seu perfil não possui capacidade para administrar grupos neste escopo.', retry: 'Tentar novamente',
+    congregation: 'Unidade', newGroup: 'Novo grupo', empty: 'Nenhum grupo registrado nesta unidade.',
+    leader: 'Líder', host: 'Anfitrião', apprentice: 'Aprendiz', neighborhood: 'Bairro', schedule: 'Encontro',
+    participants: 'Participantes', capacity: 'Capacidade', nearCapacity: 'Perto da capacidade', healthy: 'Dentro da capacidade',
+    adjust: 'Ajustar contagem', decrease: 'Diminuir', increase: 'Aumentar', name: 'Nome do grupo', weekday: 'Dia/frequência', time: 'Horário',
+    cancel: 'Cancelar', create: 'Criar grupo', sourceRule: 'A ocupação é um dado operacional registrado. Ela não mede saúde espiritual nem qualidade do líder.',
+    error: 'Não foi possível concluir a operação.',
+  },
+  en: {
+    product: 'NestJourney', title: 'Groups', subtitle: 'Real community structure, capacity, and ownership — without turning attendance into judgment.',
+    back: 'Back to NestJourney', loading: 'Loading groups…', noAccessTitle: 'Access unavailable',
+    noAccess: 'Your profile cannot manage groups in this scope.', retry: 'Try again',
+    congregation: 'Campus', newGroup: 'New group', empty: 'No groups recorded for this campus.',
+    leader: 'Leader', host: 'Host', apprentice: 'Apprentice', neighborhood: 'Neighborhood', schedule: 'Meeting',
+    participants: 'Participants', capacity: 'Capacity', nearCapacity: 'Near capacity', healthy: 'Within capacity',
+    adjust: 'Adjust count', decrease: 'Decrease', increase: 'Increase', name: 'Group name', weekday: 'Day/frequency', time: 'Time',
+    cancel: 'Cancel', create: 'Create group', sourceRule: 'Occupancy is a recorded operational fact. It does not score spiritual health or leader quality.',
+    error: 'The operation could not be completed.',
+  },
+  es: {
+    product: 'NestJourney', title: 'Grupos', subtitle: 'Estructura real de comunidad, capacidad y responsables — sin convertir presencia en juicio.',
+    back: 'Volver al NestJourney', loading: 'Cargando grupos…', noAccessTitle: 'Acceso no disponible',
+    noAccess: 'Tu perfil no puede administrar grupos en este alcance.', retry: 'Intentar de nuevo',
+    congregation: 'Sede', newGroup: 'Nuevo grupo', empty: 'No hay grupos registrados en esta sede.',
+    leader: 'Líder', host: 'Anfitrión', apprentice: 'Aprendiz', neighborhood: 'Barrio', schedule: 'Encuentro',
+    participants: 'Participantes', capacity: 'Capacidad', nearCapacity: 'Cerca de la capacidad', healthy: 'Dentro de la capacidad',
+    adjust: 'Ajustar conteo', decrease: 'Disminuir', increase: 'Aumentar', name: 'Nombre del grupo', weekday: 'Día/frecuencia', time: 'Horario',
+    cancel: 'Cancelar', create: 'Crear grupo', sourceRule: 'La ocupación es un dato operativo registrado. No mide salud espiritual ni calidad del líder.',
+    error: 'No se pudo completar la operación.',
+  },
+} as const
+
+export const discipleshipRuntimeCopy = {
+  'pt-BR': {
+    product: 'NestJourney', title: 'Discipulado', subtitle: 'Relações reais, encontros registrados e próximo passo explícito. Sem score de maturidade espiritual.',
+    back: 'Voltar ao NestJourney', loading: 'Carregando discipulado…', noAccessTitle: 'Acesso não disponível',
+    noAccess: 'Seu perfil não possui capacidade para operar discipulado neste escopo.', retry: 'Tentar novamente',
+    congregation: 'Unidade', newRelation: 'Iniciar relação', empty: 'Nenhuma relação de discipulado encontrada nesta unidade.',
+    person: 'Pessoa', discipler: 'Discipulador', meeting: 'Encontro', next: 'Próximo passo', active: 'Ativo', paused: 'Pausado', completed: 'Concluído',
+    advance: 'Concluir encontro', pause: 'Pausar', resume: 'Retomar', choosePerson: 'Escolha a pessoa', cancel: 'Cancelar', start: 'Iniciar',
+    duplicate: 'Já existe uma relação ativa ou pausada para esta pessoa na sua Lens.',
+    sourceRule: 'Concluir encontros registra fatos do processo. O sistema não conclui que alguém amadureceu, esfriou ou mudou espiritualmente.',
+    error: 'Não foi possível concluir a operação.',
+  },
+  en: {
+    product: 'NestJourney', title: 'Discipleship', subtitle: 'Real relationships, recorded meetings, and an explicit next step. No spiritual maturity scoring.',
+    back: 'Back to NestJourney', loading: 'Loading discipleship…', noAccessTitle: 'Access unavailable',
+    noAccess: 'Your profile cannot operate discipleship in this scope.', retry: 'Try again',
+    congregation: 'Campus', newRelation: 'Start relationship', empty: 'No discipleship relationships found in this campus.',
+    person: 'Person', discipler: 'Discipler', meeting: 'Meeting', next: 'Next step', active: 'Active', paused: 'Paused', completed: 'Completed',
+    advance: 'Complete meeting', pause: 'Pause', resume: 'Resume', choosePerson: 'Choose person', cancel: 'Cancel', start: 'Start',
+    duplicate: 'An active or paused relationship already exists for this person in your Lens.',
+    sourceRule: 'Completing meetings records process facts. The system does not conclude that someone matured, cooled off, or changed spiritually.',
+    error: 'The operation could not be completed.',
+  },
+  es: {
+    product: 'NestJourney', title: 'Discipulado', subtitle: 'Relaciones reales, encuentros registrados y próximo paso explícito. Sin puntuar madurez espiritual.',
+    back: 'Volver al NestJourney', loading: 'Cargando discipulado…', noAccessTitle: 'Acceso no disponible',
+    noAccess: 'Tu perfil no puede operar discipulado en este alcance.', retry: 'Intentar de nuevo',
+    congregation: 'Sede', newRelation: 'Iniciar relación', empty: 'No se encontraron relaciones de discipulado en esta sede.',
+    person: 'Persona', discipler: 'Discipulador', meeting: 'Encuentro', next: 'Próximo paso', active: 'Activo', paused: 'Pausado', completed: 'Concluido',
+    advance: 'Concluir encuentro', pause: 'Pausar', resume: 'Retomar', choosePerson: 'Elegir persona', cancel: 'Cancelar', start: 'Iniciar',
+    duplicate: 'Ya existe una relación activa o pausada para esta persona en tu Lens.',
+    sourceRule: 'Concluir encuentros registra hechos del proceso. El sistema no concluye que alguien maduró, se enfrió o cambió espiritualmente.',
+    error: 'No se pudo completar la operación.',
+  },
+} as const
