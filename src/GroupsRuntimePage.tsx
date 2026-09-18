@@ -1,18 +1,23 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { ChevronLeft, House, Plus, Search, ShieldCheck, UserMinus, UserPlus, Users, X } from 'lucide-react'
+import { Check, ChevronLeft, House, Plus, Search, Send, ShieldCheck, UserMinus, Users, X } from 'lucide-react'
 import { auth } from './firebase'
 import {
+  canCreateJourneyGroupEntryRequest,
   canManageJourneyGroupRoster,
   createJourneyGroup,
+  createJourneyGroupEntryRequest,
   getActiveJourneyOrganizationId,
   listJourneyCongregations,
+  listJourneyGroupEntryRequests,
   listJourneyGroupMemberships,
   listJourneyGroups,
   listJourneyPeople,
   loadJourneyAccess,
+  resolveJourneyGroupEntryRequest,
   setJourneyGroupMembership,
   type JourneyAccessContext,
   type JourneyCongregation,
+  type JourneyGroupEntryRequest,
   type JourneyGroupMembership,
   type JourneyGroupRecord,
   type JourneyPersonRecord,
@@ -30,16 +35,17 @@ export default function GroupsRuntimePage() {
   const [people, setPeople] = useState<JourneyPersonRecord[]>([])
   const [rosterGroup, setRosterGroup] = useState<JourneyGroupRecord | null>(null)
   const [roster, setRoster] = useState<JourneyGroupMembership[]>([])
+  const [entryRequests, setEntryRequests] = useState<JourneyGroupEntryRequest[]>([])
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [showNew, setShowNew] = useState(false)
 
-  const refresh = useCallback(async (orgId: string, unitId: string) => {
-    const [nextGroups, nextPeople] = await Promise.all([
-      listJourneyGroups(orgId, unitId),
-      listJourneyPeople(orgId, unitId),
-    ])
+  const refresh = useCallback(async (nextAccess: JourneyAccessContext, unitId: string) => {
+    const nextGroups = await listJourneyGroups(nextAccess.organizationId, unitId)
+    const nextPeople = canCreateJourneyGroupEntryRequest(nextAccess)
+      ? await listJourneyPeople(nextAccess.organizationId, unitId)
+      : []
     setGroups(nextGroups)
     setPeople(nextPeople)
     return nextGroups
@@ -58,7 +64,7 @@ export default function GroupsRuntimePage() {
       setCongregations(units)
       const unitId = units[0]?.id ?? ''
       setCongregationId(unitId)
-      if (unitId) await refresh(organizationId, unitId)
+      if (unitId) await refresh(nextAccess, unitId)
     } catch (cause) { console.error(cause); setError(t.error) }
     finally { setLoading(false) }
   }, [refresh, t.error])
@@ -67,32 +73,69 @@ export default function GroupsRuntimePage() {
 
   async function selectUnit(unitId: string) {
     if (!access) return
-    setCongregationId(unitId); setBusy(true); setError(''); setRosterGroup(null); setRoster([])
-    try { await refresh(access.organizationId, unitId) }
+    setCongregationId(unitId); setBusy(true); setError(''); setRosterGroup(null); setRoster([]); setEntryRequests([])
+    try { await refresh(access, unitId) }
     catch (cause) { console.error(cause); setError(t.error) }
     finally { setBusy(false) }
+  }
+
+  async function loadRoster(group: JourneyGroupRecord) {
+    if (!access || !canManageJourneyGroupRoster(access, group)) return
+    const [nextRoster, nextRequests] = await Promise.all([
+      listJourneyGroupMemberships(access, group),
+      listJourneyGroupEntryRequests(access, group),
+    ])
+    setRoster(nextRoster)
+    setEntryRequests(nextRequests)
   }
 
   async function openRoster(group: JourneyGroupRecord) {
     if (!access || !canManageJourneyGroupRoster(access, group)) return
     setBusy(true); setError('')
     try {
-      const next = await listJourneyGroupMemberships(access, group)
-      setRoster(next)
+      await loadRoster(group)
       setRosterGroup(group)
     } catch (cause) { console.error(cause); setError(t.error) }
     finally { setBusy(false) }
   }
 
-  async function changeMembership(person: JourneyPersonRecord, active: boolean) {
+  async function removeMembership(person: JourneyPersonRecord) {
     if (!access || !rosterGroup) return
     setBusy(true); setError('')
     try {
-      await setJourneyGroupMembership({ access, group: rosterGroup, person, active })
-      const nextGroups = await refresh(access.organizationId, congregationId)
+      await setJourneyGroupMembership({ access, group: rosterGroup, person, active: false })
+      const nextGroups = await refresh(access, congregationId)
       const nextGroup = nextGroups.find((item) => item.id === rosterGroup.id) ?? rosterGroup
       setRosterGroup(nextGroup)
-      setRoster(await listJourneyGroupMemberships(access, nextGroup))
+      await loadRoster(nextGroup)
+    } catch (cause) {
+      console.error(cause)
+      setError(t.error)
+    } finally { setBusy(false) }
+  }
+
+  async function requestEntry(person: JourneyPersonRecord) {
+    if (!access || !rosterGroup) return
+    setBusy(true); setError('')
+    try {
+      await createJourneyGroupEntryRequest({ access, group: rosterGroup, person })
+      await loadRoster(rosterGroup)
+    } catch (cause) {
+      console.error(cause)
+      const message = cause instanceof Error ? cause.message : ''
+      setError(message === 'group_entry_request_exists' ? t.requestAlreadyPending : message === 'group_entry_already_member' ? t.alreadyParticipant : t.error)
+    } finally { setBusy(false) }
+  }
+
+  async function resolveEntry(request: JourneyGroupEntryRequest, decision: 'accepted' | 'declined') {
+    if (!access || !rosterGroup) return
+    setBusy(true); setError('')
+    try {
+      await resolveJourneyGroupEntryRequest({ access, group: rosterGroup, request, decision })
+      const nextGroups = await refresh(access, congregationId)
+      const nextGroup = nextGroups.find((item) => item.id === rosterGroup.id) ?? rosterGroup
+      setRosterGroup(nextGroup)
+      await loadRoster(nextGroup)
     } catch (cause) {
       console.error(cause)
       setError(cause instanceof Error && cause.message === 'group_capacity_reached' ? t.capacityReached : t.error)
@@ -128,10 +171,22 @@ export default function GroupsRuntimePage() {
         organizationId:access.organizationId,congregationId,actorId:access.userId,
         leaderId:access.role==='group_leader'?access.userId:'',...data,
       })
-      setShowNew(false);await refresh(access.organizationId,congregationId)
+      setShowNew(false);await refresh(access,congregationId)
     } catch(cause){console.error(cause);setError(t.error)}finally{setBusy(false)}
   }}/> : null}
-  {rosterGroup&&access?<RosterModal locale={locale} group={rosterGroup} people={people} memberships={roster} busy={busy} close={()=>{setRosterGroup(null);setRoster([])}} change={changeMembership}/>:null}
+  {rosterGroup&&access?<RosterModal
+    locale={locale}
+    group={rosterGroup}
+    people={people}
+    memberships={roster}
+    entryRequests={entryRequests}
+    canRequest={canCreateJourneyGroupEntryRequest(access)}
+    busy={busy}
+    close={()=>{setRosterGroup(null);setRoster([]);setEntryRequests([])}}
+    remove={removeMembership}
+    requestEntry={requestEntry}
+    resolveEntry={resolveEntry}
+  />:null}
   </main>
 }
 
@@ -143,30 +198,62 @@ function NewGroupModal({locale,close,save}:{locale:AppLocale;close:()=>void;save
   </div><div className="runtime-modal-actions"><button className="runtime-button" onClick={close}>{t.cancel}</button><button className="runtime-button primary" disabled={!name.trim()} onClick={()=>void save({name,leader,host,apprentice,neighborhood,weekday,time,capacity})}>{t.create}</button></div></section></div>
 }
 
-function RosterModal({locale,group,people,memberships,busy,close,change}:{locale:AppLocale;group:JourneyGroupRecord;people:JourneyPersonRecord[];memberships:JourneyGroupMembership[];busy:boolean;close:()=>void;change:(person:JourneyPersonRecord,active:boolean)=>Promise<void>}){
+function RosterModal({
+  locale,group,people,memberships,entryRequests,canRequest,busy,close,remove,requestEntry,resolveEntry,
+}:{
+  locale:AppLocale
+  group:JourneyGroupRecord
+  people:JourneyPersonRecord[]
+  memberships:JourneyGroupMembership[]
+  entryRequests:JourneyGroupEntryRequest[]
+  canRequest:boolean
+  busy:boolean
+  close:()=>void
+  remove:(person:JourneyPersonRecord)=>Promise<void>
+  requestEntry:(person:JourneyPersonRecord)=>Promise<void>
+  resolveEntry:(request:JourneyGroupEntryRequest,decision:'accepted'|'declined')=>Promise<void>
+}){
   const t=groupsRuntimeCopy[locale]
   const [query,setQuery]=useState('')
-  const activeIds=useMemo(()=>new Set(memberships.filter(item=>item.status==='active').map(item=>item.personId)),[memberships])
+  const activeMemberships=useMemo(()=>memberships.filter(item=>item.status==='active'),[memberships])
+  const activeIds=useMemo(()=>new Set(activeMemberships.map(item=>item.personId)),[activeMemberships])
+  const pending=useMemo(()=>entryRequests.filter(item=>item.status==='pending'),[entryRequests])
+  const pendingIds=useMemo(()=>new Set(pending.map(item=>item.personId)),[pending])
   const needle=query.trim().toLocaleLowerCase(locale)
-  const visible=people.filter(person=>!needle||person.name.toLocaleLowerCase(locale).includes(needle))
-  const active=visible.filter(person=>activeIds.has(person.id))
-  const available=visible.filter(person=>!activeIds.has(person.id))
+  const active=activeMemberships
+    .map(item=>people.find(person=>person.id===item.personId)??({
+      id:item.personId,organizationId:item.organizationId,congregationId:item.congregationId,name:item.personName??'—',
+    } satisfies JourneyPersonRecord))
+    .filter(person=>!needle||person.name.toLocaleLowerCase(locale).includes(needle))
+  const available=canRequest
+    ? people.filter(person=>!activeIds.has(person.id)&&!pendingIds.has(person.id)&&(!needle||person.name.toLocaleLowerCase(locale).includes(needle)))
+    : []
+  const visiblePending=pending.filter(item=>!needle||item.personName.toLocaleLowerCase(locale).includes(needle))
   const capacity=Math.max(1,group.capacity??12)
   const participants=group.participants??0
 
   return <div className="runtime-modal-backdrop" onMouseDown={close}><section className="runtime-panel runtime-modal runtime-roster-modal" onMouseDown={e=>e.stopPropagation()}>
     <div className="runtime-modal-head"><div><span className="runtime-kicker">Journey / Community</span><h2>{group.name}</h2><p className="runtime-muted">{participants} / {capacity} · {t.explicitRoster}</p></div><button className="runtime-button" onClick={close}><X size={17}/></button></div>
     <label className="runtime-roster-search"><Search size={16}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder={t.searchPerson}/></label>
+
+    <section className="runtime-entry-panel">
+      <div className="runtime-roster-head"><span>{t.pendingEntryRequests}</span><b>{visiblePending.length}</b></div>
+      <div className="runtime-roster-list">
+        {visiblePending.map(request=><article key={request.id}><span><strong>{request.personName}</strong><small>{t.entryRequestOperational}</small></span><div className="runtime-inline-actions"><button className="runtime-icon-button accept" disabled={busy||participants>=capacity} onClick={()=>void resolveEntry(request,'accepted')} aria-label={t.acceptEntry}><Check size={16}/></button><button className="runtime-icon-button danger" disabled={busy} onClick={()=>void resolveEntry(request,'declined')} aria-label={t.declineEntry}><X size={16}/></button></div></article>)}
+        {!visiblePending.length?<p className="runtime-roster-empty">{t.noPendingEntryRequests}</p>:null}
+      </div>
+    </section>
+
     <div className="runtime-roster-columns">
       <section><div className="runtime-roster-head"><span>{t.currentParticipants}</span><b>{active.length}</b></div><div className="runtime-roster-list">
-        {active.map(person=><article key={person.id}><span><strong>{person.name}</strong><small>{t.explicitLink}</small></span><button className="runtime-icon-button danger" disabled={busy} onClick={()=>void change(person,false)} aria-label={t.removeParticipant}><UserMinus size={16}/></button></article>)}
+        {active.map(person=><article key={person.id}><span><strong>{person.name}</strong><small>{t.explicitLink}</small></span><button className="runtime-icon-button danger" disabled={busy} onClick={()=>void remove(person)} aria-label={t.removeParticipant}><UserMinus size={16}/></button></article>)}
         {!active.length?<p className="runtime-roster-empty">{t.noExplicitParticipants}</p>:null}
       </div></section>
-      <section><div className="runtime-roster-head"><span>{t.availablePeople}</span><b>{available.length}</b></div><div className="runtime-roster-list">
-        {available.map(person=><article key={person.id}><span><strong>{person.name}</strong><small>{person.consent?t.contactAuthorized:t.contactNotAuthorized}</small></span><button className="runtime-icon-button" disabled={busy||participants>=capacity} onClick={()=>void change(person,true)} aria-label={t.addParticipant}><UserPlus size={16}/></button></article>)}
-        {!available.length?<p className="runtime-roster-empty">{t.noAvailablePeople}</p>:null}
+      <section><div className="runtime-roster-head"><span>{canRequest?t.availablePeople:t.entryRequestAccess}</span><b>{canRequest?available.length:'—'}</b></div><div className="runtime-roster-list">
+        {canRequest?available.map(person=><article key={person.id}><span><strong>{person.name}</strong><small>{person.consent?t.contactAuthorized:t.contactNotAuthorized}</small></span><button className="runtime-icon-button" disabled={busy} onClick={()=>void requestEntry(person)} aria-label={t.requestEntry}><Send size={16}/></button></article>):<p className="runtime-roster-empty">{t.candidateRestricted}</p>}
+        {canRequest&&!available.length?<p className="runtime-roster-empty">{t.noAvailablePeople}</p>:null}
       </div></section>
     </div>
-    <p className="runtime-rule"><ShieldCheck size={15}/>{t.rosterRule}</p>
+    <p className="runtime-rule"><ShieldCheck size={15}/>{t.entryRequestRule}</p>
   </section></div>
 }
