@@ -483,24 +483,36 @@ export async function updateJourneyDiscipleship(input: {
 
 export async function listImplementationCycles(organizationId: string, congregationId: string): Promise<JourneyImplementationCycle[]> {
   const firestore = requireDb()
+  const basePath = journeyCollectionPath(organizationId, 'implementationCycles')
   const snapshot = await getDocs(query(
-    collection(firestore, journeyCollectionPath(organizationId, 'implementationCycles')),
+    collection(firestore, basePath),
     where('congregationId', '==', congregationId),
   ))
-  return snapshot.docs.map((item): JourneyImplementationCycle => {
+
+  const cycles = await Promise.all(snapshot.docs.map(async (item): Promise<JourneyImplementationCycle> => {
     const data = item.data()
+    const steps = await getDocs(collection(firestore, `${basePath}/${item.id}/steps`))
+    const completedKeys = steps.docs
+      .map((step) => asString(step.data().key))
+      .filter(Boolean)
+      .sort()
     return {
-      id: item.id, organizationId, congregationId, playbookId: 'raiz_e_mesa_2026',
-      status: data.status === 'completed' ? 'completed' : 'active',
-      completedKeys: asStringArray(data.completedKeys),
+      id: item.id,
+      organizationId,
+      congregationId,
+      playbookId: 'raiz_e_mesa_2026',
+      status: completedKeys.length >= 46 ? 'completed' : 'active',
+      completedKeys,
       startedAt: toIso(data.startedAt),
       createdAt: data.createdAt ? toIso(data.createdAt) : undefined,
       createdBy: asString(data.createdBy),
-      updatedAt: data.updatedAt ? toIso(data.updatedAt) : undefined,
-      updatedBy: asString(data.updatedBy) || undefined,
-      completedAt: data.completedAt ? toIso(data.completedAt) : undefined,
+      updatedAt: undefined,
+      updatedBy: undefined,
+      completedAt: undefined,
     }
-  }).sort((a, b) => Date.parse(b.startedAt) - Date.parse(a.startedAt))
+  }))
+
+  return cycles.sort((a, b) => Date.parse(b.startedAt) - Date.parse(a.startedAt))
 }
 
 export async function createImplementationCycle(input: { organizationId: string; congregationId: string; actorId: string }) {
@@ -508,9 +520,13 @@ export async function createImplementationCycle(input: { organizationId: string;
   const cycleRef = doc(firestore, `${journeyCollectionPath(input.organizationId, 'implementationCycles')}/${input.congregationId}-raiz-e-mesa-2026`)
   const batch = writeBatch(firestore)
   batch.set(cycleRef, {
-    organizationId: input.organizationId, congregationId: input.congregationId, playbookId: 'raiz_e_mesa_2026',
-    status: 'active', completedKeys: [], startedAt: serverTimestamp(), createdAt: serverTimestamp(), createdBy: input.actorId,
-    updatedAt: serverTimestamp(), updatedBy: input.actorId, completedAt: null,
+    organizationId: input.organizationId,
+    congregationId: input.congregationId,
+    playbookId: 'raiz_e_mesa_2026',
+    status: 'active',
+    startedAt: serverTimestamp(),
+    createdAt: serverTimestamp(),
+    createdBy: input.actorId,
   })
   await batch.commit()
   return cycleRef.id
@@ -523,16 +539,21 @@ export async function completeImplementationStep(input: {
   key: string
   requiredKeys: string[]
 }) {
+  if (!input.requiredKeys.includes(input.key)) throw new Error('invalid_implementation_step')
   const firestore = requireDb()
-  const cycleRef = doc(firestore, `${journeyCollectionPath(input.organizationId, 'implementationCycles')}/${input.cycle.id}`)
-  const completedKeys = [...new Set([...input.cycle.completedKeys, input.key])]
-  const isComplete = input.requiredKeys.every((key) => completedKeys.includes(key))
+  const stepRef = doc(
+    firestore,
+    `${journeyCollectionPath(input.organizationId, 'implementationCycles')}/${input.cycle.id}/steps/${input.key}`,
+  )
   const batch = writeBatch(firestore)
-  batch.update(cycleRef, {
-    completedKeys, status: isComplete ? 'completed' : 'active',
-    completedAt: isComplete ? serverTimestamp() : null,
-    lastCompletedKey: input.key,
-    updatedAt: serverTimestamp(), updatedBy: input.actorId,
+  batch.set(stepRef, {
+    organizationId: input.organizationId,
+    congregationId: input.cycle.congregationId,
+    cycleId: input.cycle.id,
+    playbookId: input.cycle.playbookId,
+    key: input.key,
+    completedAt: serverTimestamp(),
+    completedBy: input.actorId,
   })
   await batch.commit()
 }
