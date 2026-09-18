@@ -1,5 +1,14 @@
 import { evaluateCarePromise } from './intelligence'
-import { careRequestToPromise, type CareRequestRecord, type JourneyDiscipleshipRecord, type JourneyGroupRecord, type JourneyImplementationCycle, type JourneyPersonRecord, type PresenceSessionRecord } from './journeyRepository'\nimport { implementationProgress, implementationWeekForProgress } from './implementationPlaybook'
+import {
+  careRequestToPromise,
+  type CareRequestRecord,
+  type JourneyDiscipleshipRecord,
+  type JourneyGroupRecord,
+  type JourneyImplementationCycle,
+  type JourneyPersonRecord,
+  type PresenceSessionRecord,
+} from './journeyRepository'
+import { implementationProgress, implementationWeekForProgress } from './implementationPlaybook'
 
 export interface JourneyOverviewAvailability {
   people: boolean
@@ -7,6 +16,7 @@ export interface JourneyOverviewAvailability {
   presence: boolean
   groups: boolean
   discipleship: boolean
+  implementation: boolean
 }
 
 export interface JourneyOverviewSnapshot {
@@ -15,6 +25,7 @@ export interface JourneyOverviewSnapshot {
   presence: { openSessions: number } | null
   groups: { count: number; nearCapacity: number } | null
   discipleship: { active: number; paused: number; completed: number } | null
+  implementation: { status: 'active' | 'completed'; percent: number; week: number } | null
 }
 
 export function buildJourneyOverview(input: {
@@ -24,11 +35,14 @@ export function buildJourneyOverview(input: {
   sessions: PresenceSessionRecord[]
   groups: JourneyGroupRecord[]
   discipleships: JourneyDiscipleshipRecord[]
+  implementationCycles: JourneyImplementationCycle[]
   now?: Date
 }): JourneyOverviewSnapshot {
   const careEvaluations = input.availability.care
     ? input.careRequests.map((request) => ({ request, state: evaluateCarePromise(careRequestToPromise(request), input.now).state }))
     : []
+
+  const implementation = input.implementationCycles[0]
 
   return {
     people: input.availability.people ? { count: input.people.length } : null,
@@ -53,10 +67,10 @@ export function buildJourneyOverview(input: {
       paused: input.discipleships.filter((item) => item.status === 'paused').length,
       completed: input.discipleships.filter((item) => item.status === 'completed').length,
     } : null,
-    implementation: input.availability.implementation && input.implementationCycles[0] ? {
-      status: input.implementationCycles[0].status,
-      percent: implementationProgress(input.implementationCycles[0].completedKeys).percent,
-      week: implementationWeekForProgress(input.implementationCycles[0].completedKeys),
+    implementation: input.availability.implementation && implementation ? {
+      status: implementation.status,
+      percent: implementationProgress(implementation.completedKeys).percent,
+      week: implementationWeekForProgress(implementation.completedKeys),
     } : null,
   }
 }
