@@ -86,6 +86,11 @@ service cloud.firestore {
         || role(orgId, ['owner', 'admin', 'pastor', 'group_leader'])
         || hasPermission(orgId, 'canManageGroups');
     }
+    function canManageImplementation(orgId) {
+      return isSystemAdmin()
+        || role(orgId, ['owner', 'admin', 'pastor', 'coordinator'])
+        || hasPermission(orgId, 'canManageImplementation');
+    }
     function assignedToCongregation(orgId, congregationId) {
       return membershipIsActive(orgId) && congregationId is string
         && congregationId in membership(orgId).get('congregationIds', []);
@@ -234,6 +239,22 @@ service cloud.firestore {
         && request.resource.data.get('resolutionCode', '') in ['contact_completed', 'pastoral_handoff', 'declined_contact', 'closed_no_response', 'other_resolved']
         && note is string
         && note.size() <= 160;
+    }
+    function validImplementationKey(key) {
+      return key is string
+        && key.matches('^(prep[.][1-7]|week[.]1[.](practice|teach[.][1-4])|week[.]2[.](practice|teach[.][1-5])|week[.]3[.](practice|teach[.][1-4])|week[.]4[.](practice|teach[.][1-5])|week[.]5[.](practice|teach[.][1-5])|week[.]6[.](practice|teach[.][1-4])|week[.]7[.](practice|teach[.][1-5]))$');
+    }
+    function validImplementationCycleCreate(orgId) {
+      return journeyTenantCreateFallback(orgId);
+    }
+    function journeyTenantCreateFallback(orgId) {
+      return tenantCreate(orgId)
+        && request.resource.data.get('congregationId', '') is string
+        && request.resource.data.get('playbookId', '') == 'raiz_e_mesa_2026'
+        && request.resource.data.get('status', '') == 'active'
+        && request.resource.data.get('startedAt', null) == request.time
+        && request.resource.data.get('createdAt', null) == request.time
+        && request.resource.data.get('createdBy', '') == request.auth.uid;
     }
     function validGroupState() {
       let capacity = request.resource.data.get('capacity', 0);
@@ -390,6 +411,35 @@ service cloud.firestore {
             )
             && validCanonicalFact(orgId);
           allow update, delete: if false;
+        }
+        match /implementationCycles/{cycleId} {
+          allow read: if canManageImplementation(orgId)
+            && canAccessCongregation(orgId, resource.data.get('congregationId', ''));
+          allow create: if canManageImplementation(orgId)
+            && canAccessCongregation(orgId, request.resource.data.get('congregationId', ''))
+            && validImplementationCycleCreate(orgId);
+          allow update, delete: if false;
+
+          match /steps/{stepId} {
+            allow read: if canManageImplementation(orgId)
+              && canAccessCongregation(
+                orgId,
+                get(/databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/implementationCycles/$(cycleId)).data.get('congregationId', '')
+              );
+            allow create: if canManageImplementation(orgId)
+              && exists(/databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/implementationCycles/$(cycleId))
+              && canAccessCongregation(orgId, request.resource.data.get('congregationId', ''))
+              && request.resource.data.get('organizationId', '') == orgId
+              && request.resource.data.get('cycleId', '') == cycleId
+              && request.resource.data.get('playbookId', '') == 'raiz_e_mesa_2026'
+              && request.resource.data.get('key', '') == stepId
+              && validImplementationKey(stepId)
+              && request.resource.data.get('completedAt', null) == request.time
+              && request.resource.data.get('completedBy', '') == request.auth.uid
+              && request.resource.data.get('congregationId', '') ==
+                get(/databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/implementationCycles/$(cycleId)).data.get('congregationId', '');
+            allow update, delete: if false;
+          }
         }
         match /groups/{groupId} {
           allow read: if canAccessCongregation(orgId, resource.data.get('congregationId', ''));
