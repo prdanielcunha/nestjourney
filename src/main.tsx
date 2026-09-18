@@ -13,6 +13,7 @@ const GroupsRuntimePage = lazy(() => import('./GroupsRuntimePage.tsx'))
 const DiscipleshipRuntimePage = lazy(() => import('./DiscipleshipRuntimePage.tsx'))
 const JourneyOverviewPage = lazy(() => import('./JourneyOverviewPage.tsx'))
 const ImplementationRuntimePage = lazy(() => import('./ImplementationRuntimePage.tsx'))
+const GovernanceRuntimePage = lazy(() => import('./GovernanceRuntimePage.tsx'))
 
 if ('serviceWorker' in navigator && import.meta.env.PROD) {
   window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js'))
@@ -34,6 +35,8 @@ function JourneyRoute() {
       return <DiscipleshipRuntimePage />
     case 'implementation':
       return <ImplementationRuntimePage />
+    case 'governance':
+      return <GovernanceRuntimePage />
     case 'legacy':
       return <LegacyRaizEMesa />
     case 'overview':
