@@ -108,7 +108,7 @@ describe('Firestore tenant and pastoral isolation', () => {
     await seedMembership('owner', 'org-a', 'owner')
     const db = environment.authenticatedContext('owner').firestore()
     const ref = doc(db, 'organizations/org-a/products/raiz_e_mesa/audit/event-a')
-    await assertSucceeds(setDoc(ref, { organizationId: 'org-a', actorId: 'owner', action: 'person.created', createdAt: serverTimestamp() }))
+    await assertSucceeds(setDoc(ref, { organizationId: 'org-a', congregationId: 'unit-a', actorId: 'owner', action: 'person.created', createdAt: serverTimestamp() }))
     await assertFails(updateDoc(ref, { action: 'tampered' }))
   })
 })
@@ -402,3 +402,92 @@ describe('Implementation Runtime rules', () => {
   })
 })
 
+
+
+describe('Governance Runtime rules', () => {
+  async function seedGovernancePerson() {
+    await environment.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), 'organizations/org-a/products/raiz_e_mesa/people/privacy-person'), {
+        organizationId: 'org-a', congregationId: 'unit-a', name: 'Privacy Person', consent: true, phone: '43999999999',
+      })
+    })
+  }
+
+  function request(uid: string, type: 'correction' | 'consent_revocation' | 'deletion_review' | 'retention_review', congregationId = 'unit-a') {
+    return {
+      organizationId: 'org-a',
+      congregationId,
+      personId: 'privacy-person',
+      personName: 'Privacy Person',
+      requestType: type,
+      targetField: type === 'correction' ? 'phone' : '',
+      proposedValue: type === 'correction' ? '43988888888' : '',
+      status: 'open',
+      requestedAt: serverTimestamp(),
+      requestedBy: uid,
+    }
+  }
+
+  it('data admin can register a structured privacy request and append an audit event', async () => {
+    await seedMembership('data-a', 'org-a', 'data_admin', ['unit-a'])
+    await seedGovernancePerson()
+    const db = environment.authenticatedContext('data-a').firestore()
+    const requestRef = doc(db, 'organizations/org-a/products/raiz_e_mesa/retentionRequests/request-a')
+    const auditRef = doc(db, 'organizations/org-a/products/raiz_e_mesa/audit/privacy-a')
+    const batch = writeBatch(db)
+    batch.set(requestRef, request('data-a', 'correction'))
+    batch.set(auditRef, {
+      organizationId: 'org-a', congregationId: 'unit-a', actorId: 'data-a',
+      action: 'privacy.requested', targetRef: 'privacyRequest:request-a',
+      subjectRef: 'person:privacy-person', requestType: 'correction', createdAt: serverTimestamp(),
+    })
+    await assertSucceeds(batch.commit())
+    await assertSucceeds(getDoc(requestRef))
+    await assertSucceeds(getDoc(auditRef))
+    await assertFails(updateDoc(requestRef, { status: 'resolved' }))
+    await assertFails(deleteDoc(auditRef))
+  })
+
+  it('rejects free-form invalid correction data and cross-scope privacy requests', async () => {
+    await seedMembership('data-a', 'org-a', 'data_admin', ['unit-a'])
+    await seedGovernancePerson()
+    const db = environment.authenticatedContext('data-a').firestore()
+    await assertFails(setDoc(doc(db, 'organizations/org-a/products/raiz_e_mesa/retentionRequests/invalid'), {
+      ...request('data-a', 'correction'),
+      targetField: 'private_notes',
+      proposedValue: 'sensitive narrative',
+    }))
+    await assertFails(setDoc(doc(db, 'organizations/org-a/products/raiz_e_mesa/retentionRequests/outside'), {
+      ...request('data-a', 'retention_review', 'unit-b'),
+    }))
+  })
+
+  it('pastor may view scoped audit but cannot open the data-governance privacy queue', async () => {
+    await seedMembership('pastor-a', 'org-a', 'pastor', ['unit-a'])
+    await seedGovernancePerson()
+    await environment.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore()
+      await setDoc(doc(db, 'organizations/org-a/products/raiz_e_mesa/audit/event-pastor'), {
+        organizationId: 'org-a', congregationId: 'unit-a', actorId: 'data-a', action: 'privacy.requested', createdAt: new Date(),
+      })
+      await setDoc(doc(db, 'organizations/org-a/products/raiz_e_mesa/retentionRequests/request-pastor'), {
+        organizationId: 'org-a', congregationId: 'unit-a', personId: 'privacy-person',
+        requestType: 'retention_review', targetField: '', proposedValue: '', status: 'open',
+        requestedAt: new Date(), requestedBy: 'data-a',
+      })
+    })
+    const db = environment.authenticatedContext('pastor-a').firestore()
+    await assertSucceeds(getDoc(doc(db, 'organizations/org-a/products/raiz_e_mesa/audit/event-pastor')))
+    await assertFails(getDoc(doc(db, 'organizations/org-a/products/raiz_e_mesa/retentionRequests/request-pastor')))
+  })
+
+  it('ordinary operational roles cannot create or read governance requests', async () => {
+    await seedMembership('care-gov', 'org-a', 'care', ['unit-a'])
+    await seedGovernancePerson()
+    const db = environment.authenticatedContext('care-gov').firestore()
+    await assertFails(setDoc(
+      doc(db, 'organizations/org-a/products/raiz_e_mesa/retentionRequests/request-care'),
+      request('care-gov', 'consent_revocation'),
+    ))
+  })
+})
