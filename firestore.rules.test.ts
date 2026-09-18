@@ -356,3 +356,41 @@ describe('Groups and Discipleship runtime rules', () => {
     }))
   })
 })
+
+
+describe('Implementation Runtime rules', () => {
+  const firstKey = 'prep.1'
+  function cycle(uid: string, congregationId = 'unit-a') {
+    return {
+      organizationId:'org-a', congregationId, playbookId:'raiz_e_mesa_2026', status:'active',
+      completedKeys:[], startedAt:serverTimestamp(), createdAt:serverTimestamp(), createdBy:uid,
+      updatedAt:serverTimestamp(), updatedBy:uid, completedAt:null,
+    }
+  }
+
+  it('allows a scoped coordinator to start the playbook and append one canonical step', async () => {
+    await seedMembership('coord-impl','org-a','coordinator',['unit-a'])
+    const db=environment.authenticatedContext('coord-impl').firestore()
+    const ref=doc(db,'organizations/org-a/products/raiz_e_mesa/implementationCycles/cycle-a')
+    await assertSucceeds(setDoc(ref,cycle('coord-impl')))
+    await assertSucceeds(updateDoc(ref,{completedKeys:[firstKey],status:'active',completedAt:null,updatedAt:serverTimestamp(),updatedBy:'coord-impl'}))
+  })
+
+  it('rejects arbitrary keys, removal, premature completion and cross-scope start', async () => {
+    await seedMembership('coord-impl','org-a','coordinator',['unit-a'])
+    const db=environment.authenticatedContext('coord-impl').firestore()
+    const ref=doc(db,'organizations/org-a/products/raiz_e_mesa/implementationCycles/cycle-a')
+    await assertSucceeds(setDoc(ref,cycle('coord-impl')))
+    await assertFails(updateDoc(ref,{completedKeys:['invented.step'],updatedAt:serverTimestamp(),updatedBy:'coord-impl'}))
+    await assertSucceeds(updateDoc(ref,{completedKeys:[firstKey],updatedAt:serverTimestamp(),updatedBy:'coord-impl'}))
+    await assertFails(updateDoc(ref,{completedKeys:[],updatedAt:serverTimestamp(),updatedBy:'coord-impl'}))
+    await assertFails(updateDoc(ref,{status:'completed',completedAt:serverTimestamp(),updatedAt:serverTimestamp(),updatedBy:'coord-impl'}))
+    await assertFails(setDoc(doc(db,'organizations/org-a/products/raiz_e_mesa/implementationCycles/cycle-b'),cycle('coord-impl','unit-b')))
+  })
+
+  it('keeps implementation management away from an ordinary scoped member', async () => {
+    await seedMembership('member-impl','org-a','member',['unit-a'])
+    const db=environment.authenticatedContext('member-impl').firestore()
+    await assertFails(setDoc(doc(db,'organizations/org-a/products/raiz_e_mesa/implementationCycles/member-cycle'),cycle('member-impl')))
+  })
+})

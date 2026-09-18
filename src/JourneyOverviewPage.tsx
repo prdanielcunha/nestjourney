@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { HeartHandshake, House, Leaf, ShieldCheck, UserCheck, Users } from 'lucide-react'
+import { ClipboardCheck, HeartHandshake, House, Leaf, ShieldCheck, UserCheck, Users } from 'lucide-react'
 import { auth } from './firebase'
 import { buildJourneyOverview } from './journeyOverview'
 import {
@@ -25,21 +25,21 @@ import './JourneyOverviewPage.css'
 export default function JourneyOverviewPage() {
   const [locale,setLocale]=useState<AppLocale>(getInitialLocale),t=journeyOverviewCopy[locale]
   const [access,setAccess]=useState<JourneyAccessContext|null>(null),[congregations,setCongregations]=useState<JourneyCongregation[]>([]),[congregationId,setCongregationId]=useState('')
-  const [people,setPeople]=useState<JourneyPersonRecord[]>([]),[care,setCare]=useState<CareRequestRecord[]>([]),[sessions,setSessions]=useState<PresenceSessionRecord[]>([]),[groups,setGroups]=useState<JourneyGroupRecord[]>([]),[discipleships,setDiscipleships]=useState<JourneyDiscipleshipRecord[]>([])
+  const [people,setPeople]=useState<JourneyPersonRecord[]>([]),[care,setCare]=useState<CareRequestRecord[]>([]),[sessions,setSessions]=useState<PresenceSessionRecord[]>([]),[groups,setGroups]=useState<JourneyGroupRecord[]>([]),[discipleships,setDiscipleships]=useState<JourneyDiscipleshipRecord[]>([]),[implementationCycles,setImplementationCycles]=useState<JourneyImplementationCycle[]>([])
   const [loading,setLoading]=useState(true),[busy,setBusy]=useState(false),[error,setError]=useState('')
 
-  const canView=Boolean(access&&(access.broadJourneyAccess||access.canManagePeople||access.canManageCare||access.canManagePresence||access.canManageGroups||access.canManageDiscipleship))
+  const canView=Boolean(access&&(access.broadJourneyAccess||access.canManagePeople||access.canManageCare||access.canManagePresence||access.canManageGroups||access.canManageDiscipleship||access.canManageImplementation))
   const availability=useMemo(()=>({
     people:Boolean(access),
     care:Boolean(access&&(access.canManageCare||access.broadJourneyAccess)),
     presence:Boolean(access&&access.canManagePresence),
     groups:Boolean(access),
-    discipleship:Boolean(access&&(access.canManageDiscipleship||access.broadJourneyAccess)),
+    discipleship:Boolean(access&&(access.canManageDiscipleship||access.broadJourneyAccess)),\n    implementation:Boolean(access?.canManageImplementation),
   }),[access])
-  const overview=useMemo(()=>buildJourneyOverview({availability,people,careRequests:care,sessions,groups,discipleships}),[availability,people,care,sessions,groups,discipleships])
+  const overview=useMemo(()=>buildJourneyOverview({availability,people,careRequests:care,sessions,groups,discipleships,implementationCycles}),[availability,people,care,sessions,groups,discipleships,implementationCycles])
 
   const refresh=useCallback(async(nextAccess:JourneyAccessContext,unitId:string)=>{
-    const [nextPeople,nextGroups,nextCare,nextSessions,nextDiscipleships]=await Promise.all([
+    const [nextPeople,nextGroups,nextCare,nextSessions,nextDiscipleships,nextImplementation]=await Promise.all([
       listJourneyPeople(nextAccess.organizationId,unitId),
       listJourneyGroups(nextAccess.organizationId,unitId),
       nextAccess.canManageCare||nextAccess.broadJourneyAccess?listCareRequests(nextAccess.organizationId,unitId):Promise.resolve([]),

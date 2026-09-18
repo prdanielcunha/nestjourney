@@ -1,5 +1,5 @@
 import { evaluateCarePromise } from './intelligence'
-import { careRequestToPromise, type CareRequestRecord, type JourneyDiscipleshipRecord, type JourneyGroupRecord, type JourneyPersonRecord, type PresenceSessionRecord } from './journeyRepository'
+import { careRequestToPromise, type CareRequestRecord, type JourneyDiscipleshipRecord, type JourneyGroupRecord, type JourneyImplementationCycle, type JourneyPersonRecord, type PresenceSessionRecord } from './journeyRepository'\nimport { implementationProgress, implementationWeekForProgress } from './implementationPlaybook'
 
 export interface JourneyOverviewAvailability {
   people: boolean
@@ -52,6 +52,11 @@ export function buildJourneyOverview(input: {
       active: input.discipleships.filter((item) => item.status === 'active').length,
       paused: input.discipleships.filter((item) => item.status === 'paused').length,
       completed: input.discipleships.filter((item) => item.status === 'completed').length,
+    } : null,
+    implementation: input.availability.implementation && input.implementationCycles[0] ? {
+      status: input.implementationCycles[0].status,
+      percent: implementationProgress(input.implementationCycles[0].completedKeys).percent,
+      week: implementationWeekForProgress(input.implementationCycles[0].completedKeys),
     } : null,
   }
 }

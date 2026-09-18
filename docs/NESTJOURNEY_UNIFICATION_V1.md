@@ -351,3 +351,24 @@ Nenhum dado legado é apagado por esse cutover. A mudança é somente de **front
 As experiências são carregadas por `React.lazy`, evitando que o shell legado inteiro seja incluído no bundle inicial da Journey Overview. Isso reduz o custo da entrada principal e mantém o módulo legado isolado.
 
 O rollback permanece simples: `/legacy` continua disponível, e a regra de resolução de rota está centralizada em `src/routeResolver.ts`, coberta por teste. O produto não depende de apagar ou migrar documentos para alternar a entrada.
+
+
+## 20. Implementação corrente — Implementation Runtime V1
+
+A implantação de sete semanas sai do estado local/demonstrativo e entra no runtime real em `/implementation-runtime`.
+
+O conteúdo pastoral versionado segue o **Manual de Implantação Raiz e Mesa 2026**: preparação três a cinco dias antes da Semana 1; ritmo fixo de 40–45 minutos; Semana 1 — Coração, missão e cultura; Semana 2 — Presença e Mesa Aberta; Semana 3 — Cuidado e conexão; Semana 4 — Casa de Paz; Semana 5 — Raiz: discipulado inicial; Semana 6 — Serviço, multiplicação e segurança; Semana 7 — Consolidação, compromisso e envio; lançamento progressivo desde a Semana 2; e passagem para um ciclo de 30/60/90 dias depois da Semana 7.
+
+### Fonte e semântica do progresso
+
+PT-BR preserva o conteúdo-base do manual. EN e ES são traduções do mesmo playbook. O Firestore persiste somente a confirmação operacional de que cada ponto de preparação, ensino ou prática foi realizado.
+
+O percentual mostrado é **progresso de checklist**, não score de saúde da igreja, fidelidade, maturidade ou sucesso ministerial.
+
+O progresso é monotônico nesta V1: cada chave pertence à lista canônica do playbook; cada atualização acrescenta no máximo uma chave; uma chave registrada não é silenciosamente removida; o ciclo só assume `completed` quando as 46 chaves canônicas estiverem registradas; tenant, congregação, playbook, autor e timestamps de criação não podem ser reatribuídos; e o cliente não pode fazer hard delete.
+
+### Lens de implantação
+
+A capability `canManageImplementation` é concedida por padrão a owner/admin/pastor/coordinator ou por permissão explícita, sempre dentro do escopo de congregação.
+
+Journey Overview expõe a implantação somente para essa Lens. Quando não existe ciclo, o estado é “não iniciado”; isso não é tratado como falha da igreja.

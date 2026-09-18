@@ -13,7 +13,7 @@ describe('Journey Overview factual projection', () => {
 
   it('projects only available sources', () => {
     const snapshot = buildJourneyOverview({
-      availability: { people: true, care: false, presence: true, groups: true, discipleship: false },
+      availability: { people: true, care: false, presence: true, groups: true, discipleship: false, implementation: false },
       people, careRequests, sessions, groups, discipleships,
       now: new Date('2026-09-04T00:00:00Z'),
     })
@@ -26,9 +26,9 @@ describe('Journey Overview factual projection', () => {
 
   it('does not turn a restricted source into a zero metric', () => {
     const snapshot = buildJourneyOverview({
-      availability: { people: false, care: false, presence: false, groups: false, discipleship: false },
-      people: [], careRequests: [], sessions: [], groups: [], discipleships: [],
+      availability: { people: false, care: false, presence: false, groups: false, discipleship: false, implementation: false },
+      people: [], careRequests: [], sessions: [], groups: [], discipleships: [], implementationCycles: [],
     })
-    expect(snapshot).toEqual({ people: null, care: null, presence: null, groups: null, discipleship: null })
+    expect(snapshot).toEqual({ people: null, care: null, presence: null, groups: null, discipleship: null, implementation: null })
   })
 })
