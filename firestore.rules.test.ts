@@ -396,6 +396,113 @@ describe('Groups and Discipleship runtime rules', () => {
     await assertFails(getDoc(doc(environment.authenticatedContext('leader-b').firestore(), path)))
   })
 
+  it('pastor can route a Casa entry request and only that Casa leader can see it', async () => {
+    await seedMembership('leader-a', 'org-a', 'group_leader', ['unit-a'])
+    await seedMembership('leader-b', 'org-a', 'group_leader', ['unit-a'])
+    await seedMembership('pastor-a', 'org-a', 'pastor', ['unit-a'])
+    await environment.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore()
+      await setDoc(doc(db, 'organizations/org-a/products/raiz_e_mesa/people/person-entry'), {
+        organizationId: 'org-a', congregationId: 'unit-a', name: 'Pessoa Entrada',
+      })
+      await setDoc(doc(db, 'organizations/org-a/products/raiz_e_mesa/groups/group-entry-a'), {
+        organizationId: 'org-a', congregationId: 'unit-a', name: 'Casa A',
+        leaderId: 'leader-a', capacity: 12, participants: 0, createdBy: 'leader-a',
+      })
+      await setDoc(doc(db, 'organizations/org-a/products/raiz_e_mesa/groups/group-entry-b'), {
+        organizationId: 'org-a', congregationId: 'unit-a', name: 'Casa B',
+        leaderId: 'leader-b', capacity: 12, participants: 0, createdBy: 'leader-b',
+      })
+    })
+
+    const pastorDb = environment.authenticatedContext('pastor-a').firestore()
+    const requestRef = doc(pastorDb, 'organizations/org-a/products/raiz_e_mesa/groupEntryRequests/request-entry-a')
+    await assertSucceeds(setDoc(requestRef, {
+      organizationId: 'org-a', congregationId: 'unit-a', groupId: 'group-entry-a',
+      personId: 'person-entry', personName: 'Pessoa Entrada', status: 'pending',
+      requestedAt: serverTimestamp(), requestedBy: 'pastor-a', resolvedAt: null, resolvedBy: '',
+    }))
+
+    await assertSucceeds(getDoc(doc(
+      environment.authenticatedContext('leader-a').firestore(),
+      'organizations/org-a/products/raiz_e_mesa/groupEntryRequests/request-entry-a',
+    )))
+    await assertFails(getDoc(doc(
+      environment.authenticatedContext('leader-b').firestore(),
+      'organizations/org-a/products/raiz_e_mesa/groupEntryRequests/request-entry-a',
+    )))
+
+    const leaderDb = environment.authenticatedContext('leader-a').firestore()
+    await assertFails(setDoc(doc(leaderDb, 'organizations/org-a/products/raiz_e_mesa/groupEntryRequests/leader-created'), {
+      organizationId: 'org-a', congregationId: 'unit-a', groupId: 'group-entry-a',
+      personId: 'person-entry', personName: 'Pessoa Entrada', status: 'pending',
+      requestedAt: serverTimestamp(), requestedBy: 'leader-a', resolvedAt: null, resolvedBy: '',
+    }))
+  })
+
+  it('accepting a Casa entry request requires the active membership in the same write', async () => {
+    await seedMembership('leader-a', 'org-a', 'group_leader', ['unit-a'])
+    await environment.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore()
+      await setDoc(doc(db, 'organizations/org-a/products/raiz_e_mesa/people/person-entry'), {
+        organizationId: 'org-a', congregationId: 'unit-a', name: 'Pessoa Entrada',
+      })
+      await setDoc(doc(db, 'organizations/org-a/products/raiz_e_mesa/groups/group-entry-a'), {
+        organizationId: 'org-a', congregationId: 'unit-a', name: 'Casa A',
+        leaderId: 'leader-a', capacity: 12, participants: 0, createdBy: 'leader-a',
+      })
+      await setDoc(doc(db, 'organizations/org-a/products/raiz_e_mesa/groupEntryRequests/request-entry-a'), {
+        organizationId: 'org-a', congregationId: 'unit-a', groupId: 'group-entry-a',
+        personId: 'person-entry', personName: 'Pessoa Entrada', status: 'pending',
+        requestedAt: new Date(), requestedBy: 'pastor-a', resolvedAt: null, resolvedBy: '',
+      })
+    })
+
+    const db = environment.authenticatedContext('leader-a').firestore()
+    const requestRef = doc(db, 'organizations/org-a/products/raiz_e_mesa/groupEntryRequests/request-entry-a')
+    await assertFails(updateDoc(requestRef, {
+      status: 'accepted', resolvedAt: serverTimestamp(), resolvedBy: 'leader-a',
+    }))
+
+    const membershipRef = doc(db, 'organizations/org-a/products/raiz_e_mesa/groupMemberships/group-entry-a__person-entry')
+    const groupRef = doc(db, 'organizations/org-a/products/raiz_e_mesa/groups/group-entry-a')
+    const accept = writeBatch(db)
+    accept.set(membershipRef, {
+      organizationId: 'org-a', congregationId: 'unit-a', groupId: 'group-entry-a',
+      personId: 'person-entry', personName: 'Pessoa Entrada', status: 'active',
+      joinedAt: serverTimestamp(), joinedBy: 'leader-a', leftAt: null, leftBy: '',
+    })
+    accept.update(groupRef, { participants: 1 })
+    accept.update(requestRef, {
+      status: 'accepted', resolvedAt: serverTimestamp(), resolvedBy: 'leader-a',
+    })
+    await assertSucceeds(accept.commit())
+    await assertSucceeds(getDoc(membershipRef))
+    await assertFails(deleteDoc(requestRef))
+  })
+
+  it('a Casa leader can decline a routed entry request without storing a reason', async () => {
+    await seedMembership('leader-a', 'org-a', 'group_leader', ['unit-a'])
+    await environment.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore()
+      await setDoc(doc(db, 'organizations/org-a/products/raiz_e_mesa/groups/group-entry-a'), {
+        organizationId: 'org-a', congregationId: 'unit-a', name: 'Casa A',
+        leaderId: 'leader-a', capacity: 12, participants: 0, createdBy: 'leader-a',
+      })
+      await setDoc(doc(db, 'organizations/org-a/products/raiz_e_mesa/groupEntryRequests/request-decline'), {
+        organizationId: 'org-a', congregationId: 'unit-a', groupId: 'group-entry-a',
+        personId: 'person-entry', personName: 'Pessoa Entrada', status: 'pending',
+        requestedAt: new Date(), requestedBy: 'pastor-a', resolvedAt: null, resolvedBy: '',
+      })
+    })
+    const db = environment.authenticatedContext('leader-a').firestore()
+    const ref = doc(db, 'organizations/org-a/products/raiz_e_mesa/groupEntryRequests/request-decline')
+    await assertSucceeds(updateDoc(ref, {
+      status: 'declined', resolvedAt: serverTimestamp(), resolvedBy: 'leader-a',
+    }))
+    await assertFails(updateDoc(ref, { status: 'pending', resolvedAt: null, resolvedBy: '' }))
+  })
+
   it('discipler can create and advance only their own relation without changing person or regressing meetings', async () => {
     await seedMembership('discipler-a', 'org-a', 'discipler', ['unit-a'])
     await environment.withSecurityRulesDisabled(async (context) => {
