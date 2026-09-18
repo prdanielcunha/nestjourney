@@ -495,16 +495,11 @@ A lista é apresentada em uma interface mobile-first de **Gerenciar pessoas**, c
 
 Adicionar ou encerrar um vínculo ocorre em transação junto com a projeção numérica `groups.participants`.
 
-As Rules exigem que:
+O repositório do aplicativo atualiza a associação e a projeção `groups.participants` na mesma transação e impede novas entradas quando a capacidade registrada foi atingida.
 
-- criar uma associação ativa incremente a contagem do grupo no mesmo write;
-- encerrar uma associação decremente a contagem no mesmo write;
-- reativar uma associação incremente novamente;
-- a capacidade registrada não seja ultrapassada;
-- o vínculo pertença à mesma congregação da pessoa e da Casa;
-- o navegador não faça hard delete da associação.
+As Rules mantêm as fronteiras críticas: o vínculo precisa pertencer à mesma congregação da pessoa e da Casa, somente o roster autorizado pode alterá-lo e o navegador não pode fazer hard delete da associação.
 
-Assim, `participants` continua útil para painéis e alertas de capacidade, mas o vínculo individual passa a possuir fonte explícita.
+Assim, `participants` continua útil para painéis e alertas de capacidade, enquanto o vínculo individual passa a possuir fonte explícita.
 
 ### Journey Profile
 
