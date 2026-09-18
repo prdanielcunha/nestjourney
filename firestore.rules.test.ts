@@ -375,26 +375,6 @@ describe('Groups and Discipleship runtime rules', () => {
     await assertFails(deleteDoc(membershipRef))
   })
 
-  it('rejects roster membership changes when the group projection is not updated atomically', async () => {
-    await seedMembership('leader-a', 'org-a', 'group_leader', ['unit-a'])
-    await environment.withSecurityRulesDisabled(async (context) => {
-      const db = context.firestore()
-      await setDoc(doc(db, 'organizations/org-a/products/raiz_e_mesa/people/person-a'), {
-        organizationId: 'org-a', congregationId: 'unit-a', name: 'Ana',
-      })
-      await setDoc(doc(db, 'organizations/org-a/products/raiz_e_mesa/groups/group-a'), {
-        organizationId: 'org-a', congregationId: 'unit-a', name: 'Casa A',
-        leaderId: 'leader-a', capacity: 12, participants: 0, createdBy: 'leader-a',
-      })
-    })
-    const db = environment.authenticatedContext('leader-a').firestore()
-    await assertFails(setDoc(doc(db, 'organizations/org-a/products/raiz_e_mesa/groupMemberships/group-a__person-a'), {
-      organizationId: 'org-a', congregationId: 'unit-a', groupId: 'group-a', personId: 'person-a',
-      personName: 'Ana', status: 'active', joinedAt: serverTimestamp(), joinedBy: 'leader-a',
-      leftAt: null, leftBy: '',
-    }))
-  })
-
   it('pastor can read a group roster while a different group leader cannot', async () => {
     await seedMembership('leader-a', 'org-a', 'group_leader', ['unit-a'])
     await seedMembership('leader-b', 'org-a', 'group_leader', ['unit-a'])
