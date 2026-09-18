@@ -10,6 +10,8 @@ const SYSTEM_ROLES = new Set(['ceo', 'global_admin', 'ecosystem_owner', 'founder
 const BROAD_JOURNEY_ROLES = new Set(['owner', 'admin', 'pastor', 'data_admin'])
 const PRESENCE_ROLES = new Set(['owner', 'admin', 'pastor', 'coordinator'])
 const CARE_ROLES = new Set(['owner', 'admin', 'pastor', 'care'])
+const GROUP_ROLES = new Set(['owner', 'admin', 'pastor', 'group_leader'])
+const DISCIPLESHIP_ROLES = new Set(['owner', 'admin', 'pastor', 'discipler'])
 
 export interface JourneyAccessContext {
   organizationId: string
@@ -22,6 +24,8 @@ export interface JourneyAccessContext {
   canManagePresence: boolean
   canManagePeople: boolean
   canManageCare: boolean
+  canManageGroups: boolean
+  canManageDiscipleship: boolean
   broadJourneyAccess: boolean
 }
 
@@ -41,6 +45,40 @@ export interface PresencePerson {
   phone?: string
   consent?: boolean
   visits?: number
+}
+
+export interface JourneyPersonRecord extends PresencePerson {
+  firstVisit?: string
+  stage?: string
+  groupId?: string
+  createdAt?: string
+}
+
+export interface JourneyGroupRecord {
+  id: string
+  organizationId: string
+  congregationId: string
+  name: string
+  leader?: string
+  neighborhood?: string
+  weekday?: string
+  time?: string
+  capacity?: number
+  participants?: number
+}
+
+export interface JourneyDiscipleshipRecord {
+  id: string
+  organizationId: string
+  congregationId: string
+  personId: string
+  personName?: string
+  disciplerId: string
+  disciplerName?: string
+  meeting: number
+  status: 'active' | 'paused' | 'completed'
+  nextMeeting?: string
+  startedAt?: string
 }
 
 export interface PresenceSessionRecord extends PresenceSession {
@@ -175,6 +213,8 @@ export async function loadJourneyAccess(userId: string, organizationId: string):
     canManagePresence: isSystemAdmin || isOwner || PRESENCE_ROLES.has(role) || permissions.canManagePresence === true,
     canManagePeople: isSystemAdmin || isOwner || BROAD_JOURNEY_ROLES.has(role) || permissions.canManagePeople === true,
     canManageCare: isSystemAdmin || isOwner || CARE_ROLES.has(role) || permissions.canManageCare === true,
+    canManageGroups: isSystemAdmin || isOwner || GROUP_ROLES.has(role) || permissions.canManageGroups === true,
+    canManageDiscipleship: isSystemAdmin || isOwner || DISCIPLESHIP_ROLES.has(role) || permissions.canManageDiscipleship === true,
     broadJourneyAccess: isSystemAdmin || isOwner || BROAD_JOURNEY_ROLES.has(role),
   }
 }
@@ -212,6 +252,84 @@ export async function listPresencePeople(organizationId: string, congregationId:
       visits: typeof data.visits === 'number' ? data.visits : undefined,
     }
   }).sort((a, b) => a.name.localeCompare(b.name))
+}
+
+export async function listJourneyPeople(organizationId: string, congregationId: string): Promise<JourneyPersonRecord[]> {
+  const firestore = requireDb()
+  const snapshot = await getDocs(query(
+    collection(firestore, journeyCollectionPath(organizationId, 'people')),
+    where('congregationId', '==', congregationId),
+  ))
+
+  return snapshot.docs.map((item): JourneyPersonRecord => {
+    const data = item.data()
+    return {
+      id: item.id,
+      organizationId,
+      congregationId,
+      name: asString(data.name) || '—',
+      photoUrl: asString(data.photoUrl || data.photoURL) || undefined,
+      phone: asString(data.phone) || undefined,
+      consent: Boolean(data.consent),
+      visits: typeof data.visits === 'number' ? data.visits : undefined,
+      firstVisit: asString(data.firstVisit) || undefined,
+      stage: asString(data.stage) || undefined,
+      groupId: asString(data.groupId) || undefined,
+      createdAt: data.createdAt ? toIso(data.createdAt) : undefined,
+    }
+  }).sort((a, b) => a.name.localeCompare(b.name))
+}
+
+export async function listJourneyGroups(organizationId: string, congregationId: string): Promise<JourneyGroupRecord[]> {
+  const firestore = requireDb()
+  const snapshot = await getDocs(query(
+    collection(firestore, journeyCollectionPath(organizationId, 'groups')),
+    where('congregationId', '==', congregationId),
+  ))
+
+  return snapshot.docs.map((item): JourneyGroupRecord => {
+    const data = item.data()
+    return {
+      id: item.id,
+      organizationId,
+      congregationId,
+      name: asString(data.name) || '—',
+      leader: asString(data.leader || data.leaderName) || undefined,
+      neighborhood: asString(data.neighborhood) || undefined,
+      weekday: asString(data.weekday) || undefined,
+      time: asString(data.time) || undefined,
+      capacity: typeof data.capacity === 'number' ? data.capacity : undefined,
+      participants: typeof data.participants === 'number' ? data.participants : undefined,
+    }
+  }).sort((a, b) => a.name.localeCompare(b.name))
+}
+
+export async function listJourneyDiscipleships(access: JourneyAccessContext, congregationId: string): Promise<JourneyDiscipleshipRecord[]> {
+  const firestore = requireDb()
+  const base = collection(firestore, journeyCollectionPath(access.organizationId, 'discipleships'))
+  const source = access.broadJourneyAccess
+    ? query(base, where('congregationId', '==', congregationId))
+    : query(base, where('congregationId', '==', congregationId), where('disciplerId', '==', access.userId))
+  const snapshot = await getDocs(source)
+
+  return snapshot.docs.map((item): JourneyDiscipleshipRecord => {
+    const data = item.data()
+    const rawStatus = asString(data.status)
+    const status: JourneyDiscipleshipRecord['status'] = rawStatus === 'completed' ? 'completed' : rawStatus === 'paused' ? 'paused' : 'active'
+    return {
+      id: item.id,
+      organizationId: access.organizationId,
+      congregationId,
+      personId: asString(data.personId),
+      personName: asString(data.personName || data.person) || undefined,
+      disciplerId: asString(data.disciplerId || data.mentorId),
+      disciplerName: asString(data.disciplerName || data.mentor) || undefined,
+      meeting: typeof data.meeting === 'number' ? data.meeting : 1,
+      status,
+      nextMeeting: asString(data.nextMeeting) || undefined,
+      startedAt: data.startedAt ? toIso(data.startedAt) : undefined,
+    }
+  }).sort((a, b) => a.status.localeCompare(b.status) || a.meeting - b.meeting)
 }
 
 export async function listPresenceSessions(organizationId: string, congregationId: string): Promise<PresenceSessionRecord[]> {
