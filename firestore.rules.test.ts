@@ -373,7 +373,7 @@ describe('Implementation Runtime rules', () => {
     const db=environment.authenticatedContext('coord-impl').firestore()
     const ref=doc(db,'organizations/org-a/products/raiz_e_mesa/implementationCycles/cycle-a')
     await assertSucceeds(setDoc(ref,cycle('coord-impl')))
-    await assertSucceeds(updateDoc(ref,{completedKeys:[firstKey],status:'active',completedAt:null,updatedAt:serverTimestamp(),updatedBy:'coord-impl'}))
+    await assertSucceeds(updateDoc(ref,{completedKeys:[firstKey],lastCompletedKey:firstKey,status:'active',completedAt:null,updatedAt:serverTimestamp(),updatedBy:'coord-impl'}))
   })
 
   it('rejects arbitrary keys, removal, premature completion and cross-scope start', async () => {
@@ -381,9 +381,9 @@ describe('Implementation Runtime rules', () => {
     const db=environment.authenticatedContext('coord-impl').firestore()
     const ref=doc(db,'organizations/org-a/products/raiz_e_mesa/implementationCycles/cycle-a')
     await assertSucceeds(setDoc(ref,cycle('coord-impl')))
-    await assertFails(updateDoc(ref,{completedKeys:['invented.step'],updatedAt:serverTimestamp(),updatedBy:'coord-impl'}))
-    await assertSucceeds(updateDoc(ref,{completedKeys:[firstKey],updatedAt:serverTimestamp(),updatedBy:'coord-impl'}))
-    await assertFails(updateDoc(ref,{completedKeys:[],updatedAt:serverTimestamp(),updatedBy:'coord-impl'}))
+    await assertFails(updateDoc(ref,{completedKeys:['invented.step'],lastCompletedKey:'invented.step',updatedAt:serverTimestamp(),updatedBy:'coord-impl'}))
+    await assertSucceeds(updateDoc(ref,{completedKeys:[firstKey],lastCompletedKey:firstKey,updatedAt:serverTimestamp(),updatedBy:'coord-impl'}))
+    await assertFails(updateDoc(ref,{completedKeys:[],lastCompletedKey:firstKey,updatedAt:serverTimestamp(),updatedBy:'coord-impl'}))
     await assertFails(updateDoc(ref,{status:'completed',completedAt:serverTimestamp(),updatedAt:serverTimestamp(),updatedBy:'coord-impl'}))
     await assertFails(setDoc(doc(db,'organizations/org-a/products/raiz_e_mesa/implementationCycles/cycle-b'),cycle('coord-impl','unit-b')))
   })
