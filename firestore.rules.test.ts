@@ -274,6 +274,19 @@ describe('Care Integrity persistence and scope', () => {
     await assertFails(updateDoc(requestRef, { ownerRef: 'coord-a', assignedAt: serverTimestamp(), assignedBy: 'coord-a' }))
   })
 
+  it('ordinary scoped member cannot create a manual Care Request through the generic tenant scope', async () => {
+    await seedMembership('member-a', 'org-a', 'member', ['unit-a'])
+    await seedPerson()
+    const db = environment.authenticatedContext('member-a').firestore()
+    await assertFails(setDoc(doc(db, 'organizations/org-a/products/raiz_e_mesa/careRequests/member-care'), {
+      organizationId: 'org-a', congregationId: 'unit-a', personId: 'person-a',
+      careType: 'prayer', source: 'manual', summary: '', status: 'open',
+      requestedAt: serverTimestamp(), requestedBy: 'member-a', promiseHours: 24,
+      dueAt: Timestamp.fromMillis(Date.now() + 24 * 60 * 60 * 1000), ownerRef: 'member-a',
+      assignedAt: serverTimestamp(), assignedBy: 'member-a', resolvedAt: null, resolvedBy: '', resolutionCode: '', resolutionNote: '',
+    }))
+  })
+
   it('keeps care requests inside the assigned congregation', async () => {
     await seedMembership('care-a', 'org-a', 'care', ['unit-a'])
     await seedPerson('person-b', 'unit-b')

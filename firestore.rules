@@ -301,6 +301,10 @@ service cloud.firestore {
           allow read: if canManageCare(orgId)
             && canAccessCongregation(orgId, resource.data.get('congregationId', ''));
           allow create: if canAccessCongregation(orgId, request.resource.data.get('congregationId', ''))
+            && (
+              (request.resource.data.get('source', '') == 'manual' && canManageCare(orgId))
+              || (request.resource.data.get('source', '') == 'visitor_registration' && canManagePeople(orgId))
+            )
             && validCareRequestCreate(orgId);
           allow update: if canManageCare(orgId)
             && canAccessCongregation(orgId, resource.data.get('congregationId', ''))
