@@ -1286,7 +1286,30 @@ export async function resolveCareRequest(input: { organizationId: string; reques
   const requestRef = doc(firestore, `${journeyCollectionPath(input.organizationId, 'careRequests')}/${input.request.id}`)
   const batch = writeBatch(firestore)
   const resolutionNote = String(input.resolutionNote ?? '').trim().slice(0, 160)
-  batch.update(requestRef, { status: 'resolved', resolvedAt: serverTimestamp(), resolvedBy: input.actorId, resolutionCode: input.resolutionCode, resolutionNote })
+
+  batch.update(requestRef, {
+    status: 'resolved',
+    resolvedAt: serverTimestamp(),
+    resolvedBy: input.actorId,
+    resolutionCode: input.resolutionCode,
+    resolutionNote: input.resolutionCode === 'pastoral_handoff' ? '' : resolutionNote,
+  })
+
+  if (input.resolutionCode === 'pastoral_handoff') {
+    const handoffRef = doc(firestore, `${journeyCollectionPath(input.organizationId, 'pastoralHandoffs')}/${input.request.id}`)
+    batch.set(handoffRef, {
+      organizationId: input.organizationId,
+      congregationId: input.request.congregationId,
+      personId: input.request.personId,
+      sourceCareRequestId: input.request.id,
+      status: 'open',
+      requestedAt: serverTimestamp(),
+      requestedBy: input.actorId,
+      resolvedAt: null,
+      resolvedBy: '',
+    })
+  }
+
   await batch.commit()
 }
 
