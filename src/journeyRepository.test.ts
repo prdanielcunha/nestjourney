@@ -30,3 +30,12 @@ describe('Presence correction projection', () => {
     expect(latestChecksByPerson(checks).get('p1')?.id).toBe('b')
   })
 })
+
+
+describe('Care Integrity i18n', () => {
+  it('keeps the care privacy and outcome rules in all supported locales', () => {
+    expect(careIntegrityCopy['pt-BR'].privacyRule).toContain('Detalhes íntimos')
+    expect(careIntegrityCopy.en.outcomeRule).toContain('actual outcome')
+    expect(careIntegrityCopy.es.debt).toBe('Care Debt')
+  })
+})

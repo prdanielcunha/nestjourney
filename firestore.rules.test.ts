@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { assertFails, assertSucceeds, initializeTestEnvironment, type RulesTestEnvironment } from '@firebase/rules-unit-testing'
-import { deleteDoc, doc, getDoc, serverTimestamp, setDoc, updateDoc, writeBatch } from 'firebase/firestore'
+import { Timestamp, deleteDoc, doc, getDoc, serverTimestamp, setDoc, updateDoc, writeBatch } from 'firebase/firestore'
 import { afterAll, beforeAll, beforeEach, describe, it } from 'vitest'
 
 let environment: RulesTestEnvironment
@@ -226,5 +226,98 @@ describe('Presence Assist and canonical evidence', () => {
       payload: { personId: 'person-new', consent: false },
     })
     await assertSucceeds(batch.commit())
+  })
+})
+
+
+describe('Care Integrity persistence and scope', () => {
+  async function seedPerson(id = 'person-a', congregationId = 'unit-a') {
+    await environment.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), `organizations/org-a/products/raiz_e_mesa/people/${id}`), {
+        organizationId: 'org-a', congregationId, name: 'Person', consent: true, phone: '43999999999',
+      })
+    })
+  }
+
+  it('lets a care worker create an assigned promise with facts and resolve only with an outcome', async () => {
+    await seedMembership('care-a', 'org-a', 'care', ['unit-a'])
+    await seedPerson()
+    const db = environment.authenticatedContext('care-a').firestore()
+    const requestRef = doc(db, 'organizations/org-a/products/raiz_e_mesa/careRequests/care-a')
+    const requestedFact = doc(db, 'organizations/org-a/products/raiz_e_mesa/facts/care-requested-a')
+    const assignedFact = doc(db, 'organizations/org-a/products/raiz_e_mesa/facts/care-assigned-a')
+    const batch = writeBatch(db)
+    batch.set(requestRef, {
+      organizationId: 'org-a', congregationId: 'unit-a', personId: 'person-a',
+      careType: 'first_contact', source: 'manual', summary: 'Primeiro contato autorizado',
+      status: 'open', requestedAt: serverTimestamp(), requestedBy: 'care-a', promiseHours: 48,
+      dueAt: Timestamp.fromMillis(Date.now() + 48 * 60 * 60 * 1000), ownerRef: 'care-a',
+      assignedAt: serverTimestamp(), assignedBy: 'care-a', resolvedAt: null, resolvedBy: '', resolutionCode: '', resolutionNote: '',
+    })
+    batch.set(requestedFact, {
+      eventId: 'care-requested-a', eventType: 'CARE_REQUESTED', occurredAt: serverTimestamp(), recordedAt: serverTimestamp(),
+      organizationId: 'org-a', actorId: 'care-a', subjectRef: 'person:person-a', sourceApp: 'nestjourney',
+      scope: 'congregation:unit-a', evidenceRef: 'careRequest:care-a', sensitivity: 'confidential', version: 1,
+      payload: { requestId: 'care-a', personId: 'person-a', careType: 'first_contact' },
+    })
+    batch.set(assignedFact, {
+      eventId: 'care-assigned-a', eventType: 'CARE_ASSIGNED', occurredAt: serverTimestamp(), recordedAt: serverTimestamp(),
+      organizationId: 'org-a', actorId: 'care-a', subjectRef: 'person:person-a', sourceApp: 'nestjourney',
+      scope: 'congregation:unit-a', evidenceRef: 'careRequest:care-a', sensitivity: 'confidential', version: 1,
+      payload: { requestId: 'care-a', personId: 'person-a', ownerRef: 'care-a' },
+    })
+    await assertSucceeds(batch.commit())
+    await assertFails(updateDoc(requestRef, { dueAt: Timestamp.fromMillis(Date.now() + 72 * 60 * 60 * 1000) }))
+
+    const resolvedFact = doc(db, 'organizations/org-a/products/raiz_e_mesa/facts/care-resolved-a')
+    const resolveBatch = writeBatch(db)
+    resolveBatch.update(requestRef, {
+      status: 'resolved', resolvedAt: serverTimestamp(), resolvedBy: 'care-a',
+      resolutionCode: 'contact_completed', resolutionNote: 'Contato concluído.',
+    })
+    resolveBatch.set(resolvedFact, {
+      eventId: 'care-resolved-a', eventType: 'CARE_RESOLVED', occurredAt: serverTimestamp(), recordedAt: serverTimestamp(),
+      organizationId: 'org-a', actorId: 'care-a', subjectRef: 'person:person-a', sourceApp: 'nestjourney',
+      scope: 'congregation:unit-a', evidenceRef: 'careRequest:care-a', sensitivity: 'confidential', version: 1,
+      payload: { requestId: 'care-a', personId: 'person-a', resolutionCode: 'contact_completed' },
+    })
+    await assertSucceeds(resolveBatch.commit())
+  })
+
+  it('allows visitor registration to open an unassigned first-contact promise, but not to claim it without care capability', async () => {
+    await seedMembership('coord-a', 'org-a', 'coordinator', ['unit-a'], { canManagePeople: true })
+    await seedPerson()
+    const db = environment.authenticatedContext('coord-a').firestore()
+    const requestRef = doc(db, 'organizations/org-a/products/raiz_e_mesa/careRequests/visitor-care')
+    const factRef = doc(db, 'organizations/org-a/products/raiz_e_mesa/facts/visitor-care-requested')
+    const batch = writeBatch(db)
+    batch.set(requestRef, {
+      organizationId: 'org-a', congregationId: 'unit-a', personId: 'person-a',
+      careType: 'first_contact', source: 'visitor_registration', summary: '',
+      status: 'open', requestedAt: serverTimestamp(), requestedBy: 'coord-a', promiseHours: 48,
+      dueAt: Timestamp.fromMillis(Date.now() + 48 * 60 * 60 * 1000), ownerRef: '',
+      assignedAt: null, assignedBy: '', resolvedAt: null, resolvedBy: '', resolutionCode: '', resolutionNote: '',
+    })
+    batch.set(factRef, {
+      eventId: 'visitor-care-requested', eventType: 'CARE_REQUESTED', occurredAt: serverTimestamp(), recordedAt: serverTimestamp(),
+      organizationId: 'org-a', actorId: 'coord-a', subjectRef: 'person:person-a', sourceApp: 'nestjourney',
+      scope: 'congregation:unit-a', evidenceRef: 'careRequest:visitor-care', sensitivity: 'confidential', version: 1,
+      payload: { requestId: 'visitor-care', personId: 'person-a', careType: 'first_contact' },
+    })
+    await assertSucceeds(batch.commit())
+    await assertFails(updateDoc(requestRef, { ownerRef: 'coord-a', assignedAt: serverTimestamp(), assignedBy: 'coord-a' }))
+  })
+
+  it('keeps care requests inside the assigned congregation', async () => {
+    await seedMembership('care-a', 'org-a', 'care', ['unit-a'])
+    await seedPerson('person-b', 'unit-b')
+    const db = environment.authenticatedContext('care-a').firestore()
+    await assertFails(setDoc(doc(db, 'organizations/org-a/products/raiz_e_mesa/careRequests/care-b'), {
+      organizationId: 'org-a', congregationId: 'unit-b', personId: 'person-b',
+      careType: 'prayer', source: 'manual', summary: '', status: 'open',
+      requestedAt: serverTimestamp(), requestedBy: 'care-a', promiseHours: 24,
+      dueAt: Timestamp.fromMillis(Date.now() + 24 * 60 * 60 * 1000), ownerRef: 'care-a',
+      assignedAt: serverTimestamp(), assignedBy: 'care-a', resolvedAt: null, resolvedBy: '', resolutionCode: '', resolutionNote: '',
+    }))
   })
 })

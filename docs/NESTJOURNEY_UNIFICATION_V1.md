@@ -204,3 +204,34 @@ Até esse gate, a evolução acontece ao redor da experiência existente, não e
 ## 13. Definição curta da versão unificada
 
 **NestJourney é o Journey & Care Engine do MillionsNest. Ele transforma o que o Raiz e Mesa já fazia bem — acolher, acompanhar, conectar, discipular e não esquecer pessoas — em um produto multi-igreja, configurável e orientado por fatos verificáveis. A tecnologia registra o cuidado, organiza responsabilidades e ajuda a fechar lacunas; ela não interpreta a espiritualidade das pessoas.**
+
+
+## 14. Implementação corrente — Care Integrity V1
+
+A segunda vertical slice da unificação é **Care Integrity**, disponível de forma paralela e reversível em `/care-integrity`.
+
+Ela implementa:
+
+- `careRequests` reais no Firestore, vinculados a pessoa e congregação;
+- Care Promise com prazo factual de 1 a 168 horas;
+- default Raiz e Mesa de 48h para primeiro contato autorizado, preservando a orientação pastoral de realizar o contato aproximadamente em 24h e no máximo em 48h;
+- fila sem responsável para pedidos originados no cadastro de visitante;
+- ação explícita de **assumir cuidado** por usuário com capability de Care;
+- limite visual de carga com referência inicial de 8–10 acompanhamentos leves por cuidador na semana;
+- Care Debt derivado deterministicamente de `dueAt + ausência de resolução`;
+- resolução estruturada com outcome e nota operacional curta;
+- facts `CARE_REQUESTED`, `CARE_ASSIGNED` e `CARE_RESOLVED` vinculados à evidência;
+- bloqueio de edição silenciosa de prazo, troca de tenant, troca de congregação e hard delete;
+- segregação de escopo por congregação e capability;
+- PT-BR, EN e ES;
+- regra de minimização: a fila não é prontuário e não deve armazenar diagnósticos, traumas, violência, confissões, sexualidade ou detalhes familiares.
+
+### Automação do primeiro contato
+
+Quando um visitante é cadastrado no Presence Assist **com autorização de contato**, o mesmo batch passa a criar um Care Request de `first_contact` com Promise de 48 horas e sem responsável definido. Isso preserva o fluxo Raiz e Mesa sem atribuir automaticamente o cuidado ao voluntário que fez o cadastro.
+
+A equipe de Cuidado vê a pendência, assume explicitamente a responsabilidade e registra o resultado. Assim, o sistema mede o compromisso da organização — não a espiritualidade da pessoa.
+
+### Limite desta fase
+
+`CARE_PROMISE_DUE` e `CARE_DEBT_OPENED` continuam previstos no contrato canônico, mas não são emitidos pelo navegador. O estado de dívida é calculado deterministicamente para a experiência atual; a emissão de eventos temporais canônicos deve ser feita por processo confiável/server-side em fase posterior, evitando que o relógio do dispositivo do usuário se torne autoridade do Fact Stream.

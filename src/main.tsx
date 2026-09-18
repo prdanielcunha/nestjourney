@@ -4,6 +4,7 @@ import './index.css'
 import App from './App.tsx'
 import { EcosystemSessionGate } from './EcosystemSessionGate.tsx'
 import PresenceAssistPage from './PresenceAssistPage.tsx'
+import CareIntegrityPage from './CareIntegrityPage.tsx'
 
 if ('serviceWorker' in navigator && import.meta.env.PROD) {
   window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js'))
@@ -11,7 +12,9 @@ if ('serviceWorker' in navigator && import.meta.env.PROD) {
 
 const journeyExperience = window.location.pathname === '/presence-assist'
   ? <PresenceAssistPage />
-  : <App />
+  : window.location.pathname === '/care-integrity'
+    ? <CareIntegrityPage />
+    : <App />
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

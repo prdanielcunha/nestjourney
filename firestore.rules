@@ -76,6 +76,11 @@ service cloud.firestore {
     function canManagePeople(orgId) {
       return isOrgAdmin(orgId) || hasPermission(orgId, 'canManagePeople');
     }
+    function canManageCare(orgId) {
+      return isSystemAdmin()
+        || role(orgId, ['owner', 'admin', 'pastor', 'care'])
+        || hasPermission(orgId, 'canManageCare');
+    }
     function assignedToCongregation(orgId, congregationId) {
       return membershipIsActive(orgId) && congregationId is string
         && congregationId in membership(orgId).get('congregationIds', []);
@@ -133,6 +138,102 @@ service cloud.firestore {
         && exists(personPath)
         && get(personPath).data.get('congregationId', '') == congregationId;
     }
+    function validCareRequestCreate(orgId) {
+      let congregationId = request.resource.data.get('congregationId', '');
+      let personId = request.resource.data.get('personId', '');
+      let personPath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/people/$(personId);
+      let source = request.resource.data.get('source', '');
+      let ownerRef = request.resource.data.get('ownerRef', '');
+      let summary = request.resource.data.get('summary', '');
+      return tenantCreate(orgId)
+        && congregationId is string
+        && personId is string
+        && request.resource.data.get('careType', '') in ['first_contact', 'prayer', 'pastoral_contact', 'group_interest', 'absence_check', 'operational_followup']
+        && source in ['manual', 'visitor_registration']
+        && request.resource.data.get('status', '') == 'open'
+        && request.resource.data.get('requestedAt', null) == request.time
+        && request.resource.data.get('requestedBy', '') == request.auth.uid
+        && request.resource.data.get('promiseHours', 0) is number
+        && request.resource.data.get('promiseHours', 0) >= 1
+        && request.resource.data.get('promiseHours', 0) <= 168
+        && request.resource.data.get('dueAt', null) is timestamp
+        && request.resource.data.get('dueAt', null) > request.time
+        && request.resource.data.get('dueAt', null) <= request.time + duration.value(168, 'h')
+        && ownerRef is string
+        && summary is string
+        && summary.size() <= 160
+        && existsAfter(personPath)
+        && getAfter(personPath).data.get('congregationId', '') == congregationId
+        && (
+          (source == 'manual'
+            && canManageCare(orgId)
+            && ownerRef == request.auth.uid
+            && request.resource.data.get('assignedAt', null) == request.time
+            && request.resource.data.get('assignedBy', '') == request.auth.uid)
+          ||
+          (source == 'visitor_registration'
+            && canManagePeople(orgId)
+            && ownerRef == ''
+            && request.resource.data.get('assignedAt', null) == null
+            && request.resource.data.get('assignedBy', '') == '')
+        );
+    }
+    function validCareClaim(orgId) {
+      return resource.data.get('status', '') == 'open'
+        && resource.data.get('ownerRef', '') == ''
+        && tenantUnchanged(orgId)
+        && congregationUnchanged()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['ownerRef', 'assignedAt', 'assignedBy'])
+        && request.resource.data.get('ownerRef', '') == request.auth.uid
+        && request.resource.data.get('assignedAt', null) == request.time
+        && request.resource.data.get('assignedBy', '') == request.auth.uid;
+    }
+    function validCareResolve(orgId) {
+      let note = request.resource.data.get('resolutionNote', '');
+      return resource.data.get('status', '') == 'open'
+        && (resource.data.get('ownerRef', '') == request.auth.uid || isOrgAdmin(orgId))
+        && tenantUnchanged(orgId)
+        && congregationUnchanged()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'resolvedAt', 'resolvedBy', 'resolutionCode', 'resolutionNote'])
+        && request.resource.data.get('status', '') == 'resolved'
+        && request.resource.data.get('resolvedAt', null) == request.time
+        && request.resource.data.get('resolvedBy', '') == request.auth.uid
+        && request.resource.data.get('resolutionCode', '') in ['contact_completed', 'pastoral_handoff', 'declined_contact', 'closed_no_response', 'other_resolved']
+        && note is string
+        && note.size() <= 160;
+    }
+    function validCareFact(orgId) {
+      let eventType = request.resource.data.get('eventType', '');
+      let payload = request.resource.data.get('payload', {});
+      let requestId = payload.get('requestId', '');
+      let carePath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/careRequests/$(requestId);
+      return tenantCreate(orgId)
+        && request.resource.data.get('actorId', '') == request.auth.uid
+        && request.resource.data.get('sourceApp', '') == 'nestjourney'
+        && request.resource.data.get('version', 0) == 1
+        && request.resource.data.get('recordedAt', null) == request.time
+        && request.resource.data.get('occurredAt', null) == request.time
+        && request.resource.data.get('sensitivity', '') in ['confidential', 'restricted']
+        && eventType in ['CARE_REQUESTED', 'CARE_ASSIGNED', 'CARE_RESOLVED']
+        && requestId is string
+        && existsAfter(carePath)
+        && request.resource.data.get('evidenceRef', '') == 'careRequest:' + requestId
+        && request.resource.data.get('subjectRef', '') == 'person:' + getAfter(carePath).data.get('personId', '')
+        && request.resource.data.get('scope', '') == 'congregation:' + getAfter(carePath).data.get('congregationId', '')
+        && (
+          (eventType == 'CARE_REQUESTED'
+            && getAfter(carePath).data.get('requestedBy', '') == request.auth.uid)
+          ||
+          (eventType == 'CARE_ASSIGNED'
+            && getAfter(carePath).data.get('ownerRef', '') == request.auth.uid
+            && getAfter(carePath).data.get('assignedBy', '') == request.auth.uid)
+          ||
+          (eventType == 'CARE_RESOLVED'
+            && getAfter(carePath).data.get('status', '') == 'resolved'
+            && getAfter(carePath).data.get('resolvedBy', '') == request.auth.uid)
+        );
+    }
+
     function validCanonicalFact(orgId) {
       let eventType = request.resource.data.get('eventType', '');
       let payload = request.resource.data.get('payload', {});
@@ -233,14 +334,36 @@ service cloud.firestore {
             && validPresenceCheckCreate(orgId);
           allow update, delete: if false;
         }
+        match /careRequests/{careRequestId} {
+          allow read: if canManageCare(orgId)
+            && canAccessCongregation(orgId, resource.data.get('congregationId', ''));
+          allow create: if canAccessCongregation(orgId, request.resource.data.get('congregationId', ''))
+            && validCareRequestCreate(orgId);
+          allow update: if canManageCare(orgId)
+            && canAccessCongregation(orgId, resource.data.get('congregationId', ''))
+            && (validCareClaim(orgId) || validCareResolve(orgId));
+          allow delete: if false;
+        }
         match /facts/{factId} {
           allow read: if isOrgAdmin(orgId);
           allow create: if hasMembership(orgId)
             && (
-              (request.resource.data.get('eventType', '') == 'VISITOR_REGISTERED' && canManagePeople(orgId))
-              || (request.resource.data.get('eventType', '') in ['PRESENCE_SESSION_OPENED', 'PRESENCE_CONFIRMED'] && canManagePresence(orgId))
-            )
-            && validCanonicalFact(orgId);
+              (
+                (
+                  (request.resource.data.get('eventType', '') == 'VISITOR_REGISTERED' && canManagePeople(orgId))
+                  || (request.resource.data.get('eventType', '') in ['PRESENCE_SESSION_OPENED', 'PRESENCE_CONFIRMED'] && canManagePresence(orgId))
+                )
+                && validCanonicalFact(orgId)
+              )
+              ||
+              (
+                (
+                  (request.resource.data.get('eventType', '') == 'CARE_REQUESTED' && (canManageCare(orgId) || canManagePeople(orgId)))
+                  || (request.resource.data.get('eventType', '') in ['CARE_ASSIGNED', 'CARE_RESOLVED'] && canManageCare(orgId))
+                )
+                && validCareFact(orgId)
+              )
+            );
           allow update, delete: if false;
         }
         match /groups/{groupId} {
