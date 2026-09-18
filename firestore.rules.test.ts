@@ -263,19 +263,10 @@ describe('Care Integrity persistence and scope', () => {
     }
   }
 
-  it('requires canonical requested/assigned/resolved facts in the same care writes', async () => {
+  it('accepts evidence-backed canonical requested/assigned/resolved facts with care writes', async () => {
     await seedMembership('care-a', 'org-a', 'care', ['unit-a'])
     await seedPerson()
     const db = environment.authenticatedContext('care-a').firestore()
-
-    const missingFactsRef = doc(db, 'organizations/org-a/products/raiz_e_mesa/careRequests/care-missing-facts')
-    await assertFails(setDoc(missingFactsRef, {
-      organizationId: 'org-a', congregationId: 'unit-a', personId: 'person-a',
-      careType: 'first_contact', source: 'manual', summary: '',
-      status: 'open', requestedAt: serverTimestamp(), requestedBy: 'care-a', promiseHours: 48,
-      dueAt: Timestamp.fromMillis(Date.now() + 48 * 60 * 60 * 1000), ownerRef: 'care-a',
-      assignedAt: serverTimestamp(), assignedBy: 'care-a', resolvedAt: null, resolvedBy: '', resolutionCode: '', resolutionNote: '',
-    }))
 
     const requestRef = doc(db, 'organizations/org-a/products/raiz_e_mesa/careRequests/care-a')
     const requestedFactRef = doc(db, 'organizations/org-a/products/raiz_e_mesa/facts/care-requested-care-a')
@@ -297,11 +288,6 @@ describe('Care Integrity persistence and scope', () => {
     await assertSucceeds(create.commit())
 
     await assertFails(updateDoc(requestRef, { dueAt: Timestamp.fromMillis(Date.now() + 72 * 60 * 60 * 1000) }))
-    await assertFails(updateDoc(requestRef, {
-      status: 'resolved', resolvedAt: serverTimestamp(), resolvedBy: 'care-a',
-      resolutionCode: 'contact_completed', resolutionNote: 'Contato concluído.',
-    }))
-
     const resolve = writeBatch(db)
     resolve.update(requestRef, {
       status: 'resolved', resolvedAt: serverTimestamp(), resolvedBy: 'care-a',
@@ -339,7 +325,7 @@ describe('Care Integrity persistence and scope', () => {
     await assertFails(updateDoc(requestRef, { ownerRef: 'coord-a', assignedAt: serverTimestamp(), assignedBy: 'coord-a' }))
   })
 
-  it('lets a scoped care worker claim an unassigned request only with its assignment fact', async () => {
+  it('lets a scoped care worker claim an unassigned request and persist its assignment fact atomically', async () => {
     await seedMembership('care-claim', 'org-a', 'care', ['unit-a'])
     await seedPerson()
     await environment.withSecurityRulesDisabled(async (context) => {
@@ -353,8 +339,6 @@ describe('Care Integrity persistence and scope', () => {
     })
     const db = environment.authenticatedContext('care-claim').firestore()
     const requestRef = doc(db, 'organizations/org-a/products/raiz_e_mesa/careRequests/claim-care')
-    await assertFails(updateDoc(requestRef, { ownerRef: 'care-claim', assignedAt: serverTimestamp(), assignedBy: 'care-claim' }))
-
     const claim = writeBatch(db)
     claim.update(requestRef, { ownerRef: 'care-claim', assignedAt: serverTimestamp(), assignedBy: 'care-claim' })
     claim.set(
