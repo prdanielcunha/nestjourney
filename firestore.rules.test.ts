@@ -491,3 +491,87 @@ describe('Governance Runtime rules', () => {
     ))
   })
 })
+
+
+describe('Pastoral Handoff Runtime rules', () => {
+  async function seedCare(uid = 'care-pastoral') {
+    await seedMembership(uid, 'org-a', 'care', ['unit-a'])
+    await environment.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), 'organizations/org-a/products/raiz_e_mesa/people/person-pastoral'), {
+        organizationId: 'org-a', congregationId: 'unit-a', name: 'Pastoral Person', consent: true,
+      })
+      await setDoc(doc(context.firestore(), 'organizations/org-a/products/raiz_e_mesa/careRequests/care-pastoral'), {
+        organizationId: 'org-a', congregationId: 'unit-a', personId: 'person-pastoral',
+        careType: 'pastoral_contact', source: 'manual', summary: '', status: 'open',
+        requestedAt: new Date(), requestedBy: uid, promiseHours: 24,
+        dueAt: new Date(Date.now() + 24 * 60 * 60 * 1000), ownerRef: uid,
+        assignedAt: new Date(), assignedBy: uid, resolvedAt: null, resolvedBy: '',
+        resolutionCode: '', resolutionNote: '',
+      })
+    })
+  }
+
+  it('care can atomically hand off without gaining access to the restricted pastoral queue', async () => {
+    await seedCare()
+    const db = environment.authenticatedContext('care-pastoral').firestore()
+    const careRef = doc(db, 'organizations/org-a/products/raiz_e_mesa/careRequests/care-pastoral')
+    const handoffRef = doc(db, 'organizations/org-a/products/raiz_e_mesa/pastoralHandoffs/care-pastoral')
+    const batch = writeBatch(db)
+    batch.update(careRef, {
+      status: 'resolved', resolvedAt: serverTimestamp(), resolvedBy: 'care-pastoral',
+      resolutionCode: 'pastoral_handoff', resolutionNote: '',
+    })
+    batch.set(handoffRef, {
+      organizationId: 'org-a', congregationId: 'unit-a', personId: 'person-pastoral',
+      sourceCareRequestId: 'care-pastoral', status: 'open',
+      requestedAt: serverTimestamp(), requestedBy: 'care-pastoral', resolvedAt: null, resolvedBy: '',
+    })
+    await assertSucceeds(batch.commit())
+    await assertFails(getDoc(handoffRef))
+  })
+
+  it('rejects arbitrary pastoral markers not backed by an atomic care resolution', async () => {
+    await seedCare()
+    const db = environment.authenticatedContext('care-pastoral').firestore()
+    await assertFails(setDoc(
+      doc(db, 'organizations/org-a/products/raiz_e_mesa/pastoralHandoffs/fake'),
+      {
+        organizationId: 'org-a', congregationId: 'unit-a', personId: 'person-pastoral',
+        sourceCareRequestId: 'fake', status: 'open',
+        requestedAt: serverTimestamp(), requestedBy: 'care-pastoral', resolvedAt: null, resolvedBy: '',
+      },
+    ))
+  })
+
+  it('pastor can read and resolve the marker without adding narrative fields', async () => {
+    await seedMembership('pastor-pastoral', 'org-a', 'pastor', ['unit-a'])
+    await environment.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), 'organizations/org-a/products/raiz_e_mesa/pastoralHandoffs/handoff-a'), {
+        organizationId: 'org-a', congregationId: 'unit-a', personId: 'person-pastoral',
+        sourceCareRequestId: 'care-pastoral', status: 'open',
+        requestedAt: new Date(), requestedBy: 'care-pastoral', resolvedAt: null, resolvedBy: '',
+      })
+    })
+    const db = environment.authenticatedContext('pastor-pastoral').firestore()
+    const ref = doc(db, 'organizations/org-a/products/raiz_e_mesa/pastoralHandoffs/handoff-a')
+    await assertSucceeds(getDoc(ref))
+    await assertSucceeds(updateDoc(ref, { status: 'resolved', resolvedAt: serverTimestamp(), resolvedBy: 'pastor-pastoral' }))
+    await assertFails(updateDoc(ref, { note: 'private narrative' }))
+    await assertFails(deleteDoc(ref))
+  })
+
+  it('ordinary admin does not automatically receive restricted pastoral access', async () => {
+    await seedMembership('admin-pastoral', 'org-a', 'admin', ['unit-a'])
+    await environment.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), 'organizations/org-a/products/raiz_e_mesa/pastoralHandoffs/handoff-admin'), {
+        organizationId: 'org-a', congregationId: 'unit-a', personId: 'person-pastoral',
+        sourceCareRequestId: 'care-pastoral', status: 'open',
+        requestedAt: new Date(), requestedBy: 'care-pastoral', resolvedAt: null, resolvedBy: '',
+      })
+    })
+    await assertFails(getDoc(doc(
+      environment.authenticatedContext('admin-pastoral').firestore(),
+      'organizations/org-a/products/raiz_e_mesa/pastoralHandoffs/handoff-admin',
+    )))
+  })
+})
