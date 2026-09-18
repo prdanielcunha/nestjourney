@@ -81,6 +81,14 @@ service cloud.firestore {
         || role(orgId, ['owner', 'admin', 'pastor', 'care'])
         || hasPermission(orgId, 'canManageCare');
     }
+    function canManagePastoral(orgId) {
+      return isSystemAdmin()
+        || role(orgId, ['owner', 'pastor'])
+        || (
+          membershipIsActive(orgId)
+          && membership(orgId).get('permissions', {}).get('canManagePastoral', false) == true
+        );
+    }
     function canManageGroups(orgId) {
       return isSystemAdmin()
         || role(orgId, ['owner', 'admin', 'pastor', 'group_leader'])
@@ -163,6 +171,46 @@ service cloud.firestore {
           || (congregationId == '' && isOrgAdmin(orgId))
         );
     }
+    function validPastoralHandoffCreate(orgId, handoffId) {
+      let congregationId = request.resource.data.get('congregationId', '');
+      let personId = request.resource.data.get('personId', '');
+      let sourceCareRequestId = request.resource.data.get('sourceCareRequestId', '');
+      let sourcePath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/careRequests/$(sourceCareRequestId);
+      return request.resource.data.keys().hasOnly([
+          'organizationId', 'congregationId', 'personId', 'sourceCareRequestId',
+          'status', 'requestedAt', 'requestedBy', 'resolvedAt', 'resolvedBy'
+        ])
+        && tenantCreate(orgId)
+        && congregationId is string
+        && personId is string
+        && sourceCareRequestId == handoffId
+        && request.resource.data.get('status', '') == 'open'
+        && request.resource.data.get('requestedAt', null) == request.time
+        && request.resource.data.get('requestedBy', '') == request.auth.uid
+        && request.resource.data.get('resolvedAt', null) == null
+        && request.resource.data.get('resolvedBy', '') == ''
+        && existsAfter(sourcePath)
+        && getAfter(sourcePath).data.get('organizationId', '') == orgId
+        && getAfter(sourcePath).data.get('congregationId', '') == congregationId
+        && getAfter(sourcePath).data.get('personId', '') == personId
+        && getAfter(sourcePath).data.get('status', '') == 'resolved'
+        && getAfter(sourcePath).data.get('resolutionCode', '') == 'pastoral_handoff'
+        && getAfter(sourcePath).data.get('resolvedBy', '') == request.auth.uid;
+    }
+    function validPastoralHandoffResolve(orgId) {
+      return tenantUnchanged(orgId)
+        && congregationUnchanged()
+        && resource.data.get('status', '') == 'open'
+        && request.resource.data.get('personId', '') == resource.data.get('personId', '')
+        && request.resource.data.get('sourceCareRequestId', '') == resource.data.get('sourceCareRequestId', '')
+        && request.resource.data.get('requestedAt', null) == resource.data.get('requestedAt', null)
+        && request.resource.data.get('requestedBy', '') == resource.data.get('requestedBy', '')
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'resolvedAt', 'resolvedBy'])
+        && request.resource.data.get('status', '') == 'resolved'
+        && request.resource.data.get('resolvedAt', null) == request.time
+        && request.resource.data.get('resolvedBy', '') == request.auth.uid;
+    }
+
     function validPrivacyRequestCreate(orgId) {
       let congregationId = request.resource.data.get('congregationId', '');
       let personId = request.resource.data.get('personId', '');
@@ -513,6 +561,18 @@ service cloud.firestore {
             && validDiscipleshipUpdate();
           allow delete: if false;
         }
+        match /pastoralHandoffs/{handoffId} {
+          allow read: if canManagePastoral(orgId)
+            && canAccessCongregation(orgId, resource.data.get('congregationId', ''));
+          allow create: if canManageCare(orgId)
+            && canAccessCongregation(orgId, request.resource.data.get('congregationId', ''))
+            && validPastoralHandoffCreate(orgId, handoffId);
+          allow update: if canManagePastoral(orgId)
+            && canAccessCongregation(orgId, resource.data.get('congregationId', ''))
+            && validPastoralHandoffResolve(orgId);
+          allow delete: if false;
+        }
+
         match /pastoral/{pastoralId} {
           allow read: if role(orgId, ['owner', 'pastor']);
           allow create: if tenantCreate(orgId) && role(orgId, ['owner', 'pastor']);
