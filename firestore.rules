@@ -89,6 +89,39 @@ service cloud.firestore {
       return hasProductAccess(orgId)
         && (isOrgAdmin(orgId) || assignedToCongregation(orgId, congregationId));
     }
+    function canCreateCareInScope(orgId, congregationId, source) {
+      let active = membershipIsActive(orgId);
+      let memberData = active ? membership(orgId) : {};
+      let roleName = active
+        ? memberData.get('organizationRole', memberData.get('role', ''))
+        : '';
+      let permissions = active ? memberData.get('permissions', {}) : {};
+      let privileged = isSystemAdmin() || isOwner(orgId);
+      let inScope = privileged || (
+        active && (
+          roleName in ['owner', 'admin', 'pastor', 'data_admin']
+          || (congregationId is string && congregationId in memberData.get('congregationIds', []))
+        )
+      );
+      let hasCareCapability = privileged || (
+        active && (
+          roleName in ['owner', 'admin', 'pastor', 'care']
+          || permissions.get('canManageCare', false) == true
+        )
+      );
+      let hasPeopleCapability = privileged || (
+        active && (
+          roleName in ['owner', 'admin', 'pastor', 'data_admin']
+          || permissions.get('canManagePeople', false) == true
+        )
+      );
+      return hasProductAccess(orgId)
+        && inScope
+        && (
+          (source == 'manual' && hasCareCapability)
+          || (source == 'visitor_registration' && hasPeopleCapability)
+        );
+    }
     function tenantCreate(orgId) {
       return request.resource.data.get('organizationId', '') == orgId;
     }
@@ -300,10 +333,10 @@ service cloud.firestore {
         match /careRequests/{careRequestId} {
           allow read: if canManageCare(orgId)
             && canAccessCongregation(orgId, resource.data.get('congregationId', ''));
-          allow create: if canAccessCongregation(orgId, request.resource.data.get('congregationId', ''))
-            && (
-              (request.resource.data.get('source', '') == 'manual' && canManageCare(orgId))
-              || (request.resource.data.get('source', '') == 'visitor_registration' && canManagePeople(orgId))
+          allow create: if canCreateCareInScope(
+              orgId,
+              request.resource.data.get('congregationId', ''),
+              request.resource.data.get('source', '')
             )
             && validCareRequestCreate(orgId);
           allow update: if canManageCare(orgId)
