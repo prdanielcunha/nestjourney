@@ -279,3 +279,51 @@ A ordenação é determinística e não usa score espiritual ou IA interpretativ
 My Today não tenta responder “quem está frio”, “quem perdeu interesse”, “quem está desanimado” ou “quem precisa de discipulado” com base em sinais indiretos. Ele mostra somente compromissos e estados operacionais já registrados, com deep links para Presence Assist, Care Integrity e Journey Profile.
 
 Essa slice prepara o produto para o futuro **Resolve Loop**, no qual uma ação recomendada só poderá existir quando houver uma fonte de verdade e uma operação concreta que possa fechar a pendência.
+
+
+## 17. Implementação corrente — Groups Runtime V1
+
+A quinta vertical slice é **Groups Runtime**, disponível em `/groups-runtime`.
+
+Ela começa a retirar Groups/Casa de Paz da persistência demonstrativa e leva a operação para o Firestore real, mantendo o nome do produto genérico e deixando a nomenclatura ministerial para configuração da organização.
+
+A slice implementa:
+
+- leitura de grupos reais por organização e congregação;
+- criação de grupo com nome, líder, anfitrião, aprendiz, bairro, frequência/dia, horário e capacidade;
+- atualização monotônica do documento do grupo, preservando tenant e congregação;
+- contagem operacional de participantes;
+- sinal factual de atenção quando `participants / capacity >= 85%`;
+- capability `canManageGroups` e escopo por congregação;
+- PT-BR, EN e ES;
+- interface mobile-first paralela à experiência legada.
+
+A ocupação não é tratada como score de saúde espiritual, qualidade do líder ou sucesso ministerial. Nesta fase ela é apenas um dado operacional registrado.
+
+### Limite desta fase
+
+A associação pessoa → grupo ainda não é inferida por nome ou proximidade. O Journey Profile só mostra vínculo individual quando existe uma fonte explícita. Uma estrutura canônica de membership de grupos pode ser adicionada posteriormente sem transformar contagem agregada em lista presumida de participantes.
+
+## 18. Implementação corrente — Discipleship Runtime V1
+
+A sexta vertical slice é **Discipleship Runtime**, disponível em `/discipleship-runtime`.
+
+Ela persiste no Firestore as relações que antes existiam principalmente na experiência legada:
+
+- pessoa explicitamente vinculada à relação;
+- discipulador identificado por `disciplerId`;
+- encontro atual de 1 a 7 para o playbook Raiz e Mesa;
+- status `active`, `paused` ou `completed`;
+- próximo passo explícito;
+- registro factual de conclusão do encontro;
+- ação de pausar e retomar;
+- escopo do discipulador: ele só lê e altera relações atribuídas a si, salvo Lens administrativa;
+- PT-BR, EN e ES.
+
+O ciclo de sete encontros continua sendo uma característica do playbook **Raiz e Mesa**, não uma regra universal do NestJourney. Futuras Journey Tracks poderão ter outros comprimentos e estruturas.
+
+### Integração com My Today e Journey Profile
+
+My Today passa a levar diretamente para Groups Runtime quando a atenção vem de capacidade e para Discipleship Runtime quando existe próximo passo explícito de discipulado.
+
+Journey Profile e My Today continuam consumidores de fontes; eles não criam fatos subjetivos. Concluir um encontro significa somente que aquele encontro foi registrado como concluído — não que o sistema avaliou maturidade ou transformação espiritual.

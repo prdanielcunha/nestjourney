@@ -136,7 +136,17 @@ export default function MyTodayPage() {
     <section className="today-list">
       {visible.map((item) => {
         const { Icon, label, tone } = meta(item.kind)
-        const actionHref = item.kind.startsWith('care_') ? '/care-integrity' : item.kind === 'presence_open' ? '/presence-assist' : item.personId ? `/journey-profile?person=${encodeURIComponent(item.personId)}` : '/journey-profile'
+        const actionHref = item.kind.startsWith('care_')
+          ? '/care-integrity'
+          : item.kind === 'presence_open'
+            ? '/presence-assist'
+            : item.kind === 'group_attention'
+              ? '/groups-runtime'
+              : item.kind === 'discipleship_next'
+                ? '/discipleship-runtime'
+                : item.personId
+                  ? `/journey-profile?person=${encodeURIComponent(item.personId)}`
+                  : '/journey-profile'
         const detail = item.kind === 'care_debt' ? `${t.overdue}: ${item.dueAt ? new Date(item.dueAt).toLocaleString(locale) : '—'}`
           : item.kind === 'care_due_soon' || item.kind === 'care_unassigned' ? `${t.due}: ${item.dueAt ? new Date(item.dueAt).toLocaleString(locale) : '—'}`
           : item.kind === 'presence_open' ? t.goPresence
@@ -145,7 +155,7 @@ export default function MyTodayPage() {
         return <article className="today-panel today-item" key={item.id}>
           <span className={`today-icon ${tone}`}><Icon size={18} /></span>
           <div className="today-item-body"><span className="today-item-kind">{label}</span><h2>{item.personName || item.titleRef}</h2><p>{detail}</p></div>
-          <a className="today-button" href={actionHref}>{item.personId && !item.kind.startsWith('care_') ? t.openPerson : item.kind.startsWith('care_') ? t.goCare : item.kind === 'presence_open' ? t.goPresence : t.profile}</a>
+          <a className="today-button" href={actionHref}>{item.kind.startsWith('care_') ? t.goCare : item.kind === 'presence_open' ? t.goPresence : item.kind === 'group_attention' ? t.groups : item.kind === 'discipleship_next' ? t.discipleship : item.personId ? t.openPerson : t.profile}</a>
         </article>
       })}
       {!visible.length ? <div className="today-panel today-empty">{t.empty}</div> : null}
