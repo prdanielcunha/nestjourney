@@ -40,7 +40,8 @@ export default function JourneyProfilePage() {
   const [care, setCare] = useState<CareRequestRecord[]>([])
   const [groups, setGroups] = useState<JourneyGroupRecord[]>([])
   const [discipleships, setDiscipleships] = useState<JourneyDiscipleshipRecord[]>([])
-  const [selectedId, setSelectedId] = useState('')
+  const requestedPersonId = useMemo(() => new URLSearchParams(window.location.search).get('person') ?? '', [])
+  const [selectedId, setSelectedId] = useState(requestedPersonId)
   const [query, setQuery] = useState('')
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
@@ -71,8 +72,8 @@ export default function JourneyProfilePage() {
     setGroups(nextGroups)
     setCare(nextCare)
     setDiscipleships(nextDiscipleships)
-    setSelectedId((current) => nextPeople.some((person) => person.id === current) ? current : nextPeople[0]?.id ?? '')
-  }, [])
+    setSelectedId((current) => nextPeople.some((person) => person.id === current) ? current : nextPeople.some((person) => person.id === requestedPersonId) ? requestedPersonId : nextPeople[0]?.id ?? '')
+  }, [requestedPersonId])
 
   const bootstrap = useCallback(async () => {
     setLoading(true)
