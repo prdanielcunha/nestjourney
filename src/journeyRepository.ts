@@ -514,7 +514,7 @@ export async function loadJourneyModuleLabels(organizationId: string): Promise<J
 
 export async function saveJourneyModuleLabels(access: JourneyAccessContext, labels: JourneyModuleLabels) {
   const firestore = requireDb()
-  if (!(access.isSystemAdmin || access.isOwner || ['owner','admin','pastor'].includes(access.role))) {
+  if (!(access.isSystemAdmin || access.isOwner || ['owner','admin','pastor'].includes(access.organizationRole) || access.role === 'pastor')) {
     throw new Error('settings_access_denied')
   }
   const normalize = (value: string | undefined) => String(value ?? '').trim().slice(0, 48)
@@ -629,11 +629,11 @@ export async function listJourneyGroups(organizationId: string, congregationId: 
 }
 
 export function canManageJourneyGroupRoster(access: JourneyAccessContext, group: JourneyGroupRecord) {
-  return access.isSystemAdmin || access.isOwner || GROUP_ROSTER_BROAD_ROLES.has(access.role) || group.leaderId === access.userId || group.createdBy === access.userId
+  return access.isSystemAdmin || access.isOwner || GROUP_ROSTER_BROAD_ROLES.has(access.organizationRole) || ['coordinator','pastor'].includes(access.role) || group.leaderId === access.userId || group.createdBy === access.userId
 }
 
 export function canCreateJourneyGroupEntryRequest(access: JourneyAccessContext) {
-  return access.isSystemAdmin || access.isOwner || GROUP_ROSTER_BROAD_ROLES.has(access.role)
+  return access.isSystemAdmin || access.isOwner || GROUP_ROSTER_BROAD_ROLES.has(access.organizationRole) || ['coordinator','pastor'].includes(access.role)
 }
 
 export async function listJourneyGroupMemberships(access: JourneyAccessContext, group: JourneyGroupRecord): Promise<JourneyGroupMembership[]> {
