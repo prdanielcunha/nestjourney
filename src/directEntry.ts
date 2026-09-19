@@ -125,7 +125,6 @@ export async function resolveJourneyDirectEntry(db: Firestore, user: User): Prom
     Array.from(candidates).slice(0, 50).map((orgId) => candidateIsEligible(db, user.uid, orgId, isGlobal)),
   )
 
-  return resolved
-    .filter((item): item is JourneyEntryOrganization => Boolean(item))
-    .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'))
+  const eligible = resolved.filter((item): item is NonNullable<typeof item> => item !== null)
+  return eligible.sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'))
 }
