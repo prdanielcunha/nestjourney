@@ -8,7 +8,7 @@
 .journey-nav-group button:hover{background:#141613;color:#e8e5df}.journey-nav-group button.active{border-color:rgba(199,154,87,.18);background:linear-gradient(90deg,rgba(199,154,87,.12),rgba(199,154,87,.035));color:#f0e8db}
 .journey-nav-icon{display:grid;place-items:center;width:31px;height:31px;border-radius:9px;background:#141512;color:#7d807a}.journey-nav-group button.active .journey-nav-icon{background:rgba(199,154,87,.13);color:#d5ad72}
 .journey-nav-copy{display:grid;gap:2px;min-width:0}.journey-nav-copy strong{font-size:11px;font-weight:680}.journey-nav-copy small{overflow:hidden;color:#666b66;font-size:8.5px;line-height:1.25;text-overflow:ellipsis;white-space:nowrap}.journey-nav-group button.active small{color:#918776}
-.journey-side-help{margin-top:auto;padding:13px;border:1px solid rgba(199,154,87,.11);border-radius:12px;background:rgba(199,154,87,.045);display:grid;gap:5px}.journey-side-help strong{font-size:10px;color:#c7b08d}.journey-side-help span{font-size:9px;line-height:1.45;color:#74736e}
+.journey-side-footer{margin-top:auto;display:grid;gap:8px}.journey-side-help{padding:13px;border:1px solid rgba(199,154,87,.11);border-radius:12px;background:rgba(199,154,87,.045);display:grid;gap:5px}.journey-side-help strong{font-size:10px;color:#c7b08d}.journey-side-help span{font-size:9px;line-height:1.45;color:#74736e}
 .journey-app-content{min-width:0;margin-left:260px;min-height:100dvh}
 .journey-mobile-bar,.journey-mobile-drawer,.journey-mobile-scrim{display:none}
 @media(max-width:980px){
@@ -19,3 +19,4 @@
   .journey-mobile-drawer{position:fixed;z-index:65;left:10px;right:10px;bottom:10px;display:block;max-height:min(78dvh,720px);padding:15px;border:1px solid rgba(255,255,255,.09);border-radius:20px;background:#101210;box-shadow:0 30px 90px rgba(0,0,0,.6);overflow-y:auto}
   .journey-mobile-drawer header{display:flex;align-items:center;justify-content:space-between;padding:2px 3px 10px;border-bottom:1px solid rgba(255,255,255,.06)}.journey-mobile-drawer header>div{display:grid;gap:2px}.journey-mobile-drawer header strong{font-size:14px}.journey-mobile-drawer header span{font-size:9px;color:#737772}.journey-mobile-drawer header button{display:grid;place-items:center;width:34px;height:34px;border:0;border-radius:10px;background:#181a17;color:#969a94}
 }
+.journey-locale{width:100%;min-height:36px;border:1px solid rgba(255,255,255,.07);border-radius:10px;background:#111310;color:#9da19b;padding:0 9px;font:inherit;font-size:9px}.journey-locale.mobile{margin-top:16px}
