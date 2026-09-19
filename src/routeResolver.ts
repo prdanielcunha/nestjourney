@@ -10,7 +10,6 @@ export type JourneyRoute =
   | 'implementation'
   | 'governance'
   | 'pastoral'
-  | 'legacy'
 
 function normalizePathname(pathname: string) {
   const clean = pathname.trim().split('?')[0].split('#')[0]
@@ -40,8 +39,6 @@ export function resolveJourneyRoute(pathname: string): JourneyRoute {
       return 'governance'
     case '/pastoral-handoff':
       return 'pastoral'
-    case '/legacy':
-      return 'legacy'
     case '/journey-overview':
     case '/':
     default:

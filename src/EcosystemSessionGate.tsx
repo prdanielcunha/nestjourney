@@ -134,11 +134,11 @@ export function EcosystemSessionGate({ children }: { children: ReactNode }) {
   if (state === 'ready') return <>{children}</>
 
   return (
-    <main style={{ minHeight: '100dvh', display: 'grid', placeItems: 'center', background: '#07110d', color: '#f7f7f2', padding: 24 }}>
-      <section style={{ width: 'min(440px, 100%)', textAlign: 'center', padding: 28, borderRadius: 24, border: '1px solid rgba(255,255,255,.10)', background: 'rgba(255,255,255,.04)' }}>
-        <div aria-hidden="true" style={{ width: 36, height: 36, margin: '0 auto 18px', borderRadius: 999, border: '3px solid rgba(255,255,255,.15)', borderTopColor: state === 'checking' ? '#f7f7f2' : '#b5c9bc' }} />
+    <main style={{ minHeight: '100dvh', display: 'grid', placeItems: 'center', background: 'radial-gradient(circle at 50% 18%, rgba(156,134,255,.12), transparent 30%), #090a09', color: '#f4f1eb', padding: 24 }}>
+      <section style={{ width: 'min(440px, 100%)', textAlign: 'center', padding: 28, borderRadius: 20, border: '1px solid rgba(255,255,255,.075)', background: '#111210', boxShadow: '0 18px 50px rgba(0,0,0,.28)' }}>
+        <div aria-hidden="true" style={{ width: 36, height: 36, margin: '0 auto 18px', borderRadius: 999, border: '3px solid rgba(255,255,255,.12)', borderTopColor: state === 'checking' ? '#c79a57' : '#8b8b84' }} />
         <h1 style={{ margin: 0, fontSize: 20 }}>NestJourney</h1>
-        <p style={{ margin: '12px 0 0', color: '#aebbb3', lineHeight: 1.6, fontSize: 14 }}>{message}</p>
+        <p style={{ margin: '12px 0 0', color: '#8b8b84', lineHeight: 1.6, fontSize: 14 }}>{message}</p>
       </section>
     </main>
   )

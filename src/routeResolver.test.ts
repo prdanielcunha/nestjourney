@@ -7,9 +7,9 @@ describe('NestJourney route resolver', () => {
     expect(resolveJourneyRoute('/unknown-route')).toBe('overview')
   })
 
-  it('keeps the legacy Raiz e Mesa shell behind an explicit rollback route', () => {
-    expect(resolveJourneyRoute('/legacy')).toBe('legacy')
-    expect(resolveJourneyRoute('/legacy/')).toBe('legacy')
+  it('does not expose the retired legacy shell', () => {
+    expect(resolveJourneyRoute('/legacy')).toBe('overview')
+    expect(resolveJourneyRoute('/legacy/')).toBe('overview')
   })
 
   it('preserves every real runtime deep link', () => {
