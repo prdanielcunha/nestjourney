@@ -622,8 +622,10 @@ service cloud.firestore {
         && (status != 'completed' || meeting == 7);
     }
     function validFollowupCanonicalFact(orgId, factId, eventType, payload) {
+      let followupId = payload.get('followupId', '');
       let careRequestId = payload.get('careRequestId', '');
       let personId = payload.get('personId', '');
+      let followupPath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/followups/$(followupId);
       return followupId is string
         && followupId.size() > 0
         && existsAfter(followupPath)
@@ -660,12 +662,10 @@ service cloud.firestore {
       let sessionId = payload.get('sessionId', '');
       let checkId = payload.get('checkId', '');
       let careRequestId = payload.get('careRequestId', '');
-      let followupId = payload.get('followupId', '');
       let personPath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/people/$(personId);
       let sessionPath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/presenceSessions/$(sessionId);
       let checkPath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/presenceChecks/$(checkId);
       let carePath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/careRequests/$(careRequestId);
-      let followupPath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/followups/$(followupId);
       return tenantCreate(orgId)
         && request.resource.data.get('eventId', '') == factId
         && request.resource.data.get('actorId', '') == request.auth.uid
