@@ -186,7 +186,10 @@ export default function CareIntegrityPage() {
           {request.summary ? <p className="care-summary">{request.summary}</p> : null}
           <div className="care-card-actions">
             {!request.ownerRef && request.status === 'open' ? <button className="care-button" disabled={busy} onClick={() => void claim(request)}>{t.claim}</button> : null}
-            {request.status === 'open' && request.ownerRef ? <button className="care-button primary" disabled={busy || !canResolve} onClick={() => setResolving(request)}><CheckCircle2 size={16} /> {t.recordOutcome}</button> : null}
+            {request.status === 'open' && request.ownerRef && request.careType === 'first_contact'
+              ? <a className="care-button primary" aria-disabled={!canResolve} href={canResolve ? `/followup-runtime?care=${encodeURIComponent(request.id)}` : undefined}><CheckCircle2 size={16} /> {t.openFollowup}</a>
+              : null}
+            {request.status === 'open' && request.ownerRef && request.careType !== 'first_contact' ? <button className="care-button primary" disabled={busy || !canResolve} onClick={() => setResolving(request)}><CheckCircle2 size={16} /> {t.recordOutcome}</button> : null}
             {request.status === 'resolved' ? <span className="care-resolution"><CheckCircle2 size={16} /> {request.resolutionCode ? t.resolutions[request.resolutionCode] : t.resolved}</span> : null}
           </div>
         </article>
