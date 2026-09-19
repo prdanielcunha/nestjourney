@@ -3,6 +3,7 @@ import { ArrowUpRight, ClipboardCheck, HeartHandshake, House, Leaf, ShieldCheck,
 import { auth } from './firebase'
 import { getActiveJourneyOrganizationId, loadJourneyAccess, type JourneyAccessContext } from './journeyRepository'
 import { getInitialLocale, localeLabels, persistLocale, type AppLocale } from './i18n'
+import { useJourneyLabels } from './journeyLabels'
 import './TeamSetupPage.css'
 
 const HUB_MEMBERS_URL='https://www.millionsnest.com/dashboard/organization/members'
@@ -62,6 +63,12 @@ const copy={
 export default function TeamSetupPage(){
   const [locale,setLocale]=useState<AppLocale>(getInitialLocale)
   const t=copy[locale]
+  const { labels } = useJourneyLabels()
+  const presenceName=labels.presence||t.presence
+  const tableName=labels.table||t.table
+  const careName=labels.care||t.care
+  const groupsName=labels.groups||t.houses
+  const rootName=labels.discipleship||t.root
   const [access,setAccess]=useState<JourneyAccessContext|null>(null)
   const [loading,setLoading]=useState(true)
   const [error,setError]=useState('')
@@ -80,18 +87,18 @@ export default function TeamSetupPage(){
 
   const fronts=[
     {icon:ShieldCheck,title:t.pastor,description:t.pastorDesc,size:t.pastorSize},
-    {icon:UserCheck,title:t.presence,description:t.presenceDesc,size:t.presenceSize},
-    {icon:Users,title:t.table,description:t.tableDesc,size:t.tableSize},
-    {icon:HeartHandshake,title:t.care,description:t.careDesc,size:t.careSize},
-    {icon:House,title:t.houses,description:t.housesDesc,size:t.housesSize},
-    {icon:Leaf,title:t.root,description:t.rootDesc,size:t.rootSize},
+    {icon:UserCheck,title:presenceName,description:t.presenceDesc,size:t.presenceSize},
+    {icon:Users,title:tableName,description:t.tableDesc,size:t.tableSize},
+    {icon:HeartHandshake,title:careName,description:t.careDesc,size:t.careSize},
+    {icon:House,title:groupsName,description:t.housesDesc,size:t.housesSize},
+    {icon:Leaf,title:rootName,description:t.rootDesc,size:t.rootSize},
   ]
   const capabilities=access?[
     [t.people,access.canManagePeople||access.broadJourneyAccess],
-    [t.presence,access.canManagePresence],
-    [t.care,access.canManageCare||access.broadJourneyAccess],
-    [t.houses,access.canManageGroups||access.broadJourneyAccess],
-    [t.root,access.canManageDiscipleship||access.broadJourneyAccess],
+    [presenceName,access.canManagePresence],
+    [careName,access.canManageCare||access.broadJourneyAccess],
+    [groupsName,access.canManageGroups||access.broadJourneyAccess],
+    [rootName,access.canManageDiscipleship||access.broadJourneyAccess],
     [t.implementation,access.canManageImplementation],
     [t.pastoralView,access.canManagePastoral],
     [t.privacy,access.canViewGovernance],
