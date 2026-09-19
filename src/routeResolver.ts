@@ -3,6 +3,7 @@ export type JourneyRoute =
   | 'today'
   | 'presence'
   | 'care'
+  | 'followup'
   | 'profile'
   | 'groups'
   | 'discipleship'
@@ -23,6 +24,8 @@ export function resolveJourneyRoute(pathname: string): JourneyRoute {
       return 'presence'
     case '/care-integrity':
       return 'care'
+    case '/followup-runtime':
+      return 'followup'
     case '/journey-profile':
       return 'profile'
     case '/my-today':
