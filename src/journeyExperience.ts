@@ -32,7 +32,7 @@ export const responsibilityDefinitions: JourneyResponsibilityDefinition[] = [
 
 export function resolveJourneyResponsibility(access: JourneyAccessContext): JourneyResponsibility {
   if (access.isSystemAdmin) return 'ceo'
-  if (access.isOwner || ['owner', 'admin', 'data_admin'].includes(access.role)) return 'admin'
+  if (access.isOwner || ['owner', 'admin', 'data_admin'].includes(access.organizationRole)) return 'admin'
   if (access.role === 'pastor' || access.canManagePastoral) return 'pastor'
   if (access.role === 'coordinator') return 'coordinator'
   if (['mesa', 'table_host'].includes(access.role) || (access.canManageMesa && !access.canManagePresence)) return 'mesa_team'
@@ -46,7 +46,8 @@ export function resolveJourneyResponsibility(access: JourneyAccessContext): Jour
 export function canViewJourneyVision(access: JourneyAccessContext) {
   return access.isSystemAdmin
     || access.isOwner
-    || ['owner', 'admin', 'pastor', 'coordinator', 'data_admin'].includes(access.role)
+    || ['owner', 'admin', 'pastor', 'data_admin'].includes(access.organizationRole)
+    || ['pastor', 'coordinator'].includes(access.role)
     || access.canManagePastoral
     || access.canViewGovernance
 }
@@ -54,7 +55,8 @@ export function canViewJourneyVision(access: JourneyAccessContext) {
 export function canViewJourneyReports(access: JourneyAccessContext) {
   return access.isSystemAdmin
     || access.isOwner
-    || ['owner', 'admin', 'pastor', 'coordinator'].includes(access.role)
+    || ['owner', 'admin', 'pastor'].includes(access.organizationRole)
+    || ['pastor', 'coordinator'].includes(access.role)
     || access.broadJourneyAccess
 }
 
