@@ -6,6 +6,7 @@ import {
 import { auth } from './firebase'
 import { getActiveJourneyOrganizationId, loadJourneyAccess, type JourneyAccessContext } from './journeyRepository'
 import { getInitialLocale, localeLabels, persistLocale, type AppLocale } from './i18n'
+import { useJourneyLabels } from './journeyLabels'
 import './JourneyShell.css'
 
 type NavItem = {
@@ -95,8 +96,19 @@ export function JourneyShell({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false)
   const [locale, setLocale] = useState<AppLocale>(getInitialLocale)
   const [pathname, setPathname] = useState(() => window.location.pathname)
+  const { labels } = useJourneyLabels()
   const copy = shellCopy[locale]
-  const groups = useMemo(() => buildGroups(copy), [copy])
+  const moduleCopy = useMemo(() => {
+    const [defaultPresence, defaultTable] = copy.reception.split(' & ')
+    return {
+      ...copy,
+      reception: `${labels.presence || defaultPresence} & ${labels.table || defaultTable}`,
+      care: labels.care || copy.care,
+      groups: labels.groups || copy.groups,
+      root: labels.discipleship || copy.root,
+    }
+  }, [copy, labels])
+  const groups = useMemo(() => buildGroups(moduleCopy), [moduleCopy])
 
   useEffect(() => {
     const syncPath = () => setPathname(window.location.pathname)
@@ -138,8 +150,8 @@ export function JourneyShell({ children }: { children: ReactNode }) {
   const essentials = [
     { href: '/', label: copy.home, icon: LayoutDashboard },
     { href: '/my-today', label: copy.today, icon: ListTodo },
-    { href: '/presence-assist', label: copy.reception.split(' & ')[0], icon: UserCheck },
-    { href: '/care-integrity', label: copy.care.split(' & ')[0], icon: HeartHandshake },
+    { href: '/presence-assist', label: moduleCopy.reception.split(' & ')[0], icon: UserCheck },
+    { href: '/care-integrity', label: moduleCopy.care.split(' & ')[0], icon: HeartHandshake },
   ].filter(item => visibleGroups.some(group => group.items.some(nav => nav.href === item.href)))
 
   return <div className="journey-app-frame">
