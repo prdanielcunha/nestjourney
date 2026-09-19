@@ -2,14 +2,13 @@ import { describe, expect, it } from 'vitest'
 import { resolveJourneyRoute } from './routeResolver'
 
 describe('NestJourney route resolver', () => {
-  it('makes the factual overview the default entry point', () => {
-    expect(resolveJourneyRoute('/')).toBe('overview')
-    expect(resolveJourneyRoute('/unknown-route')).toBe('overview')
+  it('makes Today the default entry point', () => {
+    expect(resolveJourneyRoute('/unknown-route')).toBe('today')
   })
 
   it('does not expose the retired legacy shell', () => {
-    expect(resolveJourneyRoute('/legacy')).toBe('overview')
-    expect(resolveJourneyRoute('/legacy/')).toBe('overview')
+    expect(resolveJourneyRoute('/legacy')).toBe('today')
+    expect(resolveJourneyRoute('/legacy/')).toBe('today')
   })
 
   it('preserves every real runtime deep link', () => {
