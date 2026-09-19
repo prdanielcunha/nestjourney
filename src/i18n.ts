@@ -170,7 +170,7 @@ export const careIntegrityCopy = {
     attention: 'Precisa de atenção', open: 'Abertos', resolved: 'Resolvidos', promise: 'Care Promise',
     overdueBy: 'vencido há', remaining: 'restam', promiseResolved: 'compromisso concluído',
     owner: 'Responsável', you: 'Você', assigned: 'Responsável atribuído',
-    fromVisitor: 'criado pelo cadastro de visitante', manual: 'criado manualmente', claim: 'Assumir cuidado',
+    fromVisitor: 'criado pelo cadastro de visitante', manual: 'criado manualmente', claim: 'Assumir cuidado', openFollowup: 'Abrir primeiro contato',
     recordOutcome: 'Registrar resultado', unknownPerson: 'Pessoa não encontrada', empty: 'Nenhum cuidado encontrado neste filtro.',
     privacyRule: 'Registre somente o necessário: status, próximo passo e resultado. Detalhes íntimos não pertencem a esta fila.',
     person: 'Pessoa', type: 'Tipo de cuidado', promiseWindow: 'Prazo do compromisso', operationalNote: 'Nota operacional opcional',
