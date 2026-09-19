@@ -390,6 +390,130 @@ describe('Care Integrity persistence and scope', () => {
     )
     await assertFails(create.commit())
   })
+
+  it('first-contact follow-up is evidence-backed and resolves its Care Promise atomically', async () => {
+    await seedMembership('care-followup', 'org-a', 'care', ['unit-a'])
+    const due = new Date(Date.now() + 48 * 60 * 60 * 1000)
+    await environment.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore()
+      await setDoc(doc(db, 'organizations/org-a/products/raiz_e_mesa/people/person-followup'), {
+        organizationId: 'org-a', congregationId: 'unit-a', name: 'Pessoa Follow-up',
+        consent: true, phone: '43999999999',
+      })
+      await setDoc(doc(db, 'organizations/org-a/products/raiz_e_mesa/careRequests/care-followup'), {
+        organizationId: 'org-a', congregationId: 'unit-a', personId: 'person-followup',
+        careType: 'first_contact', source: 'visitor_registration', summary: '', status: 'open',
+        requestedAt: new Date(), requestedBy: 'source-user', promiseHours: 48, dueAt: due,
+        ownerRef: 'care-followup', assignedAt: new Date(), assignedBy: 'care-followup',
+        resolvedAt: null, resolvedBy: '', resolutionCode: '', resolutionNote: '',
+      })
+    })
+
+    const db = environment.authenticatedContext('care-followup').firestore()
+    const followupRef = doc(db, 'organizations/org-a/products/raiz_e_mesa/followups/first-contact-care-followup')
+    const createFactRef = doc(db, 'organizations/org-a/products/raiz_e_mesa/facts/followup-created-first-contact-care-followup')
+    const create = writeBatch(db)
+    create.set(followupRef, {
+      organizationId: 'org-a', congregationId: 'unit-a', personId: 'person-followup',
+      careRequestId: 'care-followup', kind: 'first_contact', status: 'pending',
+      ownerRef: 'care-followup', dueAt: due, createdAt: serverTimestamp(), createdBy: 'care-followup',
+      completedAt: null, completedBy: '', outcomeCode: '', nextActionCode: '',
+    })
+    create.set(createFactRef, {
+      eventId: 'followup-created-first-contact-care-followup',
+      eventType: 'FOLLOWUP_CREATED', occurredAt: serverTimestamp(), recordedAt: serverTimestamp(),
+      organizationId: 'org-a', actorId: 'care-followup', subjectRef: 'person:person-followup',
+      sourceApp: 'nestjourney', scope: 'congregation:unit-a',
+      evidenceRef: 'followup:first-contact-care-followup', sensitivity: 'confidential', version: 1,
+      payload: {
+        followupId: 'first-contact-care-followup', careRequestId: 'care-followup',
+        personId: 'person-followup', kind: 'first_contact',
+      },
+    })
+    await assertSucceeds(create.commit())
+
+    const careRef = doc(db, 'organizations/org-a/products/raiz_e_mesa/careRequests/care-followup')
+    await assertFails(updateDoc(followupRef, {
+      status: 'completed', completedAt: serverTimestamp(), completedBy: 'care-followup',
+      outcomeCode: 'group_interest', nextActionCode: 'group_entry',
+    }))
+
+    const complete = writeBatch(db)
+    complete.update(followupRef, {
+      status: 'completed', completedAt: serverTimestamp(), completedBy: 'care-followup',
+      outcomeCode: 'group_interest', nextActionCode: 'group_entry',
+    })
+    complete.update(careRef, {
+      status: 'resolved', resolvedAt: serverTimestamp(), resolvedBy: 'care-followup',
+      resolutionCode: 'contact_completed', resolutionNote: '',
+    })
+    complete.set(
+      doc(db, 'organizations/org-a/products/raiz_e_mesa/facts/followup-completed-first-contact-care-followup'),
+      {
+        eventId: 'followup-completed-first-contact-care-followup',
+        eventType: 'FOLLOWUP_COMPLETED', occurredAt: serverTimestamp(), recordedAt: serverTimestamp(),
+        organizationId: 'org-a', actorId: 'care-followup', subjectRef: 'person:person-followup',
+        sourceApp: 'nestjourney', scope: 'congregation:unit-a',
+        evidenceRef: 'followup:first-contact-care-followup', sensitivity: 'confidential', version: 1,
+        payload: {
+          followupId: 'first-contact-care-followup', careRequestId: 'care-followup',
+          personId: 'person-followup', outcomeCode: 'group_interest', nextActionCode: 'group_entry',
+        },
+      },
+    )
+    complete.set(
+      doc(db, 'organizations/org-a/products/raiz_e_mesa/facts/care-resolved-care-followup'),
+      careFact('care-resolved-care-followup', 'CARE_RESOLVED', 'care-followup', {
+        careRequestId: 'care-followup', personId: 'person-followup',
+        careType: 'first_contact', resolutionCode: 'contact_completed',
+      }),
+    )
+    await assertSucceeds(complete.commit())
+    await assertFails(deleteDoc(followupRef))
+  })
+
+  it('follow-up creation requires the assigned owner and contact authorization', async () => {
+    await seedMembership('care-owner', 'org-a', 'care', ['unit-a'])
+    await seedMembership('care-other', 'org-a', 'care', ['unit-a'])
+    const due = new Date(Date.now() + 24 * 60 * 60 * 1000)
+    await environment.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore()
+      await setDoc(doc(db, 'organizations/org-a/products/raiz_e_mesa/people/person-no-consent'), {
+        organizationId: 'org-a', congregationId: 'unit-a', name: 'Sem Consentimento',
+        consent: false, phone: '',
+      })
+      await setDoc(doc(db, 'organizations/org-a/products/raiz_e_mesa/careRequests/care-no-consent'), {
+        organizationId: 'org-a', congregationId: 'unit-a', personId: 'person-no-consent',
+        careType: 'first_contact', source: 'visitor_registration', summary: '', status: 'open',
+        requestedAt: new Date(), requestedBy: 'source-user', promiseHours: 24, dueAt: due,
+        ownerRef: 'care-owner', assignedAt: new Date(), assignedBy: 'care-owner',
+        resolvedAt: null, resolvedBy: '', resolutionCode: '', resolutionNote: '',
+      })
+    })
+
+    const ownerDb = environment.authenticatedContext('care-owner').firestore()
+    await assertFails(setDoc(
+      doc(ownerDb, 'organizations/org-a/products/raiz_e_mesa/followups/first-contact-care-no-consent'),
+      {
+        organizationId: 'org-a', congregationId: 'unit-a', personId: 'person-no-consent',
+        careRequestId: 'care-no-consent', kind: 'first_contact', status: 'pending',
+        ownerRef: 'care-owner', dueAt: due, createdAt: serverTimestamp(), createdBy: 'care-owner',
+        completedAt: null, completedBy: '', outcomeCode: '', nextActionCode: '',
+      },
+    ))
+
+    const otherDb = environment.authenticatedContext('care-other').firestore()
+    await assertFails(setDoc(
+      doc(otherDb, 'organizations/org-a/products/raiz_e_mesa/followups/first-contact-care-no-consent'),
+      {
+        organizationId: 'org-a', congregationId: 'unit-a', personId: 'person-no-consent',
+        careRequestId: 'care-no-consent', kind: 'first_contact', status: 'pending',
+        ownerRef: 'care-other', dueAt: due, createdAt: serverTimestamp(), createdBy: 'care-other',
+        completedAt: null, completedBy: '', outcomeCode: '', nextActionCode: '',
+      },
+    ))
+  })
+
 })
 
 
