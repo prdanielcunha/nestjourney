@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import './index.css'
 import { EcosystemSessionGate } from './EcosystemSessionGate.tsx'
 import { JourneyShell } from './JourneyShell.tsx'
+import { JourneyLabelsProvider } from './journeyLabels.tsx'
 import { resolveJourneyRoute } from './routeResolver'
 
 const PresenceAssistPage = lazy(() => import('./PresenceAssistPage.tsx'))
@@ -101,11 +102,13 @@ function RouteFallback() {
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <EcosystemSessionGate>
-      <JourneyShell>
-        <Suspense fallback={<RouteFallback />}>
-          <JourneyRoute />
-        </Suspense>
-      </JourneyShell>
+      <JourneyLabelsProvider>
+        <JourneyShell>
+          <Suspense fallback={<RouteFallback />}>
+            <JourneyRoute />
+          </Suspense>
+        </JourneyShell>
+      </JourneyLabelsProvider>
     </EcosystemSessionGate>
   </StrictMode>,
 )
