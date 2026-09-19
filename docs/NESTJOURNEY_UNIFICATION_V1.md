@@ -640,3 +640,36 @@ Care Integrity continua sendo a fila de compromissos e Care Debt.
 Quando um `first_contact` já possui responsável, sua ação principal deixa de ser uma resolução genérica e passa a abrir o **Follow-up Runtime**. Outros tipos de Care Request continuam usando o fluxo de outcome do Care Integrity.
 
 Isso preserva o que já funcionava e especializa somente o fluxo que possui requisitos próprios de primeiro contato.
+
+
+## 26. Implementação corrente — Resolve Loop V1 com MillionsNest Connect
+
+A primeira integração operacional entre **NestJourney** e **MillionsNest Connect** fecha o ciclo entre uma pendência factual e uma ação humana sem transferir a autoridade do cuidado para o canal de comunicação.
+
+### Fluxo
+
+1. um Care Request de `first_contact` atribuído ao responsável gera o Follow-up factual;
+2. o NestJourney envia ao Hub apenas um destino allow-listed contendo o id opaco do Follow-up;
+3. o Hub faz o handoff autenticado para o Connect, sem colocar nome, telefone ou narrativa pastoral na URL;
+4. o Connect pede ao Hub, server-to-server e com o mesmo Firebase bearer transitório, a projeção mínima necessária;
+5. o Hub revalida organização, entitlement do NestJourney, capability de Care, congregação, owner do Follow-up, consentimento, pessoa e Care Request de origem;
+6. o Connect apresenta um roteiro de primeiro contato baseado no Manual de Cuidado e Conexão e abre o composer do WhatsApp;
+7. o usuário retorna ao NestJourney, que continua sendo a autoridade para registrar o outcome estruturado e resolver a Care Promise.
+
+### Fronteira de verdade
+
+**Abrir um rascunho no WhatsApp não é envio e não é resolução.**
+
+Esta V1 não possui confirmação de entrega pelo provider e, portanto, o Connect não grava `message_sent`, não conclui a Care Promise e não fabrica evidência de contato. O outcome só existe quando o responsável volta ao NestJourney e registra o que observou.
+
+A URL de handoff contém somente o id do Follow-up. Nome e telefone são liberados para a superfície autenticada do Connect somente depois da revalidação server-side e não entram nos logs da boundary.
+
+### Roteiro ministerial
+
+O texto sugerido preserva a intenção do Manual de Cuidado e Conexão Raiz e Mesa 2026: agradecer a presença, comunicar acolhimento, dizer que a pessoa pode contar com a igreja e oferecer oração. O usuário pode ajustar a saudação antes de abrir o canal.
+
+A interface não oferece campo para transcrever confissão, diagnóstico, trauma, conflito familiar ou detalhes íntimos.
+
+### Rollback e independência
+
+O Follow-up continua funcional mesmo sem o Connect: o registro de outcome permanece no NestJourney. A integração é um acelerador da execução do contato, não uma nova fonte de verdade e não altera o modelo Firestore canônico do Follow-up.
