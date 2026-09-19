@@ -370,7 +370,6 @@ service cloud.firestore {
       let careRequestId = request.resource.data.get('careRequestId', '');
       let personId = request.resource.data.get('personId', '');
       let carePath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/careRequests/$(careRequestId);
-      let followupPath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/followups/$(followupId);
       let personPath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/people/$(personId);
       return request.resource.data.keys().hasOnly([
           'organizationId', 'congregationId', 'personId', 'careRequestId', 'kind',
@@ -634,6 +633,7 @@ service cloud.firestore {
       let sessionPath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/presenceSessions/$(sessionId);
       let checkPath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/presenceChecks/$(checkId);
       let carePath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/careRequests/$(careRequestId);
+      let followupPath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/followups/$(followupId);
       return tenantCreate(orgId)
         && request.resource.data.get('eventId', '') == factId
         && request.resource.data.get('actorId', '') == request.auth.uid
