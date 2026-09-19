@@ -64,7 +64,7 @@ function responsibilityCopy(locale:AppLocale){
 const copy={
   'pt-BR':{
     title:'Equipe & Papéis',subtitle:'Defina claramente quem faz o quê. Cada pessoa entra no NestJourney vendo somente o trabalho que depende dela.',
-    back:'Início',loading:'Carregando equipe…',yourAccess:'Seu acesso no NestJourney',role:'Função no NestJourney',
+    back:'Início',loading:'Carregando equipe…',yourAccess:'Seu acesso no NestJourney',role:'Responsabilidade no NestJourney',role:'Função no NestJourney',
     full:'Acesso amplo',yes:'Permitido',no:'Sem acesso',members:'Membros & Convites',roles:'Cargos da organização',
     hubNote:'Identidade, convites e cargos da organização continuam no MillionsNest Hub. Aqui você define a responsabilidade operacional específica do NestJourney.',
     fronts:'Frentes do projeto',frontsDesc:'Estrutura inicial baseada nos manuais do Raiz e Mesa. Comece pequeno e aumente conforme a cultura amadurecer.',
@@ -84,7 +84,7 @@ const copy={
   },
   en:{
     title:'Team & Roles',subtitle:'Define clearly who does what. Each person enters NestJourney seeing only the work that depends on them.',
-    back:'Home',loading:'Loading team…',yourAccess:'Your NestJourney access',role:'NestJourney responsibility',
+    back:'Home',loading:'Loading team…',yourAccess:'Your NestJourney access',role:'NestJourney responsibility',role:'NestJourney responsibility',
     full:'Broad access',yes:'Allowed',no:'No access',members:'Members & Invites',roles:'Organization roles',
     hubNote:'Identity, invitations, and organization roles stay in MillionsNest Hub. Here you define each person’s NestJourney operational responsibility.',
     fronts:'Ministry fronts',frontsDesc:'Initial structure based on the Raiz e Mesa manuals. Start small and expand as the culture matures.',
@@ -104,7 +104,7 @@ const copy={
   },
   es:{
     title:'Equipo & Papeles',subtitle:'Define con claridad quién hace qué. Cada persona entra en NestJourney viendo solo el trabajo que depende de ella.',
-    back:'Inicio',loading:'Cargando equipo…',yourAccess:'Tu acceso en NestJourney',role:'Función en NestJourney',
+    back:'Inicio',loading:'Cargando equipo…',yourAccess:'Tu acceso en NestJourney',role:'Responsabilidad en NestJourney',role:'Función en NestJourney',
     full:'Acceso amplio',yes:'Permitido',no:'Sin acceso',members:'Miembros & Invitaciones',roles:'Cargos de la organización',
     hubNote:'Identidad, invitaciones y cargos siguen en MillionsNest Hub. Aquí defines la responsabilidad operativa específica de NestJourney.',
     fronts:'Frentes del proyecto',frontsDesc:'Estructura inicial basada en los manuales de Raiz e Mesa. Empieza pequeño y crece con la cultura.',
