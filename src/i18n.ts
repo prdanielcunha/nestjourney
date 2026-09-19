@@ -19,6 +19,7 @@ export function getInitialLocale(): AppLocale {
 
 export function persistLocale(locale: AppLocale) {
   try { localStorage.setItem(STORAGE_KEY, locale) } catch {}
+  if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('nestjourney:locale', { detail: locale }))
 }
 
 export const localeLabels: Record<AppLocale, string> = {
