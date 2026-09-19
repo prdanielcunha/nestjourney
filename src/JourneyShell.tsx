@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import {
   ClipboardCheck, HeartHandshake, House, LayoutDashboard, Leaf, Menu, ShieldCheck,
-  Sparkles, UserCheck, Users, X, ListTodo
+  Sparkles, UserCheck, Users, X, ListTodo, UserCog
 } from 'lucide-react'
 import { auth } from './firebase'
 import { getActiveJourneyOrganizationId, loadJourneyAccess, type JourneyAccessContext } from './journeyRepository'
@@ -17,14 +17,14 @@ type NavItem = {
 }
 
 const shellCopy: Record<AppLocale, {
-  start: string; home: string; homeDesc: string; today: string; todayDesc: string; implementation: string; implementationDesc: string;
+  start: string; home: string; homeDesc: string; today: string; todayDesc: string; implementation: string; implementationDesc: string; team: string; teamDesc: string;
   journey: string; people: string; peopleDesc: string; reception: string; receptionDesc: string; care: string; careDesc: string;
   groups: string; groupsDesc: string; root: string; rootDesc: string; management: string; pastoral: string; pastoralDesc: string;
   privacy: string; privacyDesc: string; helpTitle: string; helpText: string; tagline: string; modules: string; quick: string; more: string; close: string;
 }> = {
   'pt-BR': {
     start:'Começar', home:'Início', homeDesc:'Visão simples da jornada', today:'Meu Hoje', todayDesc:'O que precisa da sua atenção',
-    implementation:'Implantação', implementationDesc:'As 7 semanas, passo a passo', journey:'Jornada da pessoa',
+    implementation:'Implantação', implementationDesc:'As 7 semanas, passo a passo', team:'Equipe & Papéis', teamDesc:'Frentes, responsabilidades e acessos', journey:'Jornada da pessoa',
     people:'Pessoas', peopleDesc:'Cadastro e histórico da jornada', reception:'Recepção & Mesa', receptionDesc:'Chegada, vínculo e presença',
     care:'Cuidado & Conexão', careDesc:'Contato em 24–48h e próximos passos', groups:'Casas de Paz', groupsDesc:'Casas, participantes e entradas',
     root:'Raiz', rootDesc:'Discipulado inicial em 7 encontros', management:'Pastoral & gestão', pastoral:'Visão Pastoral', pastoralDesc:'Casos que pedem atenção pastoral',
@@ -34,7 +34,7 @@ const shellCopy: Record<AppLocale, {
   },
   en: {
     start:'Start', home:'Home', homeDesc:'A simple journey overview', today:'My Today', todayDesc:'What needs your attention',
-    implementation:'Implementation', implementationDesc:'The 7 weeks, step by step', journey:'Person journey',
+    implementation:'Implementation', implementationDesc:'The 7 weeks, step by step', team:'Team & Roles', teamDesc:'Ministry fronts, responsibilities and access', journey:'Person journey',
     people:'People', peopleDesc:'Profile and journey history', reception:'Welcome & Table', receptionDesc:'Arrival, relationship and presence',
     care:'Care & Connection', careDesc:'24–48h contact and next steps', groups:'Peace Houses', groupsDesc:'Groups, participants and entry',
     root:'Root', rootDesc:'Initial discipleship in 7 meetings', management:'Pastoral & management', pastoral:'Pastoral View', pastoralDesc:'Cases needing pastoral attention',
@@ -44,7 +44,7 @@ const shellCopy: Record<AppLocale, {
   },
   es: {
     start:'Comenzar', home:'Inicio', homeDesc:'Visión simple de la jornada', today:'Mi Hoy', todayDesc:'Lo que necesita tu atención',
-    implementation:'Implementación', implementationDesc:'Las 7 semanas, paso a paso', journey:'Jornada de la persona',
+    implementation:'Implementación', implementationDesc:'Las 7 semanas, paso a paso', team:'Equipo & Papeles', teamDesc:'Frentes, responsabilidades y accesos', journey:'Jornada de la persona',
     people:'Personas', peopleDesc:'Registro e historial de la jornada', reception:'Recepción & Mesa', receptionDesc:'Llegada, vínculo y presencia',
     care:'Cuidado & Conexión', careDesc:'Contacto en 24–48h y próximos pasos', groups:'Casas de Paz', groupsDesc:'Casas, participantes y entradas',
     root:'Raíz', rootDesc:'Discipulado inicial en 7 encuentros', management:'Pastoral & gestión', pastoral:'Visión Pastoral', pastoralDesc:'Casos que requieren atención pastoral',
@@ -62,6 +62,7 @@ function buildGroups(copy: typeof shellCopy[AppLocale]): Array<{ label: string; 
         { href: '/', label: copy.home, description: copy.homeDesc, icon: LayoutDashboard, allowed: () => true },
         { href: '/my-today', label: copy.today, description: copy.todayDesc, icon: ListTodo, allowed: (a) => a.broadJourneyAccess || a.canManageCare || a.canManagePresence || a.canManageGroups || a.canManageDiscipleship || a.canManagePastoral },
         { href: '/implementation-runtime', label: copy.implementation, description: copy.implementationDesc, icon: ClipboardCheck, allowed: (a) => a.canManageImplementation },
+        { href: '/team-runtime', label: copy.team, description: copy.teamDesc, icon: UserCog, allowed: (a) => a.isOwner || a.isSystemAdmin || a.canManageImplementation || a.canViewGovernance },
       ],
     },
     {
