@@ -1,14 +1,19 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Check, ChevronLeft, House, Plus, Search, Send, ShieldCheck, UserMinus, Users, X } from 'lucide-react'
+import { CalendarCheck, Check, ChevronLeft, House, Play, Plus, Search, Send, ShieldCheck, Square, UserMinus, Users, X } from 'lucide-react'
 import { auth } from './firebase'
 import {
   canCreateJourneyGroupEntryRequest,
   canManageJourneyGroupRoster,
+  closeJourneyGroupMeeting,
+  confirmJourneyGroupAttendance,
   createJourneyGroup,
+  createJourneyGroupMeeting,
   createJourneyGroupEntryRequest,
   getActiveJourneyOrganizationId,
   listJourneyCongregations,
+  listJourneyGroupAttendance,
   listJourneyGroupEntryRequests,
+  listJourneyGroupMeetings,
   listJourneyGroupMemberships,
   listJourneyGroups,
   listJourneyPeople,
@@ -17,7 +22,9 @@ import {
   setJourneyGroupMembership,
   type JourneyAccessContext,
   type JourneyCongregation,
+  type JourneyGroupAttendanceRecord,
   type JourneyGroupEntryRequest,
+  type JourneyGroupMeetingRecord,
   type JourneyGroupMembership,
   type JourneyGroupRecord,
   type JourneyPersonRecord,
@@ -39,6 +46,8 @@ export default function GroupsRuntimePage() {
   const [rosterGroup, setRosterGroup] = useState<JourneyGroupRecord | null>(null)
   const [roster, setRoster] = useState<JourneyGroupMembership[]>([])
   const [entryRequests, setEntryRequests] = useState<JourneyGroupEntryRequest[]>([])
+  const [meetings, setMeetings] = useState<JourneyGroupMeetingRecord[]>([])
+  const [attendance, setAttendance] = useState<JourneyGroupAttendanceRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -76,7 +85,7 @@ export default function GroupsRuntimePage() {
 
   async function selectUnit(unitId: string) {
     if (!access) return
-    setCongregationId(unitId); setBusy(true); setError(''); setRosterGroup(null); setRoster([]); setEntryRequests([])
+    setCongregationId(unitId); setBusy(true); setError(''); setRosterGroup(null); setRoster([]); setEntryRequests([]); setMeetings([]); setAttendance([])
     try { await refresh(access, unitId) }
     catch (cause) { console.error(cause); setError(t.error) }
     finally { setBusy(false) }
@@ -84,12 +93,19 @@ export default function GroupsRuntimePage() {
 
   async function loadRoster(group: JourneyGroupRecord) {
     if (!access || !canManageJourneyGroupRoster(access, group)) return
-    const [nextRoster, nextRequests] = await Promise.all([
+    const [nextRoster, nextRequests, nextMeetings] = await Promise.all([
       listJourneyGroupMemberships(access, group),
       listJourneyGroupEntryRequests(access, group),
+      listJourneyGroupMeetings(access, group),
     ])
+    const openMeeting = nextMeetings.find(item => item.status === 'open')
+    const nextAttendance = openMeeting
+      ? await listJourneyGroupAttendance(access, group, openMeeting.id)
+      : []
     setRoster(nextRoster)
     setEntryRequests(nextRequests)
+    setMeetings(nextMeetings)
+    setAttendance(nextAttendance)
   }
 
   async function openRoster(group: JourneyGroupRecord) {
@@ -98,6 +114,36 @@ export default function GroupsRuntimePage() {
     try {
       await loadRoster(group)
       setRosterGroup(group)
+    } catch (cause) { console.error(cause); setError(t.error) }
+    finally { setBusy(false) }
+  }
+
+  async function startMeeting() {
+    if (!access || !rosterGroup) return
+    setBusy(true); setError('')
+    try {
+      await createJourneyGroupMeeting(access, rosterGroup)
+      await loadRoster(rosterGroup)
+    } catch (cause) { console.error(cause); setError(t.error) }
+    finally { setBusy(false) }
+  }
+
+  async function finishMeeting(meeting: JourneyGroupMeetingRecord) {
+    if (!access || !rosterGroup) return
+    setBusy(true); setError('')
+    try {
+      await closeJourneyGroupMeeting(access, rosterGroup, meeting)
+      await loadRoster(rosterGroup)
+    } catch (cause) { console.error(cause); setError(t.error) }
+    finally { setBusy(false) }
+  }
+
+  async function confirmAttendance(personId: string, meeting: JourneyGroupMeetingRecord) {
+    if (!access || !rosterGroup) return
+    setBusy(true); setError('')
+    try {
+      await confirmJourneyGroupAttendance({ access, group: rosterGroup, meeting, personId })
+      setAttendance(await listJourneyGroupAttendance(access, rosterGroup, meeting.id))
     } catch (cause) { console.error(cause); setError(t.error) }
     finally { setBusy(false) }
   }
@@ -183,12 +229,17 @@ export default function GroupsRuntimePage() {
     people={people}
     memberships={roster}
     entryRequests={entryRequests}
+    meetings={meetings}
+    attendance={attendance}
     canRequest={canCreateJourneyGroupEntryRequest(access)}
     busy={busy}
-    close={()=>{setRosterGroup(null);setRoster([]);setEntryRequests([])}}
+    close={()=>{setRosterGroup(null);setRoster([]);setEntryRequests([]);setMeetings([]);setAttendance([])}}
     remove={removeMembership}
     requestEntry={requestEntry}
     resolveEntry={resolveEntry}
+    startMeeting={startMeeting}
+    finishMeeting={finishMeeting}
+    confirmAttendance={confirmAttendance}
   />:null}
   </main>
 }
@@ -202,19 +253,24 @@ function NewGroupModal({locale,close,save}:{locale:AppLocale;close:()=>void;save
 }
 
 function RosterModal({
-  locale,group,people,memberships,entryRequests,canRequest,busy,close,remove,requestEntry,resolveEntry,
+  locale,group,people,memberships,entryRequests,meetings,attendance,canRequest,busy,close,remove,requestEntry,resolveEntry,startMeeting,finishMeeting,confirmAttendance,
 }:{
   locale:AppLocale
   group:JourneyGroupRecord
   people:JourneyPersonRecord[]
   memberships:JourneyGroupMembership[]
   entryRequests:JourneyGroupEntryRequest[]
+  meetings:JourneyGroupMeetingRecord[]
+  attendance:JourneyGroupAttendanceRecord[]
   canRequest:boolean
   busy:boolean
   close:()=>void
   remove:(person:JourneyPersonRecord)=>Promise<void>
   requestEntry:(person:JourneyPersonRecord)=>Promise<void>
   resolveEntry:(request:JourneyGroupEntryRequest,decision:'accepted'|'declined')=>Promise<void>
+  startMeeting:()=>Promise<void>
+  finishMeeting:(meeting:JourneyGroupMeetingRecord)=>Promise<void>
+  confirmAttendance:(personId:string,meeting:JourneyGroupMeetingRecord)=>Promise<void>
 }){
   const t=groupsRuntimeCopy[locale]
   const [query,setQuery]=useState('')
@@ -234,10 +290,33 @@ function RosterModal({
   const visiblePending=pending.filter(item=>!needle||item.personName.toLocaleLowerCase(locale).includes(needle))
   const capacity=Math.max(1,group.capacity??12)
   const participants=group.participants??0
+  const openMeeting=meetings.find(item=>item.status==='open')
+  const presentIds=new Set(attendance.map(item=>item.personId))
+  const meetingCopy=locale==='en'
+    ? {title:'Meeting attendance',open:'Open meeting',close:'Close meeting',present:'Present',confirm:'Confirm presence',none:'No meeting is open.',rule:'Confirm only people who were actually present. NestJourney never infers absence.'}
+    : locale==='es'
+      ? {title:'Presencia del encuentro',open:'Abrir encuentro',close:'Cerrar encuentro',present:'Presente',confirm:'Confirmar presencia',none:'No hay un encuentro abierto.',rule:'Confirma solamente a quien realmente estuvo presente. NestJourney nunca presume ausencia.'}
+      : {title:'Presença do encontro',open:'Abrir encontro',close:'Encerrar encontro',present:'Presente',confirm:'Confirmar presença',none:'Nenhum encontro está aberto.',rule:'Confirme apenas quem realmente esteve presente. O NestJourney nunca presume ausência.'}
 
   return <div className="runtime-modal-backdrop" onMouseDown={close}><section className="runtime-panel runtime-modal runtime-roster-modal" onMouseDown={e=>e.stopPropagation()}>
     <div className="runtime-modal-head"><div><span className="runtime-kicker">Journey / Community</span><h2>{group.name}</h2><p className="runtime-muted">{participants} / {capacity} · {t.explicitRoster}</p></div><button className="runtime-button" onClick={close}><X size={17}/></button></div>
     <label className="runtime-roster-search"><Search size={16}/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder={t.searchPerson}/></label>
+
+    <section className="runtime-meeting-panel">
+      <div className="runtime-roster-head"><span><CalendarCheck size={14}/> {meetingCopy.title}</span><b>{openMeeting?attendance.length:meetings.filter(item=>item.status==='closed').length}</b></div>
+      {!openMeeting?<div className="runtime-meeting-empty"><p>{meetingCopy.none}</p><button className="runtime-button primary compact" disabled={busy} onClick={()=>void startMeeting()}><Play size={15}/>{meetingCopy.open}</button></div>
+      :<div className="runtime-meeting-open">
+        <div className="runtime-meeting-summary"><span className="runtime-badge">{meetingCopy.present}: {attendance.length}</span><button className="runtime-button compact" disabled={busy} onClick={()=>void finishMeeting(openMeeting)}><Square size={14}/>{meetingCopy.close}</button></div>
+        <div className="runtime-roster-list">
+          {active.map(person=>{
+            const present=presentIds.has(person.id)
+            return <article key={'attendance-'+person.id}><span><strong>{person.name}</strong><small>{present?meetingCopy.present:meetingCopy.confirm}</small></span><button className={`runtime-icon-button ${present?'accept':''}`} disabled={busy||present} onClick={()=>void confirmAttendance(person.id,openMeeting)} aria-label={meetingCopy.confirm}>{present?<Check size={16}/>:<UserCheck size={16}/>}</button></article>
+          })}
+          {!active.length?<p className="runtime-roster-empty">{t.noExplicitParticipants}</p>:null}
+        </div>
+        <p className="runtime-attendance-rule"><ShieldCheck size={14}/>{meetingCopy.rule}</p>
+      </div>}
+    </section>
 
     <section className="runtime-entry-panel">
       <div className="runtime-roster-head"><span>{t.pendingEntryRequests}</span><b>{visiblePending.length}</b></div>
