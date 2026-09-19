@@ -80,7 +80,7 @@ const copy={
   'pt-BR':{
     title:'Visão',subtitle:'O painel muda conforme a responsabilidade. Aqui liderança enxerga a operação sem transformar pessoas em métricas de fé.',
     loading:'Montando a visão…',noAccess:'Seu papel não possui uma visão de gestão.',organization:'Organização',unit:'Unidade',ecosystem:'Ecossistema',
-    organizations:'Organizações',activeJourney:'NestJourney ativo',people:'Pessoas',careOpen:'Cuidados abertos',careDebt:'Care Debt',sessions:'Sessões abertas',pastoral:'Pastoral pendente',audit:'Eventos de auditoria',
+    organizations:'Organizações',activeJourney:'NestJourney ativo',people:'Pessoas',careOpen:'Cuidados abertos',careDebt:'Care Debt',careUnassigned:'Cuidados sem responsável',maxLoad:'Maior carga individual',withoutNextStep:'Sem próximo passo registrado',sessions:'Sessões abertas',pastoral:'Pastoral pendente',audit:'Eventos de auditoria',
     simulation:'Simular experiência',simulationDesc:'Prévia somente leitura. Não altera seu acesso real nem executa ações como outro usuário.',
     current:'Sua experiência atual',openArea:'Abrir área',access:'Acessos',accessDesc:'Equipe, cargos e permissões continuam governados pelo MillionsNest Hub.',
     productHealth:'Saúde do produto',productHealthDesc:'Acompanhe organizações habilitadas e abra uma delas para inspecionar a operação.',
@@ -89,7 +89,7 @@ const copy={
   en:{
     title:'Vision',subtitle:'The dashboard changes with responsibility. Leadership sees operations without turning people into faith metrics.',
     loading:'Building vision…',noAccess:'Your role does not have a management view.',organization:'Organization',unit:'Campus',ecosystem:'Ecosystem',
-    organizations:'Organizations',activeJourney:'NestJourney active',people:'People',careOpen:'Open care',careDebt:'Care Debt',sessions:'Open sessions',pastoral:'Pastoral pending',audit:'Audit events',
+    organizations:'Organizations',activeJourney:'NestJourney active',people:'People',careOpen:'Open care',careDebt:'Care Debt',careUnassigned:'Care without owner',maxLoad:'Largest individual load',withoutNextStep:'No recorded next step',sessions:'Open sessions',pastoral:'Pastoral pending',audit:'Audit events',
     simulation:'Simulate experience',simulationDesc:'Read-only preview. It does not change your real access or act as another user.',
     current:'Your current experience',openArea:'Open area',access:'Access',accessDesc:'Team, roles, and permissions remain governed by MillionsNest Hub.',
     productHealth:'Product health',productHealthDesc:'Follow enabled organizations and open one to inspect operations.',
@@ -98,7 +98,7 @@ const copy={
   es:{
     title:'Visión',subtitle:'El panel cambia según la responsabilidad. Liderazgo ve la operación sin convertir personas en métricas de fe.',
     loading:'Preparando la visión…',noAccess:'Tu papel no tiene una visión de gestión.',organization:'Organización',unit:'Sede',ecosystem:'Ecosistema',
-    organizations:'Organizaciones',activeJourney:'NestJourney activo',people:'Personas',careOpen:'Cuidados abiertos',careDebt:'Care Debt',sessions:'Sesiones abiertas',pastoral:'Pastoral pendiente',audit:'Eventos de auditoría',
+    organizations:'Organizaciones',activeJourney:'NestJourney activo',people:'Personas',careOpen:'Cuidados abiertos',careDebt:'Care Debt',careUnassigned:'Cuidados sin responsable',maxLoad:'Mayor carga individual',withoutNextStep:'Sin próximo paso registrado',sessions:'Sesiones abiertas',pastoral:'Pastoral pendiente',audit:'Eventos de auditoría',
     simulation:'Simular experiencia',simulationDesc:'Vista previa de solo lectura. No cambia tu acceso real ni actúa como otro usuario.',
     current:'Tu experiencia actual',openArea:'Abrir área',access:'Accesos',accessDesc:'Equipo, cargos y permisos siguen gobernados por MillionsNest Hub.',
     productHealth:'Salud del producto',productHealthDesc:'Acompaña organizaciones habilitadas y abre una para inspeccionar la operación.',
@@ -182,10 +182,20 @@ export default function JourneyVisionPage(){
   const metrics=useMemo(()=>{
     const openCare=care.filter(x=>x.status==='open')
     const debt=openCare.filter(x=>evaluateCarePromise(careRequestToPromise(x)).state==='debt').length
+    const ownerLoads=new Map<string,number>()
+    for(const item of openCare){
+      if(item.ownerRef)ownerLoads.set(item.ownerRef,(ownerLoads.get(item.ownerRef)??0)+1)
+    }
+    const activeDiscipleshipIds=new Set(discipleships.filter(x=>x.status==='active').map(x=>x.personId))
+    const openCarePersonIds=new Set(openCare.map(x=>x.personId))
+    const withoutNextStep=people.filter(person=>!person.groupId&&!activeDiscipleshipIds.has(person.id)&&!openCarePersonIds.has(person.id)).length
     return {
       people:people.length,
       careOpen:openCare.length,
       careDebt:debt,
+      careUnassigned:openCare.filter(x=>!x.ownerRef).length,
+      maxLoad:Math.max(0,...ownerLoads.values()),
+      withoutNextStep,
       sessions:sessions.filter(x=>x.status==='open').length,
       pastoral:pastoral.filter(x=>x.status==='open').length,
       audit:audit.length,
@@ -222,6 +232,9 @@ export default function JourneyVisionPage(){
         <div className="journey-stat"><span>{t.people}</span><strong>{metrics.people}</strong><small>{areaNames.presence}</small></div>
         <div className="journey-stat"><span>{t.careOpen}</span><strong>{metrics.careOpen}</strong><small>{areaNames.care}</small></div>
         <div className="journey-stat"><span>{t.careDebt}</span><strong>{metrics.careDebt}</strong><small>{areaNames.care}</small></div>
+        <div className="journey-stat"><span>{t.careUnassigned}</span><strong>{metrics.careUnassigned}</strong><small>{areaNames.care}</small></div>
+        <div className="journey-stat"><span>{t.maxLoad}</span><strong>{metrics.maxLoad}</strong><small>{areaNames.care}</small></div>
+        <div className="journey-stat"><span>{t.withoutNextStep}</span><strong>{metrics.withoutNextStep}</strong><small>{t.organization}</small></div>
         <div className="journey-stat"><span>{t.sessions}</span><strong>{metrics.sessions}</strong><small>{areaNames.presence} · {areaNames.mesa}</small></div>
         <div className="journey-stat"><span>{areaNames.groups}</span><strong>{metrics.groups}</strong><small>{t.organization}</small></div>
         <div className="journey-stat"><span>{areaNames.root}</span><strong>{metrics.discipleships}</strong><small>{t.organization}</small></div>
