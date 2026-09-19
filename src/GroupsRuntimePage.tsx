@@ -23,11 +23,14 @@ import {
   type JourneyPersonRecord,
 } from './journeyRepository'
 import { getInitialLocale, groupsRuntimeCopy, localeLabels, persistLocale, type AppLocale } from './i18n'
+import { useJourneyLabels } from './journeyLabels'
 import './JourneyRuntimePages.css'
 
 export default function GroupsRuntimePage() {
   const [locale, setLocale] = useState<AppLocale>(getInitialLocale)
-  const t = groupsRuntimeCopy[locale]
+  const baseCopy = groupsRuntimeCopy[locale]
+  const { labels } = useJourneyLabels()
+  const t = { ...baseCopy, title: labels.groups || baseCopy.title }
   const [access, setAccess] = useState<JourneyAccessContext | null>(null)
   const [congregations, setCongregations] = useState<JourneyCongregation[]>([])
   const [congregationId, setCongregationId] = useState('')
