@@ -24,6 +24,7 @@ export interface JourneyAccessContext {
   organizationId: string
   userId: string
   role: string
+  organizationRole: string
   permissions: Record<string, boolean>
   congregationIds: string[]
   isSystemAdmin: boolean
@@ -395,7 +396,7 @@ export async function listJourneyOrganizationsForSystemAdmin(access: JourneyAcce
 
 export async function listJourneyOrganizationMembers(access: JourneyAccessContext): Promise<JourneyOrganizationMember[]> {
   const canManage = access.isSystemAdmin || access.isOwner || ['owner', 'admin'].includes(
-    asString(access.role),
+    asString(access.organizationRole),
   )
   if (!canManage) return []
 
@@ -458,33 +459,35 @@ export async function loadJourneyAccess(userId: string, organizationId: string):
   const isSystemAdmin = SYSTEM_ROLES.has(systemRole)
   const ownerUid = asString(orgData.ownerUid || orgData.ownerId)
   const isOwner = ownerUid === userId
-  const role = asString(
-    membership.journeyRole ||
+  const organizationRole = asString(
     membership.organizationRole ||
     membership.role ||
     (isOwner ? 'owner' : ''),
   )
+  const role = asString(membership.journeyRole || organizationRole)
   const congregationIds = asStringArray(membership.congregationIds)
+  const organizationHasBroadAccess = ['owner', 'admin', 'pastor', 'data_admin'].includes(organizationRole)
 
   return {
     organizationId,
     userId,
     role,
+    organizationRole,
     permissions,
     congregationIds,
     isSystemAdmin,
     isOwner,
-    canManagePresence: isSystemAdmin || isOwner || PRESENCE_ROLES.has(role) || permissions.canManagePresence === true,
-    canManageMesa: isSystemAdmin || isOwner || MESA_ROLES.has(role) || permissions.canManageMesa === true || permissions.canManagePresence === true,
-    canManagePeople: isSystemAdmin || isOwner || BROAD_JOURNEY_ROLES.has(role) || role === 'presence_host' || role === 'coordinator' || permissions.canManagePeople === true,
-    canManageCare: isSystemAdmin || isOwner || CARE_ROLES.has(role) || permissions.canManageCare === true,
-    canManageGroups: isSystemAdmin || isOwner || GROUP_ROLES.has(role) || permissions.canManageGroups === true,
-    canManageDiscipleship: isSystemAdmin || isOwner || DISCIPLESHIP_ROLES.has(role) || permissions.canManageDiscipleship === true,
-    canManageImplementation: isSystemAdmin || isOwner || IMPLEMENTATION_ROLES.has(role) || permissions.canManageImplementation === true,
-    canViewGovernance: isSystemAdmin || isOwner || GOVERNANCE_ROLES.has(role) || permissions.canViewGovernance === true,
-    canManagePrivacy: isSystemAdmin || isOwner || PRIVACY_ROLES.has(role) || permissions.canManagePrivacy === true,
-    canManagePastoral: isSystemAdmin || isOwner || PASTORAL_ROLES.has(role) || permissions.canManagePastoral === true,
-    broadJourneyAccess: isSystemAdmin || isOwner || BROAD_JOURNEY_ROLES.has(role),
+    canManagePresence: isSystemAdmin || isOwner || PRESENCE_ROLES.has(organizationRole) || PRESENCE_ROLES.has(role) || permissions.canManagePresence === true,
+    canManageMesa: isSystemAdmin || isOwner || MESA_ROLES.has(organizationRole) || MESA_ROLES.has(role) || permissions.canManageMesa === true || permissions.canManagePresence === true,
+    canManagePeople: isSystemAdmin || isOwner || organizationHasBroadAccess || BROAD_JOURNEY_ROLES.has(role) || role === 'presence_host' || role === 'coordinator' || permissions.canManagePeople === true,
+    canManageCare: isSystemAdmin || isOwner || CARE_ROLES.has(organizationRole) || CARE_ROLES.has(role) || permissions.canManageCare === true,
+    canManageGroups: isSystemAdmin || isOwner || GROUP_ROLES.has(organizationRole) || GROUP_ROLES.has(role) || permissions.canManageGroups === true,
+    canManageDiscipleship: isSystemAdmin || isOwner || DISCIPLESHIP_ROLES.has(organizationRole) || DISCIPLESHIP_ROLES.has(role) || permissions.canManageDiscipleship === true,
+    canManageImplementation: isSystemAdmin || isOwner || IMPLEMENTATION_ROLES.has(organizationRole) || IMPLEMENTATION_ROLES.has(role) || permissions.canManageImplementation === true,
+    canViewGovernance: isSystemAdmin || isOwner || GOVERNANCE_ROLES.has(organizationRole) || GOVERNANCE_ROLES.has(role) || permissions.canViewGovernance === true,
+    canManagePrivacy: isSystemAdmin || isOwner || PRIVACY_ROLES.has(organizationRole) || PRIVACY_ROLES.has(role) || permissions.canManagePrivacy === true,
+    canManagePastoral: isSystemAdmin || isOwner || PASTORAL_ROLES.has(organizationRole) || PASTORAL_ROLES.has(role) || permissions.canManagePastoral === true,
+    broadJourneyAccess: isSystemAdmin || isOwner || organizationHasBroadAccess || BROAD_JOURNEY_ROLES.has(role),
   }
 }
 
