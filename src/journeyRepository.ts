@@ -120,6 +120,30 @@ export interface JourneyGroupEntryRequest {
   resolvedBy?: string
 }
 
+export interface JourneyGroupMeetingRecord {
+  id: string
+  organizationId: string
+  congregationId: string
+  groupId: string
+  status: 'open' | 'closed'
+  startedAt: string
+  createdBy: string
+  endedAt?: string
+  closedBy?: string
+}
+
+export interface JourneyGroupAttendanceRecord {
+  id: string
+  organizationId: string
+  congregationId: string
+  groupId: string
+  meetingId: string
+  personId: string
+  status: 'present_confirmed'
+  recordedAt: string
+  recordedBy: string
+}
+
 export interface JourneyDiscipleshipRecord {
   id: string
   organizationId: string
@@ -781,6 +805,114 @@ export async function setJourneyGroupMembership(input: {
       updatedBy: input.access.userId,
     })
   })
+}
+
+export async function listJourneyGroupMeetings(
+  access: JourneyAccessContext,
+  group: JourneyGroupRecord,
+): Promise<JourneyGroupMeetingRecord[]> {
+  if (!canManageJourneyGroupRoster(access, group)) return []
+  const firestore = requireDb()
+  const snapshot = await getDocs(query(
+    collection(firestore, journeyCollectionPath(access.organizationId, 'groupMeetings')),
+    where('groupId', '==', group.id),
+  ))
+  return snapshot.docs.map((item): JourneyGroupMeetingRecord => {
+    const data = item.data()
+    return {
+      id: item.id,
+      organizationId: access.organizationId,
+      congregationId: asString(data.congregationId),
+      groupId: asString(data.groupId),
+      status: data.status === 'closed' ? 'closed' : 'open',
+      startedAt: toIso(data.startedAt),
+      createdBy: asString(data.createdBy),
+      endedAt: data.endedAt ? toIso(data.endedAt) : undefined,
+      closedBy: asString(data.closedBy) || undefined,
+    }
+  }).filter((item) => item.congregationId === group.congregationId)
+    .sort((a,b) => Date.parse(b.startedAt) - Date.parse(a.startedAt))
+}
+
+export async function createJourneyGroupMeeting(access: JourneyAccessContext, group: JourneyGroupRecord) {
+  if (!canManageJourneyGroupRoster(access, group)) throw new Error('group_meeting_forbidden')
+  const firestore = requireDb()
+  const ref = doc(collection(firestore, journeyCollectionPath(access.organizationId, 'groupMeetings')))
+  await writeBatch(firestore).set(ref, {
+    organizationId: access.organizationId,
+    congregationId: group.congregationId,
+    groupId: group.id,
+    status: 'open',
+    startedAt: serverTimestamp(),
+    createdBy: access.userId,
+    endedAt: null,
+    closedBy: '',
+  }).commit()
+  return ref.id
+}
+
+export async function closeJourneyGroupMeeting(access: JourneyAccessContext, group: JourneyGroupRecord, meeting: JourneyGroupMeetingRecord) {
+  if (!canManageJourneyGroupRoster(access, group)) throw new Error('group_meeting_forbidden')
+  const firestore = requireDb()
+  const ref = doc(firestore, `${journeyCollectionPath(access.organizationId, 'groupMeetings')}/${meeting.id}`)
+  await updateDoc(ref, {
+    status: 'closed',
+    endedAt: serverTimestamp(),
+    closedBy: access.userId,
+  })
+}
+
+export async function listJourneyGroupAttendance(
+  access: JourneyAccessContext,
+  group: JourneyGroupRecord,
+  meetingId: string,
+): Promise<JourneyGroupAttendanceRecord[]> {
+  if (!canManageJourneyGroupRoster(access, group)) return []
+  const firestore = requireDb()
+  const snapshot = await getDocs(query(
+    collection(firestore, journeyCollectionPath(access.organizationId, 'groupAttendance')),
+    where('meetingId', '==', meetingId),
+  ))
+  return snapshot.docs.map((item): JourneyGroupAttendanceRecord => {
+    const data = item.data()
+    return {
+      id: item.id,
+      organizationId: access.organizationId,
+      congregationId: asString(data.congregationId),
+      groupId: asString(data.groupId),
+      meetingId: asString(data.meetingId),
+      personId: asString(data.personId),
+      status: 'present_confirmed',
+      recordedAt: toIso(data.recordedAt),
+      recordedBy: asString(data.recordedBy),
+    }
+  }).filter((item) => item.groupId === group.id && item.congregationId === group.congregationId)
+}
+
+export async function confirmJourneyGroupAttendance(input: {
+  access: JourneyAccessContext
+  group: JourneyGroupRecord
+  meeting: JourneyGroupMeetingRecord
+  personId: string
+}) {
+  if (!canManageJourneyGroupRoster(input.access, input.group)) throw new Error('group_attendance_forbidden')
+  if (input.meeting.groupId !== input.group.id || input.meeting.status !== 'open') throw new Error('group_meeting_closed')
+  const firestore = requireDb()
+  const id = `${input.meeting.id}__${input.personId}`
+  const ref = doc(firestore, `${journeyCollectionPath(input.access.organizationId, 'groupAttendance')}/${id}`)
+  const existing = await getDoc(ref)
+  if (existing.exists()) return id
+  await writeBatch(firestore).set(ref, {
+    organizationId: input.access.organizationId,
+    congregationId: input.group.congregationId,
+    groupId: input.group.id,
+    meetingId: input.meeting.id,
+    personId: input.personId,
+    status: 'present_confirmed',
+    recordedAt: serverTimestamp(),
+    recordedBy: input.access.userId,
+  }).commit()
+  return id
 }
 
 export async function listJourneyDiscipleships(access: JourneyAccessContext, congregationId: string): Promise<JourneyDiscipleshipRecord[]> {
