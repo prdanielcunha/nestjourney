@@ -181,6 +181,51 @@ describe('Presence Assist and canonical evidence', () => {
     }))
   })
 
+  it('accepts an append-only correction while the session is open and requires a matching corrected fact', async () => {
+    await seedMembership('coord-a', 'org-a', 'coordinator', ['unit-a'])
+    await environment.withSecurityRulesDisabled(async (context) => {
+      const adminDb = context.firestore()
+      await setDoc(doc(adminDb, 'organizations/org-a/products/raiz_e_mesa/presenceSessions/session-correction'), {
+        organizationId: 'org-a', congregationId: 'unit-a', eventRef: 'event:session-correction', openedAt: new Date(),
+        status: 'open', expectedPeopleCount: 1, minimumCoveragePercent: 90, createdBy: 'coord-a',
+      })
+      await setDoc(doc(adminDb, 'organizations/org-a/products/raiz_e_mesa/people/person-correction'), {
+        organizationId: 'org-a', congregationId: 'unit-a', name: 'Person Correction',
+      })
+      await setDoc(doc(adminDb, 'organizations/org-a/products/raiz_e_mesa/presenceChecks/original-correction'), {
+        organizationId: 'org-a', congregationId: 'unit-a', sessionId: 'session-correction', personId: 'person-correction',
+        state: 'present_confirmed', source: 'human_check', actorId: 'coord-a', recordedAt: new Date(),
+      })
+    })
+
+    const db = environment.authenticatedContext('coord-a').firestore()
+    const check = doc(db, 'organizations/org-a/products/raiz_e_mesa/presenceChecks/correction-open')
+    const fact = doc(db, 'organizations/org-a/products/raiz_e_mesa/facts/presence-correction-open')
+    const batch = writeBatch(db)
+    batch.set(check, {
+      organizationId: 'org-a', congregationId: 'unit-a', sessionId: 'session-correction', personId: 'person-correction',
+      state: 'absent_confirmed', source: 'retroactive_human_correction', actorId: 'coord-a',
+      recordedAt: serverTimestamp(), correctedFromCheckId: 'original-correction',
+    })
+    batch.set(fact, {
+      eventId: 'presence-correction-open', eventType: 'PRESENCE_CORRECTED',
+      occurredAt: serverTimestamp(), recordedAt: serverTimestamp(),
+      organizationId: 'org-a', actorId: 'coord-a', subjectRef: 'person:person-correction', sourceApp: 'nestjourney',
+      scope: 'congregation:unit-a', evidenceRef: 'presenceCheck:correction-open', sensitivity: 'confidential', version: 1,
+      payload: {
+        checkId: 'correction-open', sessionId: 'session-correction', state: 'absent_confirmed',
+        source: 'retroactive_human_correction', correctedFromCheckId: 'original-correction',
+      },
+    })
+    await assertSucceeds(batch.commit())
+
+    await assertFails(setDoc(doc(db, 'organizations/org-a/products/raiz_e_mesa/presenceChecks/invalid-same-state'), {
+      organizationId: 'org-a', congregationId: 'unit-a', sessionId: 'session-correction', personId: 'person-correction',
+      state: 'present_confirmed', source: 'retroactive_human_correction', actorId: 'coord-a',
+      recordedAt: serverTimestamp(), correctedFromCheckId: 'original-correction',
+    }))
+  })
+
   it('blocks browser retroactive correction after a session closes', async () => {
     await seedMembership('coord-a', 'org-a', 'coordinator', ['unit-a'])
     await environment.withSecurityRulesDisabled(async (context) => {

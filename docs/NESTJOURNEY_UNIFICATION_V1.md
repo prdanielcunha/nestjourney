@@ -673,3 +673,59 @@ A interface não oferece campo para transcrever confissão, diagnóstico, trauma
 ### Rollback e independência
 
 O Follow-up continua funcional mesmo sem o Connect: o registro de outcome permanece no NestJourney. A integração é um acelerador da execução do contato, não uma nova fonte de verdade e não altera o modelo Firestore canônico do Follow-up.
+
+
+## 27. Implementação corrente — Presence Absence Integrity V1
+
+Os materiais do Raiz e Mesa incluem **ausentes** entre as pessoas que podem precisar de cuidado, mas a arquitetura do NestJourney mantém uma fronteira indispensável: **não marcado não é ausente**. Uma ausência só existe como fato quando alguém a confirma explicitamente.
+
+### Confirmação humana
+
+O Presence Assist passa a oferecer três estados operacionais:
+
+- presente confirmado;
+- ausência confirmada;
+- não verificado.
+
+O estado inicial continua sendo **não verificado**. Fechar a sessão não converte automaticamente pessoas não marcadas em ausentes.
+
+A ação de confirmar ausência exige uma confirmação adicional na interface para reduzir registros acidentais.
+
+### Correções append-only
+
+Enquanto a sessão permanece aberta, uma presença confirmada pode ser corrigida para ausência confirmada e vice-versa.
+
+A correção não sobrescreve o registro anterior. Ela cria um novo Presence Check com:
+
+- `source = retroactive_human_correction`;
+- `correctedFromCheckId` apontando para o registro anterior;
+- fato canônico `PRESENCE_CORRECTED`;
+- evidência apontando para o novo Presence Check.
+
+As Firestore Rules validam que o registro corrigido pertence à mesma organização, congregação, sessão e pessoa, que o estado realmente mudou e que a sessão ainda está aberta.
+
+Correções pelo navegador continuam bloqueadas depois que a sessão é encerrada.
+
+### Evidência de ausência
+
+A UI só apresenta a contagem de ausências confirmadas como evidência quando:
+
+1. a sessão foi encerrada;
+2. a cobertura mínima configurada para a sessão foi atingida;
+3. a pessoa possui um check explícito `absent_confirmed`.
+
+Se a cobertura mínima não for atingida, a interface deixa claro que nenhuma ausência daquela sessão deve ser usada como evidência.
+
+Esta slice **não abre automaticamente Care Requests por ausência**. O Manual de Cuidado prevê revisão humana de ausentes e membros que precisam de cuidado; uma ausência factual, sozinha, não autoriza concluir afastamento, desinteresse, problema espiritual ou necessidade específica.
+
+### Fronteira de verdade
+
+O NestJourney continua seguindo:
+
+**NO SOURCE → NO CLAIM**
+
+- não verificado não vira ausência;
+- ausência não vira desinteresse;
+- ausência não vira abandono;
+- correção não apaga o histórico;
+- nenhuma classificação espiritual é derivada da presença.
