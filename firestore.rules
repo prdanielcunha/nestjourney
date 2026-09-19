@@ -73,6 +73,12 @@ service cloud.firestore {
         || role(orgId, ['owner', 'admin', 'pastor', 'coordinator'])
         || hasPermission(orgId, 'canManagePresence');
     }
+    function canManageMesa(orgId) {
+      return isSystemAdmin()
+        || role(orgId, ['owner', 'admin', 'pastor', 'coordinator', 'mesa', 'table_host'])
+        || hasPermission(orgId, 'canManageMesa')
+        || hasPermission(orgId, 'canManagePresence');
+    }
     function canManagePeople(orgId) {
       return isOrgAdmin(orgId) || hasPermission(orgId, 'canManagePeople');
     }
@@ -868,7 +874,7 @@ service cloud.firestore {
           allow delete: if false;
         }
         match /presenceSessions/{sessionId} {
-          allow read: if canManagePresence(orgId)
+          allow read: if (canManagePresence(orgId) || canManageMesa(orgId))
             && canAccessCongregation(orgId, resource.data.get('congregationId', ''));
           allow create: if canManagePresence(orgId)
             && canAccessCongregation(orgId, request.resource.data.get('congregationId', ''))
@@ -893,12 +899,12 @@ service cloud.firestore {
           allow update, delete: if false;
         }
         match /mesaParticipations/{recordId} {
-          allow read: if canManagePresence(orgId)
+          allow read: if canManageMesa(orgId)
             && canAccessCongregation(orgId, resource.data.get('congregationId', ''));
-          allow create: if canManagePresence(orgId)
+          allow create: if canManageMesa(orgId)
             && canAccessCongregation(orgId, request.resource.data.get('congregationId', ''))
             && validMesaParticipationCreate(orgId, recordId);
-          allow update: if canManagePresence(orgId)
+          allow update: if canManageMesa(orgId)
             && canAccessCongregation(orgId, resource.data.get('congregationId', ''))
             && validMesaParticipationUpdate(orgId);
           allow delete: if false;
