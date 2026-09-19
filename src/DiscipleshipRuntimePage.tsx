@@ -15,10 +15,14 @@ import {
   type JourneyPersonRecord,
 } from './journeyRepository'
 import { discipleshipRuntimeCopy, getInitialLocale, localeLabels, persistLocale, type AppLocale } from './i18n'
+import { useJourneyLabels } from './journeyLabels'
 import './JourneyRuntimePages.css'
 
 export default function DiscipleshipRuntimePage(){
-  const [locale,setLocale]=useState<AppLocale>(getInitialLocale), t=discipleshipRuntimeCopy[locale]
+  const [locale,setLocale]=useState<AppLocale>(getInitialLocale)
+  const baseCopy=discipleshipRuntimeCopy[locale]
+  const { labels } = useJourneyLabels()
+  const t={...baseCopy,title:labels.discipleship||baseCopy.title}
   const [access,setAccess]=useState<JourneyAccessContext|null>(null),[congregations,setCongregations]=useState<JourneyCongregation[]>([]),[congregationId,setCongregationId]=useState('')
   const [people,setPeople]=useState<JourneyPersonRecord[]>([]),[items,setItems]=useState<JourneyDiscipleshipRecord[]>([]),[loading,setLoading]=useState(true),[busy,setBusy]=useState(false),[error,setError]=useState(''),[showNew,setShowNew]=useState(false)
   const activePersonIds=useMemo(()=>new Set(items.filter(x=>x.status!=='completed').map(x=>x.personId)),[items])
