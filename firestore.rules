@@ -307,6 +307,45 @@ service cloud.firestore {
         && exists(personPath)
         && get(personPath).data.get('congregationId', '') == congregationId;
     }
+    function validMesaParticipationCreate(orgId, recordId) {
+      let sessionId = request.resource.data.get('sessionId', '');
+      let congregationId = request.resource.data.get('congregationId', '');
+      let personId = request.resource.data.get('personId', '');
+      let sessionPath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/presenceSessions/$(sessionId);
+      let personPath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/people/$(personId);
+      return tenantCreate(orgId)
+        && recordId == sessionId + '__' + personId
+        && congregationId is string
+        && sessionId is string
+        && personId is string
+        && request.resource.data.get('status', '') in ['invited', 'joined']
+        && request.resource.data.get('bondHostRef', '') is string
+        && request.resource.data.get('bondHostRef', '').size() > 0
+        && request.resource.data.get('updatedAt', null) == request.time
+        && request.resource.data.get('updatedBy', '') == request.auth.uid
+        && request.resource.data.keys().hasOnly([
+          'organizationId', 'congregationId', 'sessionId', 'personId',
+          'status', 'bondHostRef', 'updatedAt', 'updatedBy'
+        ])
+        && exists(sessionPath)
+        && get(sessionPath).data.get('congregationId', '') == congregationId
+        && exists(personPath)
+        && get(personPath).data.get('congregationId', '') == congregationId;
+    }
+    function validMesaParticipationUpdate(orgId) {
+      return tenantUnchanged(orgId)
+        && congregationUnchanged()
+        && request.resource.data.get('sessionId', '') == resource.data.get('sessionId', '')
+        && request.resource.data.get('personId', '') == resource.data.get('personId', '')
+        && request.resource.data.get('status', '') in ['invited', 'joined']
+        && request.resource.data.get('bondHostRef', '') == resource.data.get('bondHostRef', '')
+        && request.resource.data.get('updatedAt', null) == request.time
+        && request.resource.data.get('updatedBy', '') == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'status', 'updatedAt', 'updatedBy'
+        ]);
+    }
+
     function validCareRequestCreate(orgId) {
       let congregationId = request.resource.data.get('congregationId', '');
       let personId = request.resource.data.get('personId', '');
@@ -823,6 +862,17 @@ service cloud.firestore {
             && canAccessCongregation(orgId, request.resource.data.get('congregationId', ''))
             && validPresenceCheckCreate(orgId);
           allow update, delete: if false;
+        }
+        match /mesaParticipations/{recordId} {
+          allow read: if canManagePresence(orgId)
+            && canAccessCongregation(orgId, resource.data.get('congregationId', ''));
+          allow create: if canManagePresence(orgId)
+            && canAccessCongregation(orgId, request.resource.data.get('congregationId', ''))
+            && validMesaParticipationCreate(orgId, recordId);
+          allow update: if canManagePresence(orgId)
+            && canAccessCongregation(orgId, resource.data.get('congregationId', ''))
+            && validMesaParticipationUpdate(orgId);
+          allow delete: if false;
         }
         match /careRequests/{careRequestId} {
           allow read: if canManageCare(orgId)
