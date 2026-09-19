@@ -1,6 +1,6 @@
-# Raiz e Mesa
+# NestJourney
 
-SaaS multi-tenant, mobile-first e instalável para implantação de uma cultura de acolhimento, cuidado, pequenos grupos e discipulado em igrejas.
+NestJourney é o SaaS multi-tenant, mobile-first e instalável do ecossistema MillionsNest para acolhimento, cuidado, pequenos grupos e discipulado em igrejas. Raiz e Mesa permanece como o método/ministério piloto da OBPC, sem ser o nome do software.
 
 ## Produto
 
@@ -29,7 +29,7 @@ npm run check
 npm run test:rules
 ```
 
-Sem variáveis Firebase, o aplicativo abre em modo de demonstração com dados fictícios persistidos no dispositivo. O Firebase deve ser ativado somente depois de Emulator, testes de Rules e aprovação do ambiente.
+A produção usa o Firebase compartilhado do ecossistema MillionsNest e recebe a configuração Web pública canônica no build. Em desenvolvimento local, copie `.env.example` para `.env.local` e informe `VITE_FIREBASE_*` para validar autenticação e SSO; sem essa configuração o gate de sessão bloqueia o acesso.
 
 ## Segurança e governança
 
