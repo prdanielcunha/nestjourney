@@ -530,6 +530,60 @@ export const journeyOverviewCopy = {
 } as const
 
 
+export const journeyHomeCopy = {
+  'pt-BR': {
+    product:'NestJourney', title:'O que precisa de cuidado hoje?', subtitle:'Você não precisa decorar o sistema. Comece pelo que pede atenção e avance pela jornada da pessoa.',
+    loading:'Preparando seu painel…', noAccessTitle:'Painel não disponível', noAccess:'Seu perfil atual não possui acesso ao NestJourney neste escopo.', retry:'Tentar novamente',
+    unit:'Unidade', openToday:'Abrir Meu Hoje', implementation:'Implantação', implementationTitle:'Sua igreja ainda está em implantação', implementationDone:'Implantação concluída', implementationNotStarted:'O ciclo de 7 semanas ainda não foi iniciado.', implementationContinue:'Continuar implantação', implementationStart:'Começar implantação', week:'Semana',
+    attentionTitle:'O que merece atenção agora', care:'Cuidado & Conexão', careDesc:'Contatos autorizados e próximos passos de 24–48h.', careDebt:'atrasados', careOpen:'abertos', presence:'Recepção & Mesa', presenceDesc:'Sessões de culto e acolhimento em andamento.', openSessions:'sessões abertas',
+    groups:'Casas de Paz', groupsDesc:'Casas, capacidade, participantes e pedidos de entrada.', nearCapacity:'perto do limite', raiz:'Raiz', raizDesc:'Relações de discipulado e próximos encontros.', activeRelations:'relações ativas',
+    journeyTitle:'A jornada no NestJourney', journeySubtitle:'Cada módulo corresponde a uma parte clara do cuidado. Você pode entrar direto onde precisa trabalhar.',
+    stagePresence:'1. Recepção & Mesa', stagePresenceDesc:'Receba, registre a presença e crie uma ponte humana sem pressão.',
+    stageCare:'2. Cuidado & Conexão', stageCareDesc:'Faça o contato autorizado em 24–48h, acompanhe a resposta e defina o próximo passo.',
+    stageGroups:'3. Casas de Paz', stageGroupsDesc:'Conecte a pessoa a uma Casa adequada e acompanhe entrada e participação.',
+    stageRoot:'4. Raiz', stageRootDesc:'Acompanhe o discipulado inicial em sete encontros, sem transformar pessoas em pontuação.',
+    people:'Pessoas', peopleDesc:'Veja cadastro, consentimento e a história factual da jornada.', pastoral:'Visão Pastoral', pastoralDesc:'Veja encaminhamentos que realmente precisam do pastor.', pastoralOpen:'encaminhamentos abertos',
+    governance:'Privacidade & Auditoria', governanceDesc:'LGPD, correções de dados, retenção e histórico de acesso.',
+    startTitle:'Se você está começando agora', startDesc:'Não tente configurar tudo de uma vez. O próprio fluxo de implantação organiza a igreja.',
+    start1:'Abra Implantação e faça a preparação antes da Semana 1.', start2:'Na Semana 2, coloque Recepção & Mesa em funcionamento.', start3:'Depois, Cuidado, Casas de Paz e Raiz entram progressivamente.',
+    restricted:'Acesso restrito ao seu papel', sourceRule:'Os números mostram somente fatos registrados no sistema; não medem fé, maturidade ou valor de pessoas.', error:'Não foi possível montar este painel.',
+  },
+  en: {
+    product:'NestJourney', title:'What needs care today?', subtitle:'You do not need to memorize the system. Start with what needs attention and move through each person’s journey.',
+    loading:'Preparing your dashboard…', noAccessTitle:'Dashboard unavailable', noAccess:'Your current profile does not have NestJourney access in this scope.', retry:'Try again',
+    unit:'Campus', openToday:'Open My Today', implementation:'Implementation', implementationTitle:'Your church is still in implementation', implementationDone:'Implementation completed', implementationNotStarted:'The 7-week cycle has not started yet.', implementationContinue:'Continue implementation', implementationStart:'Start implementation', week:'Week',
+    attentionTitle:'What needs attention now', care:'Care & Connection', careDesc:'Authorized contacts and 24–48h next steps.', careDebt:'overdue', careOpen:'open', presence:'Welcome & Table', presenceDesc:'Service sessions and welcome currently in progress.', openSessions:'open sessions',
+    groups:'Peace Houses', groupsDesc:'Groups, capacity, participants, and entry requests.', nearCapacity:'near capacity', raiz:'Root', raizDesc:'Discipleship relationships and next meetings.', activeRelations:'active relationships',
+    journeyTitle:'The journey in NestJourney', journeySubtitle:'Each module represents a clear part of care. Go directly to the work you need.',
+    stagePresence:'1. Welcome & Table', stagePresenceDesc:'Welcome people, record presence, and create a human bridge without pressure.',
+    stageCare:'2. Care & Connection', stageCareDesc:'Make authorized contact within 24–48h, follow the response, and define the next step.',
+    stageGroups:'3. Peace Houses', stageGroupsDesc:'Connect the person to a suitable group and follow entry and participation.',
+    stageRoot:'4. Root', stageRootDesc:'Follow the seven initial discipleship meetings without turning people into scores.',
+    people:'People', peopleDesc:'See profile, consent, and the factual journey history.', pastoral:'Pastoral View', pastoralDesc:'See handoffs that truly need pastoral attention.', pastoralOpen:'open handoffs',
+    governance:'Privacy & Audit', governanceDesc:'Privacy, data corrections, retention, and access history.',
+    startTitle:'If you are starting now', startDesc:'Do not try to configure everything at once. The implementation flow organizes the church.',
+    start1:'Open Implementation and complete preparation before Week 1.', start2:'In Week 2, put Welcome & Table into practice.', start3:'Then Care, Peace Houses, and Root are introduced progressively.',
+    restricted:'Restricted to your role', sourceRule:'Numbers show only recorded facts; they do not measure faith, maturity, or a person’s value.', error:'This dashboard could not be built.',
+  },
+  es: {
+    product:'NestJourney', title:'¿Qué necesita cuidado hoy?', subtitle:'No necesitas memorizar el sistema. Empieza por lo que pide atención y avanza por la jornada de cada persona.',
+    loading:'Preparando tu panel…', noAccessTitle:'Panel no disponible', noAccess:'Tu perfil actual no tiene acceso a NestJourney en este alcance.', retry:'Intentar de nuevo',
+    unit:'Sede', openToday:'Abrir Mi Hoy', implementation:'Implementación', implementationTitle:'Tu iglesia todavía está en implementación', implementationDone:'Implementación concluida', implementationNotStarted:'El ciclo de 7 semanas todavía no comenzó.', implementationContinue:'Continuar implementación', implementationStart:'Comenzar implementación', week:'Semana',
+    attentionTitle:'Lo que merece atención ahora', care:'Cuidado & Conexión', careDesc:'Contactos autorizados y próximos pasos de 24–48h.', careDebt:'atrasados', careOpen:'abiertos', presence:'Recepción & Mesa', presenceDesc:'Sesiones de culto y acogida en curso.', openSessions:'sesiones abiertas',
+    groups:'Casas de Paz', groupsDesc:'Casas, capacidad, participantes y solicitudes de entrada.', nearCapacity:'cerca del límite', raiz:'Raíz', raizDesc:'Relaciones de discipulado y próximos encuentros.', activeRelations:'relaciones activas',
+    journeyTitle:'La jornada en NestJourney', journeySubtitle:'Cada módulo corresponde a una parte clara del cuidado. Entra directamente donde necesitas trabajar.',
+    stagePresence:'1. Recepción & Mesa', stagePresenceDesc:'Recibe, registra la presencia y crea un puente humano sin presión.',
+    stageCare:'2. Cuidado & Conexión', stageCareDesc:'Haz el contacto autorizado en 24–48h, acompaña la respuesta y define el próximo paso.',
+    stageGroups:'3. Casas de Paz', stageGroupsDesc:'Conecta a la persona con una Casa adecuada y acompaña su entrada y participación.',
+    stageRoot:'4. Raíz', stageRootDesc:'Acompaña el discipulado inicial en siete encuentros sin convertir personas en puntuaciones.',
+    people:'Personas', peopleDesc:'Consulta registro, consentimiento e historia factual de la jornada.', pastoral:'Visión Pastoral', pastoralDesc:'Ve los casos que realmente necesitan atención pastoral.', pastoralOpen:'encaminamientos abiertos',
+    governance:'Privacidad & Auditoría', governanceDesc:'Privacidad, correcciones de datos, retención e historial de acceso.',
+    startTitle:'Si estás comenzando ahora', startDesc:'No intentes configurar todo de una vez. El flujo de implementación organiza a la iglesia.',
+    start1:'Abre Implementación y completa la preparación antes de la Semana 1.', start2:'En la Semana 2, pon Recepción & Mesa en funcionamiento.', start3:'Después, Cuidado, Casas de Paz y Raíz entran progresivamente.',
+    restricted:'Acceso restringido a tu rol', sourceRule:'Los números muestran solamente hechos registrados; no miden fe, madurez ni el valor de una persona.', error:'No se pudo montar este panel.',
+  },
+} as const
+
 export const implementationRuntimeCopy = {
   'pt-BR': {
     product:'NestJourney', title:'Implantação guiada', subtitle:'O ciclo de 7 semanas do Raiz e Mesa, agora com progresso real por unidade e prática desde o início.',
