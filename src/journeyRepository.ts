@@ -10,6 +10,7 @@ import type { CarePromise, PresenceCheck, PresenceSession, PresenceSource, Prese
 const SYSTEM_ROLES = new Set(['ceo', 'global_admin', 'ecosystem_owner', 'founder'])
 const BROAD_JOURNEY_ROLES = new Set(['owner', 'admin', 'pastor', 'data_admin'])
 const PRESENCE_ROLES = new Set(['owner', 'admin', 'pastor', 'coordinator'])
+const MESA_ROLES = new Set(['owner', 'admin', 'pastor', 'coordinator', 'mesa', 'table_host'])
 const CARE_ROLES = new Set(['owner', 'admin', 'pastor', 'care'])
 const GROUP_ROLES = new Set(['owner', 'admin', 'pastor', 'group_leader'])
 const GROUP_ROSTER_BROAD_ROLES = new Set(['owner', 'admin', 'pastor'])
@@ -28,6 +29,7 @@ export interface JourneyAccessContext {
   isSystemAdmin: boolean
   isOwner: boolean
   canManagePresence: boolean
+  canManageMesa: boolean
   canManagePeople: boolean
   canManageCare: boolean
   canManageGroups: boolean
@@ -44,6 +46,14 @@ export interface JourneyCongregation {
   name: string
   city?: string
   active?: boolean
+}
+
+export interface JourneyOrganizationSummary {
+  id: string
+  name: string
+  city?: string
+  status?: string
+  journeyStatus: 'active' | 'trialing' | 'inactive' | 'not_configured'
 }
 
 export interface PresencePerson {
@@ -301,6 +311,40 @@ export function getActiveJourneyOrganizationId() {
   try { return sessionStorage.getItem('mn_ecosystem_org_id')?.trim() ?? '' } catch { return '' }
 }
 
+export function setActiveJourneyOrganizationId(organizationId: string) {
+  try {
+    sessionStorage.setItem('mn_ecosystem_org_id', organizationId.trim())
+    window.dispatchEvent(new CustomEvent('nestjourney:organization', { detail: organizationId.trim() }))
+  } catch {
+    // Session storage is an enhancement; the ecosystem handoff remains authoritative.
+  }
+}
+
+export async function listJourneyOrganizationsForSystemAdmin(access: JourneyAccessContext): Promise<JourneyOrganizationSummary[]> {
+  if (!access.isSystemAdmin) return []
+  const firestore = requireDb()
+  const snapshot = await getDocs(collection(firestore, 'organizations'))
+  return snapshot.docs.map((item): JourneyOrganizationSummary => {
+    const data = item.data()
+    const apps = data.apps && typeof data.apps === 'object' ? data.apps as Record<string, unknown> : {}
+    const rawJourney = (apps.nestjourney ?? apps.raiz_e_mesa)
+    const journey = rawJourney && typeof rawJourney === 'object' ? rawJourney as Record<string, unknown> : {}
+    const rawStatus = asString(journey.status)
+    const journeyStatus: JourneyOrganizationSummary['journeyStatus'] =
+      rawStatus === 'active' ? 'active'
+      : rawStatus === 'trialing' ? 'trialing'
+      : rawStatus ? 'inactive'
+      : 'not_configured'
+    return {
+      id: item.id,
+      name: asString(data.name || data.organizationName || data.displayName) || item.id,
+      city: asString(data.city) || undefined,
+      status: asString(data.status) || undefined,
+      journeyStatus,
+    }
+  }).sort((a,b) => a.name.localeCompare(b.name))
+}
+
 export async function loadJourneyAccess(userId: string, organizationId: string): Promise<JourneyAccessContext> {
   const firestore = requireDb()
   const nestedRef = doc(firestore, `organizations/${organizationId}/members/${userId}`)
@@ -350,6 +394,7 @@ export async function loadJourneyAccess(userId: string, organizationId: string):
     isSystemAdmin,
     isOwner,
     canManagePresence: isSystemAdmin || isOwner || PRESENCE_ROLES.has(role) || permissions.canManagePresence === true,
+    canManageMesa: isSystemAdmin || isOwner || MESA_ROLES.has(role) || permissions.canManageMesa === true || permissions.canManagePresence === true,
     canManagePeople: isSystemAdmin || isOwner || BROAD_JOURNEY_ROLES.has(role) || permissions.canManagePeople === true,
     canManageCare: isSystemAdmin || isOwner || CARE_ROLES.has(role) || permissions.canManageCare === true,
     canManageGroups: isSystemAdmin || isOwner || GROUP_ROLES.has(role) || permissions.canManageGroups === true,
