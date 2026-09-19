@@ -550,3 +550,93 @@ Recusar encerra o pedido em `declined` sem armazenar motivo.
 A ausência de justificativa é intencional: o blueprint pede pedido de entrada, não um prontuário de avaliação da pessoa. Se alguma situação exigir cuidado pastoral, ela deve usar a Lens pastoral apropriada em vez de contaminar o fluxo de Casa com narrativa sensível.
 
 Pedidos resolvidos não são apagados pelo navegador e não voltam para `pending`. Um novo encaminhamento futuro nasce como um novo registro, preservando o evento anterior.
+
+
+## 25. Implementação corrente — First Contact / Follow-up Runtime V1
+
+Esta vertical slice fecha uma lacuna entre **Visitor Registration**, **Care Integrity** e a futura execução pelo **MillionsNest Connect**.
+
+Os materiais do Raiz e Mesa orientam que o primeiro contato aconteça rapidamente — preferencialmente por volta de 24 horas e, como limite operacional inicial, até 48 horas — respeitando autorização de contato, registrando somente que o contato aconteceu e qual é o próximo passo. O blueprint atual do NestJourney também descreve a sequência visitante → responsável → primeiro contato → resultado → próximo passo e inclui os fatos canônicos `FOLLOWUP_CREATED` e `FOLLOWUP_COMPLETED`.
+
+### Fronteira entre NestJourney e Connect
+
+O NestJourney é autoridade sobre:
+
+- a tarefa de acompanhamento;
+- responsável;
+- prazo;
+- vínculo com a Care Promise de origem;
+- resultado estruturado;
+- próxima ação operacional derivada;
+- evidência e fatos canônicos.
+
+O NestJourney **não afirma que enviou WhatsApp, SMS, e-mail ou ligação** nesta V1.
+
+A execução de comunicação pertence ao MillionsNest Connect. Enquanto a integração Connect não estiver ligada a este fluxo, a interface orienta o responsável a usar um canal autorizado e depois registrar somente o resultado humano observado.
+
+Assim, uma mensagem preparada ou enviada futuramente pelo Connect não será confundida com “necessidade resolvida”.
+
+### Fonte factual
+
+Um acompanhamento de primeiro contato só pode nascer quando existe:
+
+- Care Request aberto do tipo `first_contact`;
+- responsável explicitamente atribuído;
+- pessoa da mesma congregação;
+- consentimento de contato registrado;
+- telefone disponível;
+- prazo herdado da Care Promise.
+
+O id é determinístico por Care Request: `first-contact-{careRequestId}`.
+
+A criação grava no mesmo batch o documento de acompanhamento e o fato `FOLLOWUP_CREATED`. O fato aponta para `followup:{id}` como evidência.
+
+### Resultado estruturado
+
+A V1 não possui caixa de texto livre no resultado. Os resultados canônicos desta slice são:
+
+- `responded` — respondeu;
+- `prayer_requested` — pediu oração;
+- `group_interest` — demonstrou interesse em grupo;
+- `declined_contact` — não deseja contato;
+- `invalid_contact` — dado de contato inválido;
+- `no_response` — não houve resposta registrada.
+
+Nenhum deles significa fé, conversão, interesse espiritual, humor, caráter ou afastamento.
+
+`no_response` significa somente isso: **não há resposta registrada naquela tentativa/processo**.
+
+### Próxima ação determinística
+
+A aplicação projeta uma próxima ação operacional simples, sem LLM:
+
+- respondeu → nenhuma ação automática;
+- pediu oração → abrir cuidado de oração;
+- interesse em grupo → avaliar próximo passo em Grupos;
+- não deseja contato → nenhuma insistência automática;
+- contato inválido → revisar dado de contato;
+- sem resposta → revisão manual.
+
+Nesta V1, essa projeção direciona a interface para o módulo apropriado; ela não cria silenciosamente uma nova ação irreversível.
+
+### Fechamento da Care Promise
+
+Concluir o acompanhamento ocorre atomicamente com:
+
+1. `followups.status = completed`;
+2. resultado e próxima ação estruturados;
+3. Care Request de origem resolvido com código compatível;
+4. fato `FOLLOWUP_COMPLETED`;
+5. fato `CARE_RESOLVED`.
+
+As Firestore Rules validam que resultado, próxima ação e resolução da Care Promise são compatíveis entre si e que a fonte foi atualizada no mesmo write.
+
+Por isso, o sistema não pode gravar “contato concluído” apenas porque alguém abriu a tela ou preparou uma mensagem.
+
+### UX e migração do fluxo existente
+
+Care Integrity continua sendo a fila de compromissos e Care Debt.
+
+Quando um `first_contact` já possui responsável, sua ação principal deixa de ser uma resolução genérica e passa a abrir o **Follow-up Runtime**. Outros tipos de Care Request continuam usando o fluxo de outcome do Care Integrity.
+
+Isso preserva o que já funcionava e especializa somente o fluxo que possui requisitos próprios de primeiro contato.

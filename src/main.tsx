@@ -7,6 +7,7 @@ import { resolveJourneyRoute } from './routeResolver'
 const LegacyRaizEMesa = lazy(() => import('./App.tsx'))
 const PresenceAssistPage = lazy(() => import('./PresenceAssistPage.tsx'))
 const CareIntegrityPage = lazy(() => import('./CareIntegrityPage.tsx'))
+const FollowupRuntimePage = lazy(() => import('./FollowupRuntimePage.tsx'))
 const JourneyProfilePage = lazy(() => import('./JourneyProfilePage.tsx'))
 const MyTodayPage = lazy(() => import('./MyTodayPage.tsx'))
 const GroupsRuntimePage = lazy(() => import('./GroupsRuntimePage.tsx'))
@@ -26,6 +27,8 @@ function JourneyRoute() {
       return <PresenceAssistPage />
     case 'care':
       return <CareIntegrityPage />
+    case 'followup':
+      return <FollowupRuntimePage />
     case 'profile':
       return <JourneyProfilePage />
     case 'today':

@@ -15,6 +15,7 @@ describe('NestJourney route resolver', () => {
   it('preserves every real runtime deep link', () => {
     expect(resolveJourneyRoute('/presence-assist')).toBe('presence')
     expect(resolveJourneyRoute('/care-integrity')).toBe('care')
+    expect(resolveJourneyRoute('/followup-runtime')).toBe('followup')
     expect(resolveJourneyRoute('/journey-profile')).toBe('profile')
     expect(resolveJourneyRoute('/my-today')).toBe('today')
     expect(resolveJourneyRoute('/groups-runtime')).toBe('groups')
