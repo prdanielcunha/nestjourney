@@ -192,6 +192,20 @@ export interface MesaParticipationRecord {
   updatedBy: string
 }
 
+export type MesaPreparationItemKey = 'environment' | 'hosts' | 'hospitality' | 'supplies'
+
+export interface MesaPreparationRecord {
+  id: string
+  organizationId: string
+  congregationId: string
+  sessionId: string
+  status: 'preparing' | 'ready'
+  items: Record<MesaPreparationItemKey, boolean>
+  owners: Record<MesaPreparationItemKey, string>
+  updatedAt: string
+  updatedBy: string
+}
+
 export interface JourneyModuleLabels {
   presence?: string
   table?: string
@@ -1369,6 +1383,74 @@ export async function listMesaParticipationRecords(
       updatedBy: asString(data.updatedBy),
     }
   })
+}
+
+export async function loadMesaPreparation(
+  organizationId: string,
+  congregationId: string,
+  sessionId: string,
+): Promise<MesaPreparationRecord | null> {
+  const firestore = requireDb()
+  const ref = doc(firestore, `${journeyCollectionPath(organizationId, 'mesaPreparations')}/${sessionId}`)
+  const snapshot = await getDoc(ref)
+  if (!snapshot.exists()) return null
+  const data = snapshot.data()
+  if (asString(data.congregationId) !== congregationId || asString(data.sessionId) !== sessionId) return null
+  const rawItems = data.items && typeof data.items === 'object' ? data.items as Record<string, unknown> : {}
+  const rawOwners = data.owners && typeof data.owners === 'object' ? data.owners as Record<string, unknown> : {}
+  const keys: MesaPreparationItemKey[] = ['environment', 'hosts', 'hospitality', 'supplies']
+  const items = Object.fromEntries(keys.map(key => [key, rawItems[key] === true])) as Record<MesaPreparationItemKey, boolean>
+  const owners = Object.fromEntries(keys.map(key => [key, asString(rawOwners[key])])) as Record<MesaPreparationItemKey, string>
+  return {
+    id: snapshot.id,
+    organizationId,
+    congregationId,
+    sessionId,
+    status: data.status === 'ready' ? 'ready' : 'preparing',
+    items,
+    owners,
+    updatedAt: toIso(data.updatedAt),
+    updatedBy: asString(data.updatedBy),
+  }
+}
+
+export async function setMesaPreparationItem(input: {
+  access: JourneyAccessContext
+  congregationId: string
+  sessionId: string
+  item: MesaPreparationItemKey
+  checked: boolean
+}) {
+  if (!input.access.canManageMesa) throw new Error('mesa_preparation_forbidden')
+  const firestore = requireDb()
+  const ref = doc(firestore, `${journeyCollectionPath(input.access.organizationId, 'mesaPreparations')}/${input.sessionId}`)
+  const snapshot = await getDoc(ref)
+  const keys: MesaPreparationItemKey[] = ['environment', 'hosts', 'hospitality', 'supplies']
+  const previousItems = snapshot.exists() && snapshot.data().items && typeof snapshot.data().items === 'object'
+    ? snapshot.data().items as Record<string, unknown>
+    : {}
+  const previousOwners = snapshot.exists() && snapshot.data().owners && typeof snapshot.data().owners === 'object'
+    ? snapshot.data().owners as Record<string, unknown>
+    : {}
+  const items = Object.fromEntries(keys.map(key => [key, key === input.item ? input.checked : previousItems[key] === true])) as Record<MesaPreparationItemKey, boolean>
+  const owners = Object.fromEntries(keys.map(key => [
+    key,
+    key === input.item ? (input.checked ? input.access.userId : '') : asString(previousOwners[key]),
+  ])) as Record<MesaPreparationItemKey, string>
+  const payload = {
+    organizationId: input.access.organizationId,
+    congregationId: input.congregationId,
+    sessionId: input.sessionId,
+    status: keys.every(key => items[key]) ? 'ready' : 'preparing',
+    items,
+    owners,
+    updatedAt: serverTimestamp(),
+    updatedBy: input.access.userId,
+  }
+  const batch = writeBatch(firestore)
+  if (snapshot.exists()) batch.update(ref, payload)
+  else batch.set(ref, payload)
+  await batch.commit()
 }
 
 export async function setMesaParticipation(input: {
