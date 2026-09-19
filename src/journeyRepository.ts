@@ -146,6 +146,18 @@ export interface PresenceSessionRecord extends PresenceSession {
   closedBy?: string
 }
 
+export interface MesaParticipationRecord {
+  id: string
+  organizationId: string
+  congregationId: string
+  sessionId: string
+  personId: string
+  status: 'invited' | 'joined'
+  bondHostRef?: string
+  updatedAt: string
+  updatedBy: string
+}
+
 export interface MinimalVisitorInput {
   organizationId: string
   congregationId: string
@@ -1097,6 +1109,73 @@ export async function listPresenceChecks(organizationId: string, congregationId:
       correctedFromCheckId: asString(data.correctedFromCheckId) || undefined,
     }
   })
+}
+
+export async function listMesaParticipationRecords(
+  organizationId: string,
+  congregationId: string,
+  sessionId: string,
+): Promise<MesaParticipationRecord[]> {
+  const firestore = requireDb()
+  const snapshot = await getDocs(query(
+    collection(firestore, journeyCollectionPath(organizationId, 'mesaParticipations')),
+    where('congregationId', '==', congregationId),
+    where('sessionId', '==', sessionId),
+  ))
+
+  return snapshot.docs.map((item): MesaParticipationRecord => {
+    const data = item.data()
+    return {
+      id: item.id,
+      organizationId,
+      congregationId,
+      sessionId,
+      personId: asString(data.personId),
+      status: data.status === 'joined' ? 'joined' : 'invited',
+      bondHostRef: asString(data.bondHostRef) || undefined,
+      updatedAt: toIso(data.updatedAt),
+      updatedBy: asString(data.updatedBy),
+    }
+  })
+}
+
+export async function setMesaParticipation(input: {
+  organizationId: string
+  congregationId: string
+  sessionId: string
+  personId: string
+  actorId: string
+  status: 'invited' | 'joined'
+}) {
+  const firestore = requireDb()
+  const id = `${input.sessionId}__${input.personId}`
+  const ref = doc(firestore, `${journeyCollectionPath(input.organizationId, 'mesaParticipations')}/${id}`)
+  const existing = await getDoc(ref)
+  const batch = writeBatch(firestore)
+  const bondHostRef = existing.exists() ? asString(existing.data().bondHostRef) || input.actorId : input.actorId
+
+  if (existing.exists()) {
+    batch.update(ref, {
+      status: input.status,
+      bondHostRef,
+      updatedAt: serverTimestamp(),
+      updatedBy: input.actorId,
+    })
+  } else {
+    batch.set(ref, {
+      organizationId: input.organizationId,
+      congregationId: input.congregationId,
+      sessionId: input.sessionId,
+      personId: input.personId,
+      status: input.status,
+      bondHostRef,
+      updatedAt: serverTimestamp(),
+      updatedBy: input.actorId,
+    })
+  }
+
+  await batch.commit()
+  return id
 }
 
 export async function createPresenceSession(input: {
