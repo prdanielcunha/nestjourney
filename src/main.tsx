@@ -2,8 +2,16 @@ import { StrictMode, Suspense, lazy, useEffect, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
 import { EcosystemSessionGate } from './EcosystemSessionGate.tsx'
+import { JourneyShell } from './JourneyShell.tsx'
+import { JourneyLabelsProvider } from './journeyLabels.tsx'
 import { resolveJourneyRoute } from './routeResolver'
 
+const AreasPage = lazy(() => import('./AreasPage.tsx'))
+const MesaRuntimePage = lazy(() => import('./MesaRuntimePage.tsx'))
+const JourneyVisionPage = lazy(() => import('./JourneyVisionPage.tsx'))
+const MorePage = lazy(() => import('./MorePage.tsx'))
+const JourneyReportsPage = lazy(() => import('./JourneyReportsPage.tsx'))
+const HelpPage = lazy(() => import('./HelpPage.tsx'))
 const PresenceAssistPage = lazy(() => import('./PresenceAssistPage.tsx'))
 const CareIntegrityPage = lazy(() => import('./CareIntegrityPage.tsx'))
 const FollowupRuntimePage = lazy(() => import('./FollowupRuntimePage.tsx'))
@@ -13,6 +21,8 @@ const GroupsRuntimePage = lazy(() => import('./GroupsRuntimePage.tsx'))
 const DiscipleshipRuntimePage = lazy(() => import('./DiscipleshipRuntimePage.tsx'))
 const JourneyOverviewPage = lazy(() => import('./JourneyOverviewPage.tsx'))
 const ImplementationRuntimePage = lazy(() => import('./ImplementationRuntimePage.tsx'))
+const TeamSetupPage = lazy(() => import('./TeamSetupPage.tsx'))
+const JourneySettingsPage = lazy(() => import('./JourneySettingsPage.tsx'))
 const GovernanceRuntimePage = lazy(() => import('./GovernanceRuntimePage.tsx'))
 const PastoralHandoffPage = lazy(() => import('./PastoralHandoffPage.tsx'))
 
@@ -42,8 +52,12 @@ function JourneyRoute() {
       event.preventDefault()
       const nextUrl = `${url.pathname}${url.search}${url.hash}`
       const currentUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`
-      if (nextUrl !== currentUrl) window.history.pushState({}, '', nextUrl)
-      syncPath()
+      if (nextUrl !== currentUrl) {
+        window.history.pushState({}, '', nextUrl)
+        window.dispatchEvent(new PopStateEvent('popstate'))
+      } else {
+        syncPath()
+      }
     }
 
     window.addEventListener('popstate', syncPath)
@@ -56,6 +70,18 @@ function JourneyRoute() {
   }, [])
 
   switch (resolveJourneyRoute(pathname)) {
+    case 'areas':
+      return <AreasPage />
+    case 'mesa':
+      return <MesaRuntimePage />
+    case 'vision':
+      return <JourneyVisionPage />
+    case 'more':
+      return <MorePage />
+    case 'reports':
+      return <JourneyReportsPage />
+    case 'help':
+      return <HelpPage />
     case 'presence':
       return <PresenceAssistPage />
     case 'care':
@@ -72,6 +98,10 @@ function JourneyRoute() {
       return <DiscipleshipRuntimePage />
     case 'implementation':
       return <ImplementationRuntimePage />
+    case 'team':
+      return <TeamSetupPage />
+    case 'settings':
+      return <JourneySettingsPage />
     case 'governance':
       return <GovernanceRuntimePage />
     case 'pastoral':
@@ -93,9 +123,13 @@ function RouteFallback() {
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <EcosystemSessionGate>
-      <Suspense fallback={<RouteFallback />}>
-        <JourneyRoute />
-      </Suspense>
+      <JourneyLabelsProvider>
+        <JourneyShell>
+          <Suspense fallback={<RouteFallback />}>
+            <JourneyRoute />
+          </Suspense>
+        </JourneyShell>
+      </JourneyLabelsProvider>
     </EcosystemSessionGate>
   </StrictMode>,
 )

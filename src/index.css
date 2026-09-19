@@ -5,3 +5,16 @@
 .journey-route-loading img{width:48px;height:48px;border-radius:14px;margin-bottom:4px}
 .journey-route-loading strong{font-size:18px;letter-spacing:-.02em}
 .journey-route-loading span{font-size:11px;color:#7f8493}
+
+/* The persistent NestJourney shell owns product navigation. Individual runtime pages
+   keep their top bars only for standalone development, avoiding duplicate "mini apps"
+   in the integrated experience. */
+.journey-app-content .presence-topbar,
+.journey-app-content .care-topbar,
+.journey-app-content .followup-topbar,
+.journey-app-content .journey-topbar,
+.journey-app-content .today-topbar,
+.journey-app-content .runtime-topbar,
+.journey-app-content .implementation-topbar,
+.journey-app-content .governance-topbar,
+.journey-app-content .pastoral-topbar{display:none}

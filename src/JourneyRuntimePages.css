@@ -25,3 +25,11 @@
 .runtime-inline-actions{display:flex;align-items:center;gap:6px}
 .runtime-icon-button.accept{color:#9fe2c6;border-color:rgba(93,211,165,.28);background:rgba(93,211,165,.07)}
 @media(max-width:680px){.runtime-entry-panel .runtime-roster-list{max-height:220px}}
+
+.runtime-meeting-panel{margin:0 0 12px;border:1px solid rgba(167,148,255,.16);background:linear-gradient(180deg,rgba(167,148,255,.055),rgba(14,16,22,.94));border-radius:14px;overflow:hidden}
+.runtime-meeting-panel .runtime-roster-head>span{display:flex;align-items:center;gap:6px}
+.runtime-meeting-empty{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px}.runtime-meeting-empty p{margin:0;color:#7d8491;font-size:10px;line-height:1.45}
+.runtime-meeting-open{display:grid}.runtime-meeting-summary{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 11px;border-bottom:1px solid #20232e}.runtime-meeting-panel .runtime-roster-list{max-height:270px}
+.runtime-attendance-rule{display:flex;align-items:flex-start;gap:6px;margin:0;padding:10px 11px;border-top:1px solid #20232e;color:#777e8b;font-size:9px;line-height:1.45}
+@media(max-width:680px){.runtime-meeting-empty{align-items:stretch;flex-direction:column}.runtime-meeting-empty .runtime-button{width:100%}.runtime-meeting-summary{align-items:stretch;flex-direction:column}.runtime-meeting-summary .runtime-button{width:100%}}
+.runtime-preparation{display:grid;gap:8px;margin:12px 0;padding:11px 12px;border:1px solid rgba(167,148,255,.13);border-radius:12px;background:rgba(167,148,255,.04)}.runtime-preparation>span{display:flex;align-items:center;gap:6px;color:#c6bbff}.runtime-preparation>span strong{font-size:10px}.runtime-preparation ul{display:grid;gap:4px;margin:0;padding-left:18px;color:#818795;font-size:9.5px;line-height:1.4}

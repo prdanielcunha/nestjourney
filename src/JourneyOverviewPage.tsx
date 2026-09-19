@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { ClipboardCheck, HeartHandshake, House, Leaf, ShieldAlert, ShieldCheck, UserCheck, Users } from 'lucide-react'
+import {
+  ArrowRight, ClipboardCheck, HeartHandshake, House, Leaf, ShieldCheck,
+  Sparkles, UserCheck, Users
+} from 'lucide-react'
 import { auth } from './firebase'
 import { buildJourneyOverview } from './journeyOverview'
 import {
@@ -23,14 +26,56 @@ import {
   type JourneyPersonRecord,
   type PresenceSessionRecord,
 } from './journeyRepository'
-import { getInitialLocale, journeyOverviewCopy, localeLabels, persistLocale, type AppLocale } from './i18n'
+import { getInitialLocale, journeyHomeCopy, localeLabels, persistLocale, type AppLocale } from './i18n'
+import { useJourneyLabels } from './journeyLabels'
 import './JourneyOverviewPage.css'
 
+type ModuleCardProps = {
+  href: string
+  eyebrow: string
+  title: string
+  description: string
+  metric?: string
+  detail?: string
+  icon: typeof Users
+  locked?: boolean
+}
+
+function ModuleCard({ href, eyebrow, title, description, metric, detail, icon: Icon, locked }: ModuleCardProps) {
+  return <a className={`home-module-card ${locked ? 'locked' : ''}`} href={locked ? '#' : href} onClick={locked ? (event) => event.preventDefault() : undefined}>
+    <span className="home-module-icon"><Icon size={20}/></span>
+    <div className="home-module-copy">
+      <span className="home-module-eyebrow">{eyebrow}</span>
+      <strong>{title}</strong>
+      <p>{description}</p>
+      {metric ? <small><b>{metric}</b>{detail ? ` · ${detail}` : ''}</small> : null}
+    </div>
+    <ArrowRight size={17}/>
+  </a>
+}
+
 export default function JourneyOverviewPage() {
-  const [locale,setLocale]=useState<AppLocale>(getInitialLocale),t=journeyOverviewCopy[locale]
-  const [access,setAccess]=useState<JourneyAccessContext|null>(null),[congregations,setCongregations]=useState<JourneyCongregation[]>([]),[congregationId,setCongregationId]=useState('')
-  const [people,setPeople]=useState<JourneyPersonRecord[]>([]),[care,setCare]=useState<CareRequestRecord[]>([]),[sessions,setSessions]=useState<PresenceSessionRecord[]>([]),[groups,setGroups]=useState<JourneyGroupRecord[]>([]),[discipleships,setDiscipleships]=useState<JourneyDiscipleshipRecord[]>([]),[implementationCycles,setImplementationCycles]=useState<JourneyImplementationCycle[]>([]),[pastoralHandoffs,setPastoralHandoffs]=useState<JourneyPastoralHandoff[]>([])
-  const [loading,setLoading]=useState(true),[busy,setBusy]=useState(false),[error,setError]=useState('')
+  const [locale,setLocale]=useState<AppLocale>(getInitialLocale)
+  const t=journeyHomeCopy[locale]
+  const { labels } = useJourneyLabels()
+  const defaultReceptionParts = t.presence.split(' & ')
+  const presenceName = `${labels.presence || defaultReceptionParts[0]} & ${labels.table || defaultReceptionParts[1] || ''}`.replace(/\s*&\s*$/, '')
+  const careName = labels.care || t.care
+  const groupsName = labels.groups || t.groups
+  const rootName = labels.discipleship || t.raiz
+  const [access,setAccess]=useState<JourneyAccessContext|null>(null)
+  const [congregations,setCongregations]=useState<JourneyCongregation[]>([])
+  const [congregationId,setCongregationId]=useState('')
+  const [people,setPeople]=useState<JourneyPersonRecord[]>([])
+  const [care,setCare]=useState<CareRequestRecord[]>([])
+  const [sessions,setSessions]=useState<PresenceSessionRecord[]>([])
+  const [groups,setGroups]=useState<JourneyGroupRecord[]>([])
+  const [discipleships,setDiscipleships]=useState<JourneyDiscipleshipRecord[]>([])
+  const [implementationCycles,setImplementationCycles]=useState<JourneyImplementationCycle[]>([])
+  const [pastoralHandoffs,setPastoralHandoffs]=useState<JourneyPastoralHandoff[]>([])
+  const [loading,setLoading]=useState(true)
+  const [busy,setBusy]=useState(false)
+  const [error,setError]=useState('')
 
   const canView=Boolean(access&&(access.broadJourneyAccess||access.canManagePeople||access.canManageCare||access.canManagePresence||access.canManageGroups||access.canManageDiscipleship||access.canManageImplementation||access.canManagePastoral))
   const availability=useMemo(()=>({
@@ -42,7 +87,9 @@ export default function JourneyOverviewPage() {
     implementation:Boolean(access?.canManageImplementation),
     pastoral:Boolean(access?.canManagePastoral),
   }),[access])
-  const overview=useMemo(()=>buildJourneyOverview({availability,people,careRequests:care,sessions,groups,discipleships,implementationCycles,pastoralHandoffs}),[availability,people,care,sessions,groups,discipleships,implementationCycles,pastoralHandoffs])
+  const overview=useMemo(()=>buildJourneyOverview({
+    availability,people,careRequests:care,sessions,groups,discipleships,implementationCycles,pastoralHandoffs
+  }),[availability,people,care,sessions,groups,discipleships,implementationCycles,pastoralHandoffs])
 
   const refresh=useCallback(async(nextAccess:JourneyAccessContext,unitId:string)=>{
     const [nextPeople,nextGroups,nextCare,nextSessions,nextDiscipleships,nextImplementation,nextPastoral]=await Promise.all([
@@ -63,32 +110,86 @@ export default function JourneyOverviewPage() {
       const user=auth?.currentUser,organizationId=getActiveJourneyOrganizationId()
       if(!user||!organizationId)throw new Error('missing_ecosystem_context')
       const nextAccess=await loadJourneyAccess(user.uid,organizationId);setAccess(nextAccess)
-      const units=await listJourneyCongregations(nextAccess);setCongregations(units);const unitId=units[0]?.id??'';setCongregationId(unitId)
+      const units=await listJourneyCongregations(nextAccess);setCongregations(units)
+      const unitId=units[0]?.id??'';setCongregationId(unitId)
       if(unitId)await refresh(nextAccess,unitId)
     }catch(cause){console.error(cause);setError(t.error)}finally{setLoading(false)}
   },[refresh,t.error])
+
   useEffect(()=>{void bootstrap()},[bootstrap])
-  async function selectUnit(unitId:string){if(!access)return;setCongregationId(unitId);setBusy(true);setError('');try{await refresh(access,unitId)}catch(cause){console.error(cause);setError(t.error)}finally{setBusy(false)}}
+
+  async function selectUnit(unitId:string){
+    if(!access)return
+    setCongregationId(unitId);setBusy(true);setError('')
+    try{await refresh(access,unitId)}catch(cause){console.error(cause);setError(t.error)}finally{setBusy(false)}
+  }
 
   if(loading)return <main className="journey-overview"><div className="overview-loading">{t.loading}</div></main>
   if(!canView)return <main className="journey-overview"><section className="overview-panel overview-no-access"><ShieldCheck size={34}/><h1>{t.noAccessTitle}</h1><p>{t.noAccess}</p><button className="overview-button" onClick={()=>void bootstrap()}>{t.retry}</button></section></main>
 
-  const restricted=<><strong>—</strong><small>{t.restricted}</small></>
-  return <main className="journey-overview"><div className="overview-shell">
-    <header className="overview-topbar"><div className="overview-brand"><img src="/icon.svg" alt=""/><span><strong>{t.product}</strong><small>Journey & Care Engine</small></span></div><div className="overview-actions">{access?.canViewGovernance?<a href="/governance-runtime">{t.governance}</a>:null}<a href="/my-today">{t.today}</a><select value={locale} onChange={e=>{const next=e.target.value as AppLocale;setLocale(next);persistLocale(next)}}>{(Object.keys(localeLabels) as AppLocale[]).map(id=><option key={id} value={id}>{localeLabels[id]}</option>)}</select></div></header>
-    <section className="overview-hero"><span className="overview-kicker">Journey / Overview</span><h1>{t.title}</h1><p>{t.subtitle}</p></section>
-    {error?<div className="overview-error">{error}</div>:null}
-    <section className="overview-panel overview-toolbar"><label><span>{t.congregation}</span><select value={congregationId} disabled={busy} onChange={e=>void selectUnit(e.target.value)}>{congregations.map(x=><option key={x.id} value={x.id}>{x.name}{x.city?` · ${x.city}`:''}</option>)}</select></label></section>
+  const implementation = overview.implementation
+  const implementationFinished = implementation?.status === 'completed'
+  const implementationWeek = implementation?.week ?? 1
 
-    <section className="overview-grid">
-      <a className="overview-panel overview-card" href="/journey-profile"><span className="overview-icon"><Users size={19}/></span><div><span>{t.people}</span>{overview.people?<><strong>{overview.people.count}</strong><small>{t.peopleDetail}</small></>:restricted}</div><b>{t.peopleAction}</b></a>
-      <a className="overview-panel overview-card" href="/care-integrity"><span className="overview-icon"><HeartHandshake size={19}/></span><div><span>{t.careDebt}</span>{overview.care?<><strong className={overview.care.debt?'attention':''}>{overview.care.debt}</strong><small>{overview.care.open} {t.careOpen} · {overview.care.unassigned} {t.careUnassigned} · {overview.care.dueSoon} {t.careDueSoon}</small></>:restricted}</div><b>{t.careAction}</b></a>
-      <a className="overview-panel overview-card" href="/presence-assist"><span className="overview-icon"><UserCheck size={19}/></span><div><span>{t.presence}</span>{overview.presence?<><strong>{overview.presence.openSessions}</strong><small>{t.openSessions}</small></>:restricted}</div><b>{t.presenceAction}</b></a>
-      <a className="overview-panel overview-card" href="/groups-runtime"><span className="overview-icon"><House size={19}/></span><div><span>{t.groups}</span>{overview.groups?<><strong>{overview.groups.count}</strong><small>{overview.groups.nearCapacity} {t.nearCapacity}</small></>:restricted}</div><b>{t.groupsAction}</b></a>
-      {access?.canManageImplementation?<a className="overview-panel overview-card" href="/implementation-runtime"><span className="overview-icon"><ClipboardCheck size={19}/></span><div><span>{t.implementation}</span>{overview.implementation?<><strong>{overview.implementation.percent}%</strong><small>{overview.implementation.status==='completed'?t.implementationCompleted:`${t.implementationWeek} ${overview.implementation.week}`}</small></>:<><strong>—</strong><small>{t.implementationNotStarted}</small></>}</div><b>{t.implementationAction}</b></a>:null}
-      <a className="overview-panel overview-card" href="/discipleship-runtime"><span className="overview-icon"><Leaf size={19}/></span><div><span>{t.discipleship}</span>{overview.discipleship?<><strong>{overview.discipleship.active}</strong><small>{t.activeRelations}</small></>:restricted}</div><b>{t.discipleshipAction}</b></a>
-      {access?.canManagePastoral?<a className="overview-panel overview-card" href="/pastoral-handoff"><span className="overview-icon"><ShieldAlert size={19}/></span><div><span>{t.pastoral}</span>{overview.pastoral?<><strong className={overview.pastoral.open?'attention':''}>{overview.pastoral.open}</strong><small>{t.pastoralOpen}</small></>:restricted}</div><b>{t.pastoralAction}</b></a>:null}
+  return <main className="journey-overview"><div className="overview-shell">
+    <header className="home-utility">
+      <label><span>{t.unit}</span><select value={congregationId} disabled={busy} onChange={e=>void selectUnit(e.target.value)}>{congregations.map(x=><option key={x.id} value={x.id}>{x.name}{x.city?` · ${x.city}`:''}</option>)}</select></label>
+      <div><a href="/my-today">{t.openToday}<ArrowRight size={15}/></a><select value={locale} aria-label="Language" onChange={e=>{const next=e.target.value as AppLocale;setLocale(next);persistLocale(next)}}>{(Object.keys(localeLabels) as AppLocale[]).map(id=><option key={id} value={id}>{localeLabels[id]}</option>)}</select></div>
+    </header>
+
+    <section className="overview-hero home-hero">
+      <span className="overview-kicker">{t.product} / Home</span>
+      <h1>{t.title}</h1>
+      <p>{t.subtitle}</p>
     </section>
+
+    {error?<div className="overview-error">{error}</div>:null}
+
+    {access?.canManageImplementation ? <a className={`home-implementation ${implementationFinished?'done':''}`} href="/implementation-runtime">
+      <span className="home-module-icon"><ClipboardCheck size={20}/></span>
+      <div>
+        <span className="home-module-eyebrow">{t.implementation}</span>
+        <strong>{implementationFinished?t.implementationDone:t.implementationTitle}</strong>
+        <p>{implementation ? `${t.week} ${implementationWeek} · ${implementation.percent}%` : t.implementationNotStarted}</p>
+      </div>
+      <b>{implementation ? t.implementationContinue : t.implementationStart}<ArrowRight size={15}/></b>
+    </a> : null}
+
+    <section className="home-section">
+      <div className="home-section-heading"><div><span className="overview-kicker">AGORA</span><h2>{t.attentionTitle}</h2></div></div>
+      <div className="home-attention-grid">
+        {access && (access.canManageCare||access.broadJourneyAccess) ? <ModuleCard href="/care-integrity" eyebrow={careName} title={overview.care?.debt ? `${overview.care.debt} ${t.careDebt}` : `${overview.care?.open??0} ${t.careOpen}`} description={t.careDesc} metric={overview.care?String(overview.care.open):'0'} detail={t.careOpen} icon={HeartHandshake}/> : null}
+        {access?.canManagePresence ? <ModuleCard href="/presence-assist" eyebrow={presenceName} title={`${overview.presence?.openSessions??0} ${t.openSessions}`} description={t.presenceDesc} icon={UserCheck}/> : null}
+        {access && (access.canManageGroups||access.broadJourneyAccess) ? <ModuleCard href="/groups-runtime" eyebrow={groupsName} title={String(overview.groups?.count??0)} description={t.groupsDesc} metric={overview.groups?String(overview.groups.nearCapacity):'0'} detail={t.nearCapacity} icon={House}/> : null}
+        {access && (access.canManageDiscipleship||access.broadJourneyAccess) ? <ModuleCard href="/discipleship-runtime" eyebrow={rootName} title={String(overview.discipleship?.active??0)} description={t.raizDesc} metric={overview.discipleship?String(overview.discipleship.active):'0'} detail={t.activeRelations} icon={Leaf}/> : null}
+      </div>
+    </section>
+
+    <section className="home-section">
+      <div className="home-section-heading"><div><span className="overview-kicker">FLUXO</span><h2>{t.journeyTitle}</h2><p>{t.journeySubtitle}</p></div></div>
+      <div className="home-journey-flow">
+        {access?.canManagePresence ? <ModuleCard href="/presence-assist" eyebrow="01" title={`1. ${presenceName}`} description={t.stagePresenceDesc} icon={UserCheck}/> : null}
+        {access && (access.canManageCare||access.broadJourneyAccess) ? <ModuleCard href="/care-integrity" eyebrow="02" title={`2. ${careName}`} description={t.stageCareDesc} icon={HeartHandshake}/> : null}
+        {access && (access.canManageGroups||access.broadJourneyAccess) ? <ModuleCard href="/groups-runtime" eyebrow="03" title={`3. ${groupsName}`} description={t.stageGroupsDesc} icon={House}/> : null}
+        {access && (access.canManageDiscipleship||access.broadJourneyAccess) ? <ModuleCard href="/discipleship-runtime" eyebrow="04" title={`4. ${rootName}`} description={t.stageRootDesc} icon={Leaf}/> : null}
+      </div>
+    </section>
+
+    <section className="home-section">
+      <div className="home-section-heading"><div><span className="overview-kicker">GESTÃO</span><h2>{t.people} & {t.pastoral}</h2></div></div>
+      <div className="home-management-grid">
+        {access && (access.canManagePeople||access.broadJourneyAccess) ? <ModuleCard href="/journey-profile" eyebrow={t.people} title={String(overview.people?.count??0)} description={t.peopleDesc} icon={Users}/> : null}
+        {access?.canManagePastoral ? <ModuleCard href="/pastoral-handoff" eyebrow={t.pastoral} title={`${overview.pastoral?.open??0} ${t.pastoralOpen}`} description={t.pastoralDesc} icon={Sparkles}/> : null}
+        {access?.canViewGovernance ? <ModuleCard href="/governance-runtime" eyebrow={t.governance} title={t.governance} description={t.governanceDesc} icon={ShieldCheck}/> : null}
+      </div>
+    </section>
+
+    {access?.canManageImplementation ? <section className="home-start-card">
+      <span className="home-module-icon"><ClipboardCheck size={20}/></span>
+      <div><span className="overview-kicker">{t.startTitle}</span><h2>{t.startTitle}</h2><p>{t.startDesc}</p><ol><li>{t.start1}</li><li>{t.start2}</li><li>{t.start3}</li></ol></div>
+      <a href="/implementation-runtime">{implementation ? t.implementationContinue : t.implementationStart}<ArrowRight size={15}/></a>
+    </section> : null}
+
     <p className="overview-rule"><ShieldCheck size={15}/>{t.sourceRule}</p>
   </div></main>
 }

@@ -10,6 +10,7 @@ import type { CarePromise, PresenceCheck, PresenceSession, PresenceSource, Prese
 const SYSTEM_ROLES = new Set(['ceo', 'global_admin', 'ecosystem_owner', 'founder'])
 const BROAD_JOURNEY_ROLES = new Set(['owner', 'admin', 'pastor', 'data_admin'])
 const PRESENCE_ROLES = new Set(['owner', 'admin', 'pastor', 'coordinator'])
+const MESA_ROLES = new Set(['owner', 'admin', 'pastor', 'coordinator', 'mesa', 'table_host'])
 const CARE_ROLES = new Set(['owner', 'admin', 'pastor', 'care'])
 const GROUP_ROLES = new Set(['owner', 'admin', 'pastor', 'group_leader'])
 const GROUP_ROSTER_BROAD_ROLES = new Set(['owner', 'admin', 'pastor'])
@@ -28,6 +29,7 @@ export interface JourneyAccessContext {
   isSystemAdmin: boolean
   isOwner: boolean
   canManagePresence: boolean
+  canManageMesa: boolean
   canManagePeople: boolean
   canManageCare: boolean
   canManageGroups: boolean
@@ -44,6 +46,14 @@ export interface JourneyCongregation {
   name: string
   city?: string
   active?: boolean
+}
+
+export interface JourneyOrganizationSummary {
+  id: string
+  name: string
+  city?: string
+  status?: string
+  journeyStatus: 'active' | 'trialing' | 'inactive' | 'not_configured'
 }
 
 export interface PresencePerson {
@@ -110,6 +120,30 @@ export interface JourneyGroupEntryRequest {
   resolvedBy?: string
 }
 
+export interface JourneyGroupMeetingRecord {
+  id: string
+  organizationId: string
+  congregationId: string
+  groupId: string
+  status: 'open' | 'closed'
+  startedAt: string
+  createdBy: string
+  endedAt?: string
+  closedBy?: string
+}
+
+export interface JourneyGroupAttendanceRecord {
+  id: string
+  organizationId: string
+  congregationId: string
+  groupId: string
+  meetingId: string
+  personId: string
+  status: 'present_confirmed'
+  recordedAt: string
+  recordedBy: string
+}
+
 export interface JourneyDiscipleshipRecord {
   id: string
   organizationId: string
@@ -144,6 +178,40 @@ export interface PresenceSessionRecord extends PresenceSession {
   status: 'open' | 'closed'
   createdBy: string
   closedBy?: string
+}
+
+export interface MesaParticipationRecord {
+  id: string
+  organizationId: string
+  congregationId: string
+  sessionId: string
+  personId: string
+  status: 'invited' | 'joined'
+  bondHostRef?: string
+  updatedAt: string
+  updatedBy: string
+}
+
+export type MesaPreparationItemKey = 'environment' | 'hosts' | 'hospitality' | 'supplies'
+
+export interface MesaPreparationRecord {
+  id: string
+  organizationId: string
+  congregationId: string
+  sessionId: string
+  status: 'preparing' | 'ready'
+  items: Record<MesaPreparationItemKey, boolean>
+  owners: Record<MesaPreparationItemKey, string>
+  updatedAt: string
+  updatedBy: string
+}
+
+export interface JourneyModuleLabels {
+  presence?: string
+  table?: string
+  care?: string
+  groups?: string
+  discipleship?: string
 }
 
 export interface MinimalVisitorInput {
@@ -281,6 +349,40 @@ export function getActiveJourneyOrganizationId() {
   try { return sessionStorage.getItem('mn_ecosystem_org_id')?.trim() ?? '' } catch { return '' }
 }
 
+export function setActiveJourneyOrganizationId(organizationId: string) {
+  try {
+    sessionStorage.setItem('mn_ecosystem_org_id', organizationId.trim())
+    window.dispatchEvent(new CustomEvent('nestjourney:organization', { detail: organizationId.trim() }))
+  } catch {
+    // Session storage is an enhancement; the ecosystem handoff remains authoritative.
+  }
+}
+
+export async function listJourneyOrganizationsForSystemAdmin(access: JourneyAccessContext): Promise<JourneyOrganizationSummary[]> {
+  if (!access.isSystemAdmin) return []
+  const firestore = requireDb()
+  const snapshot = await getDocs(collection(firestore, 'organizations'))
+  return snapshot.docs.map((item): JourneyOrganizationSummary => {
+    const data = item.data()
+    const apps = data.apps && typeof data.apps === 'object' ? data.apps as Record<string, unknown> : {}
+    const rawJourney = (apps.nestjourney ?? apps.raiz_e_mesa)
+    const journey = rawJourney && typeof rawJourney === 'object' ? rawJourney as Record<string, unknown> : {}
+    const rawStatus = asString(journey.status)
+    const journeyStatus: JourneyOrganizationSummary['journeyStatus'] =
+      rawStatus === 'active' ? 'active'
+      : rawStatus === 'trialing' ? 'trialing'
+      : rawStatus ? 'inactive'
+      : 'not_configured'
+    return {
+      id: item.id,
+      name: asString(data.name || data.organizationName || data.displayName) || item.id,
+      city: asString(data.city) || undefined,
+      status: asString(data.status) || undefined,
+      journeyStatus,
+    }
+  }).sort((a,b) => a.name.localeCompare(b.name))
+}
+
 export async function loadJourneyAccess(userId: string, organizationId: string): Promise<JourneyAccessContext> {
   const firestore = requireDb()
   const nestedRef = doc(firestore, `organizations/${organizationId}/members/${userId}`)
@@ -330,6 +432,7 @@ export async function loadJourneyAccess(userId: string, organizationId: string):
     isSystemAdmin,
     isOwner,
     canManagePresence: isSystemAdmin || isOwner || PRESENCE_ROLES.has(role) || permissions.canManagePresence === true,
+    canManageMesa: isSystemAdmin || isOwner || MESA_ROLES.has(role) || permissions.canManageMesa === true || permissions.canManagePresence === true,
     canManagePeople: isSystemAdmin || isOwner || BROAD_JOURNEY_ROLES.has(role) || permissions.canManagePeople === true,
     canManageCare: isSystemAdmin || isOwner || CARE_ROLES.has(role) || permissions.canManageCare === true,
     canManageGroups: isSystemAdmin || isOwner || GROUP_ROLES.has(role) || permissions.canManageGroups === true,
@@ -340,6 +443,53 @@ export async function loadJourneyAccess(userId: string, organizationId: string):
     canManagePastoral: isSystemAdmin || isOwner || PASTORAL_ROLES.has(role) || permissions.canManagePastoral === true,
     broadJourneyAccess: isSystemAdmin || isOwner || BROAD_JOURNEY_ROLES.has(role),
   }
+}
+
+export async function loadJourneyModuleLabels(organizationId: string): Promise<JourneyModuleLabels> {
+  const firestore = requireDb()
+  const ref = doc(firestore, `${journeyCollectionPath(organizationId, 'settings')}/moduleLabels`)
+  const snapshot = await getDoc(ref)
+  if (!snapshot.exists()) return {}
+  const labels = snapshot.data().labels
+  if (!labels || typeof labels !== 'object') return {}
+  const source = labels as Record<string, unknown>
+  const clean = (key: string) => {
+    const value = asString(source[key]).trim()
+    return value && value.length <= 48 ? value : undefined
+  }
+  return {
+    presence: clean('presence'),
+    table: clean('table'),
+    care: clean('care'),
+    groups: clean('groups'),
+    discipleship: clean('discipleship'),
+  }
+}
+
+export async function saveJourneyModuleLabels(access: JourneyAccessContext, labels: JourneyModuleLabels) {
+  const firestore = requireDb()
+  if (!(access.isSystemAdmin || access.isOwner || ['owner','admin','pastor'].includes(access.role))) {
+    throw new Error('settings_access_denied')
+  }
+  const normalize = (value: string | undefined) => String(value ?? '').trim().slice(0, 48)
+  const ref = doc(firestore, `${journeyCollectionPath(access.organizationId, 'settings')}/moduleLabels`)
+  const payload = {
+    organizationId: access.organizationId,
+    labels: {
+      presence: normalize(labels.presence),
+      table: normalize(labels.table),
+      care: normalize(labels.care),
+      groups: normalize(labels.groups),
+      discipleship: normalize(labels.discipleship),
+    },
+    updatedAt: serverTimestamp(),
+    updatedBy: access.userId,
+  }
+  const existing = await getDoc(ref)
+  const batch = writeBatch(firestore)
+  if (existing.exists()) batch.update(ref, payload)
+  else batch.set(ref, payload)
+  await batch.commit()
 }
 
 export async function listJourneyCongregations(access: JourneyAccessContext): Promise<JourneyCongregation[]> {
@@ -669,6 +819,114 @@ export async function setJourneyGroupMembership(input: {
       updatedBy: input.access.userId,
     })
   })
+}
+
+export async function listJourneyGroupMeetings(
+  access: JourneyAccessContext,
+  group: JourneyGroupRecord,
+): Promise<JourneyGroupMeetingRecord[]> {
+  if (!canManageJourneyGroupRoster(access, group)) return []
+  const firestore = requireDb()
+  const snapshot = await getDocs(query(
+    collection(firestore, journeyCollectionPath(access.organizationId, 'groupMeetings')),
+    where('groupId', '==', group.id),
+  ))
+  return snapshot.docs.map((item): JourneyGroupMeetingRecord => {
+    const data = item.data()
+    return {
+      id: item.id,
+      organizationId: access.organizationId,
+      congregationId: asString(data.congregationId),
+      groupId: asString(data.groupId),
+      status: data.status === 'closed' ? 'closed' : 'open',
+      startedAt: toIso(data.startedAt),
+      createdBy: asString(data.createdBy),
+      endedAt: data.endedAt ? toIso(data.endedAt) : undefined,
+      closedBy: asString(data.closedBy) || undefined,
+    }
+  }).filter((item) => item.congregationId === group.congregationId)
+    .sort((a,b) => Date.parse(b.startedAt) - Date.parse(a.startedAt))
+}
+
+export async function createJourneyGroupMeeting(access: JourneyAccessContext, group: JourneyGroupRecord) {
+  if (!canManageJourneyGroupRoster(access, group)) throw new Error('group_meeting_forbidden')
+  const firestore = requireDb()
+  const ref = doc(collection(firestore, journeyCollectionPath(access.organizationId, 'groupMeetings')))
+  await writeBatch(firestore).set(ref, {
+    organizationId: access.organizationId,
+    congregationId: group.congregationId,
+    groupId: group.id,
+    status: 'open',
+    startedAt: serverTimestamp(),
+    createdBy: access.userId,
+    endedAt: null,
+    closedBy: '',
+  }).commit()
+  return ref.id
+}
+
+export async function closeJourneyGroupMeeting(access: JourneyAccessContext, group: JourneyGroupRecord, meeting: JourneyGroupMeetingRecord) {
+  if (!canManageJourneyGroupRoster(access, group)) throw new Error('group_meeting_forbidden')
+  const firestore = requireDb()
+  const ref = doc(firestore, `${journeyCollectionPath(access.organizationId, 'groupMeetings')}/${meeting.id}`)
+  await updateDoc(ref, {
+    status: 'closed',
+    endedAt: serverTimestamp(),
+    closedBy: access.userId,
+  })
+}
+
+export async function listJourneyGroupAttendance(
+  access: JourneyAccessContext,
+  group: JourneyGroupRecord,
+  meetingId: string,
+): Promise<JourneyGroupAttendanceRecord[]> {
+  if (!canManageJourneyGroupRoster(access, group)) return []
+  const firestore = requireDb()
+  const snapshot = await getDocs(query(
+    collection(firestore, journeyCollectionPath(access.organizationId, 'groupAttendance')),
+    where('meetingId', '==', meetingId),
+  ))
+  return snapshot.docs.map((item): JourneyGroupAttendanceRecord => {
+    const data = item.data()
+    return {
+      id: item.id,
+      organizationId: access.organizationId,
+      congregationId: asString(data.congregationId),
+      groupId: asString(data.groupId),
+      meetingId: asString(data.meetingId),
+      personId: asString(data.personId),
+      status: 'present_confirmed',
+      recordedAt: toIso(data.recordedAt),
+      recordedBy: asString(data.recordedBy),
+    }
+  }).filter((item) => item.groupId === group.id && item.congregationId === group.congregationId)
+}
+
+export async function confirmJourneyGroupAttendance(input: {
+  access: JourneyAccessContext
+  group: JourneyGroupRecord
+  meeting: JourneyGroupMeetingRecord
+  personId: string
+}) {
+  if (!canManageJourneyGroupRoster(input.access, input.group)) throw new Error('group_attendance_forbidden')
+  if (input.meeting.groupId !== input.group.id || input.meeting.status !== 'open') throw new Error('group_meeting_closed')
+  const firestore = requireDb()
+  const id = `${input.meeting.id}__${input.personId}`
+  const ref = doc(firestore, `${journeyCollectionPath(input.access.organizationId, 'groupAttendance')}/${id}`)
+  const existing = await getDoc(ref)
+  if (existing.exists()) return id
+  await writeBatch(firestore).set(ref, {
+    organizationId: input.access.organizationId,
+    congregationId: input.group.congregationId,
+    groupId: input.group.id,
+    meetingId: input.meeting.id,
+    personId: input.personId,
+    status: 'present_confirmed',
+    recordedAt: serverTimestamp(),
+    recordedBy: input.access.userId,
+  }).commit()
+  return id
 }
 
 export async function listJourneyDiscipleships(access: JourneyAccessContext, congregationId: string): Promise<JourneyDiscipleshipRecord[]> {
@@ -1097,6 +1355,141 @@ export async function listPresenceChecks(organizationId: string, congregationId:
       correctedFromCheckId: asString(data.correctedFromCheckId) || undefined,
     }
   })
+}
+
+export async function listMesaParticipationRecords(
+  organizationId: string,
+  congregationId: string,
+  sessionId: string,
+): Promise<MesaParticipationRecord[]> {
+  const firestore = requireDb()
+  const snapshot = await getDocs(query(
+    collection(firestore, journeyCollectionPath(organizationId, 'mesaParticipations')),
+    where('congregationId', '==', congregationId),
+    where('sessionId', '==', sessionId),
+  ))
+
+  return snapshot.docs.map((item): MesaParticipationRecord => {
+    const data = item.data()
+    return {
+      id: item.id,
+      organizationId,
+      congregationId,
+      sessionId,
+      personId: asString(data.personId),
+      status: data.status === 'joined' ? 'joined' : 'invited',
+      bondHostRef: asString(data.bondHostRef) || undefined,
+      updatedAt: toIso(data.updatedAt),
+      updatedBy: asString(data.updatedBy),
+    }
+  })
+}
+
+export async function loadMesaPreparation(
+  organizationId: string,
+  congregationId: string,
+  sessionId: string,
+): Promise<MesaPreparationRecord | null> {
+  const firestore = requireDb()
+  const ref = doc(firestore, `${journeyCollectionPath(organizationId, 'mesaPreparations')}/${sessionId}`)
+  const snapshot = await getDoc(ref)
+  if (!snapshot.exists()) return null
+  const data = snapshot.data()
+  if (asString(data.congregationId) !== congregationId || asString(data.sessionId) !== sessionId) return null
+  const rawItems = data.items && typeof data.items === 'object' ? data.items as Record<string, unknown> : {}
+  const rawOwners = data.owners && typeof data.owners === 'object' ? data.owners as Record<string, unknown> : {}
+  const keys: MesaPreparationItemKey[] = ['environment', 'hosts', 'hospitality', 'supplies']
+  const items = Object.fromEntries(keys.map(key => [key, rawItems[key] === true])) as Record<MesaPreparationItemKey, boolean>
+  const owners = Object.fromEntries(keys.map(key => [key, asString(rawOwners[key])])) as Record<MesaPreparationItemKey, string>
+  return {
+    id: snapshot.id,
+    organizationId,
+    congregationId,
+    sessionId,
+    status: data.status === 'ready' ? 'ready' : 'preparing',
+    items,
+    owners,
+    updatedAt: toIso(data.updatedAt),
+    updatedBy: asString(data.updatedBy),
+  }
+}
+
+export async function setMesaPreparationItem(input: {
+  access: JourneyAccessContext
+  congregationId: string
+  sessionId: string
+  item: MesaPreparationItemKey
+  checked: boolean
+}) {
+  if (!input.access.canManageMesa) throw new Error('mesa_preparation_forbidden')
+  const firestore = requireDb()
+  const ref = doc(firestore, `${journeyCollectionPath(input.access.organizationId, 'mesaPreparations')}/${input.sessionId}`)
+  const snapshot = await getDoc(ref)
+  const keys: MesaPreparationItemKey[] = ['environment', 'hosts', 'hospitality', 'supplies']
+  const previousItems = snapshot.exists() && snapshot.data().items && typeof snapshot.data().items === 'object'
+    ? snapshot.data().items as Record<string, unknown>
+    : {}
+  const previousOwners = snapshot.exists() && snapshot.data().owners && typeof snapshot.data().owners === 'object'
+    ? snapshot.data().owners as Record<string, unknown>
+    : {}
+  const items = Object.fromEntries(keys.map(key => [key, key === input.item ? input.checked : previousItems[key] === true])) as Record<MesaPreparationItemKey, boolean>
+  const owners = Object.fromEntries(keys.map(key => [
+    key,
+    key === input.item ? (input.checked ? input.access.userId : '') : asString(previousOwners[key]),
+  ])) as Record<MesaPreparationItemKey, string>
+  const payload = {
+    organizationId: input.access.organizationId,
+    congregationId: input.congregationId,
+    sessionId: input.sessionId,
+    status: keys.every(key => items[key]) ? 'ready' : 'preparing',
+    items,
+    owners,
+    updatedAt: serverTimestamp(),
+    updatedBy: input.access.userId,
+  }
+  const batch = writeBatch(firestore)
+  if (snapshot.exists()) batch.update(ref, payload)
+  else batch.set(ref, payload)
+  await batch.commit()
+}
+
+export async function setMesaParticipation(input: {
+  organizationId: string
+  congregationId: string
+  sessionId: string
+  personId: string
+  actorId: string
+  status: 'invited' | 'joined'
+}) {
+  const firestore = requireDb()
+  const id = `${input.sessionId}__${input.personId}`
+  const ref = doc(firestore, `${journeyCollectionPath(input.organizationId, 'mesaParticipations')}/${id}`)
+  const existing = await getDoc(ref)
+  const batch = writeBatch(firestore)
+  const bondHostRef = existing.exists() ? asString(existing.data().bondHostRef) || input.actorId : input.actorId
+
+  if (existing.exists()) {
+    batch.update(ref, {
+      status: input.status,
+      bondHostRef,
+      updatedAt: serverTimestamp(),
+      updatedBy: input.actorId,
+    })
+  } else {
+    batch.set(ref, {
+      organizationId: input.organizationId,
+      congregationId: input.congregationId,
+      sessionId: input.sessionId,
+      personId: input.personId,
+      status: input.status,
+      bondHostRef,
+      updatedAt: serverTimestamp(),
+      updatedBy: input.actorId,
+    })
+  }
+
+  await batch.commit()
+  return id
 }
 
 export async function createPresenceSession(input: {

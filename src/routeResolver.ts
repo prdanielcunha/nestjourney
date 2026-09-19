@@ -1,6 +1,12 @@
 export type JourneyRoute =
   | 'overview'
   | 'today'
+  | 'areas'
+  | 'mesa'
+  | 'vision'
+  | 'more'
+  | 'reports'
+  | 'help'
   | 'presence'
   | 'care'
   | 'followup'
@@ -8,6 +14,8 @@ export type JourneyRoute =
   | 'groups'
   | 'discipleship'
   | 'implementation'
+  | 'team'
+  | 'settings'
   | 'governance'
   | 'pastoral'
 
@@ -19,6 +27,18 @@ function normalizePathname(pathname: string) {
 
 export function resolveJourneyRoute(pathname: string): JourneyRoute {
   switch (normalizePathname(pathname)) {
+    case '/areas':
+      return 'areas'
+    case '/mesa-runtime':
+      return 'mesa'
+    case '/vision':
+      return 'vision'
+    case '/more':
+      return 'more'
+    case '/reports':
+      return 'reports'
+    case '/help':
+      return 'help'
     case '/presence-assist':
       return 'presence'
     case '/care-integrity':
@@ -35,13 +55,19 @@ export function resolveJourneyRoute(pathname: string): JourneyRoute {
       return 'discipleship'
     case '/implementation-runtime':
       return 'implementation'
+    case '/team-runtime':
+      return 'team'
+    case '/settings-runtime':
+      return 'settings'
     case '/governance-runtime':
       return 'governance'
     case '/pastoral-handoff':
       return 'pastoral'
     case '/journey-overview':
-    case '/':
-    default:
       return 'overview'
+    case '/':
+      return 'today'
+    default:
+      return 'today'
   }
 }

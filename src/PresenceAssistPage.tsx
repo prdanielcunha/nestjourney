@@ -12,14 +12,18 @@ import {
   listPresenceChecks,
   listPresencePeople,
   listPresenceSessions,
+  listMesaParticipationRecords,
   loadJourneyAccess,
   recordPresenceCheck,
+  setMesaParticipation,
   type JourneyAccessContext,
   type JourneyCongregation,
   type PresencePerson,
   type PresenceSessionRecord,
+  type MesaParticipationRecord,
 } from './journeyRepository'
 import { getInitialLocale, localeLabels, persistLocale, presenceAssistCopy, type AppLocale } from './i18n'
+import { useJourneyLabels } from './journeyLabels'
 import './PresenceAssistPage.css'
 
 function initials(name: string) {
@@ -28,13 +32,21 @@ function initials(name: string) {
 
 export default function PresenceAssistPage() {
   const [locale, setLocale] = useState<AppLocale>(getInitialLocale)
-  const t = presenceAssistCopy[locale]
+  const baseCopy = presenceAssistCopy[locale]
+  const { labels } = useJourneyLabels()
+  const defaultTitleParts = baseCopy.title.split(' & ')
+  const t = {
+    ...baseCopy,
+    title: `${labels.presence || defaultTitleParts[0]} & ${labels.table || defaultTitleParts[1] || baseCopy.mesa}`,
+    mesa: labels.table || baseCopy.mesa,
+  }
   const [access, setAccess] = useState<JourneyAccessContext | null>(null)
   const [congregations, setCongregations] = useState<JourneyCongregation[]>([])
   const [congregationId, setCongregationId] = useState('')
   const [people, setPeople] = useState<PresencePerson[]>([])
   const [sessions, setSessions] = useState<PresenceSessionRecord[]>([])
   const [checks, setChecks] = useState<PresenceCheck[]>([])
+  const [mesa, setMesa] = useState<MesaParticipationRecord[]>([])
   const [query, setQuery] = useState('')
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
@@ -61,7 +73,17 @@ export default function PresenceAssistPage() {
     setPeople(nextPeople)
     setSessions(nextSessions)
     const session = nextSessions.find((item) => item.status === 'open') ?? nextSessions[0]
-    setChecks(session ? await listPresenceChecks(orgId, unitId, session.id) : [])
+    if (session) {
+      const [nextChecks, nextMesa] = await Promise.all([
+        listPresenceChecks(orgId, unitId, session.id),
+        listMesaParticipationRecords(orgId, unitId, session.id),
+      ])
+      setChecks(nextChecks)
+      setMesa(nextMesa)
+    } else {
+      setChecks([])
+      setMesa([])
+    }
   }, [])
 
   const bootstrap = useCallback(async () => {
@@ -120,6 +142,26 @@ export default function PresenceAssistPage() {
     finally { setBusy(false) }
   }
 
+  async function markMesa(person: PresencePerson, status: 'invited' | 'joined') {
+    if (!access || !displaySession || displaySession.status !== 'open') return
+    const presence = latest.get(person.id)
+    if (presence?.state !== 'present_confirmed') return
+    setBusy(true)
+    setError('')
+    try {
+      await setMesaParticipation({
+        organizationId: access.organizationId,
+        congregationId,
+        sessionId: displaySession.id,
+        personId: person.id,
+        actorId: access.userId,
+        status,
+      })
+      setMesa(await listMesaParticipationRecords(access.organizationId, congregationId, displaySession.id))
+    } catch (cause) { console.error(cause); setError(t.error) }
+    finally { setBusy(false) }
+  }
+
   async function closeSession() {
     if (!access || !displaySession || displaySession.status !== 'open') return
     if (!window.confirm(t.confirmClose)) return
@@ -162,6 +204,7 @@ export default function PresenceAssistPage() {
 
     {displaySession ? <section className="presence-panel presence-session-card">
       <div className="presence-session-head"><div><span className="presence-kicker">{t.session}</span><h2>{displaySession.eventName ?? new Date(displaySession.openedAt).toLocaleString(locale)}</h2><p>{new Date(displaySession.openedAt).toLocaleString(locale)} · {displaySession.status === 'closed' ? t.closed : displaySession.eventRef}</p></div><span className="presence-badge"><UserCheck size={15} /> {displaySession.status === 'open' ? t.session : t.closed}</span></div>
+      <div className="presence-mesa-summary"><div><span className="presence-kicker">{t.mesa}</span><strong>{mesa.filter(item => item.status === 'joined').length}</strong><small>{t.mesaJoined}</small></div><p>{t.mesaHint}</p></div>
       {coverage ? <><div className="coverage-wrap"><span className="coverage-number">{coverage.percent}%</span><div className="coverage-track" aria-label={`${t.coverage}: ${coverage.percent}%`}><span style={{ width: `${coverage.percent}%` }} /></div><div className="coverage-meta">{coverage.verified} {t.verified}<br />{coverage.unverified} {t.unverified}</div></div><p className="coverage-note">{coverage.meetsMinimum ? t.qualityReady : t.qualityNotReady}</p></> : null}
     </section> : <div className="presence-panel presence-empty">{t.noSession}</div>}
 
@@ -174,6 +217,16 @@ export default function PresenceAssistPage() {
           <div className="presence-person-top"><span className="presence-avatar">{person.photoUrl ? <img src={person.photoUrl} alt="" /> : initials(person.name)}</span><div className="presence-person-name"><strong>{person.name}</strong><small>{person.visits ? `${person.visits}x` : t.notVerified}</small></div></div>
           <span className={`presence-state ${confirmed ? 'confirmed' : ''}`}>{confirmed ? t.present : t.notVerified}{current?.correctedFromCheckId ? ` · ${t.correcting}` : ''}</span>
           <button className={`presence-button ${confirmed ? 'success' : 'primary'}`} disabled={busy || confirmed || displaySession?.status !== 'open'} onClick={() => void markPresent(person)}>{confirmed ? <><Check size={17} /> {t.present}</> : t.markPresent}</button>
+          {(() => {
+            const mesaRecord = mesa.find(item => item.personId === person.id)
+            const joined = mesaRecord?.status === 'joined'
+            const invited = mesaRecord?.status === 'invited'
+            return <div className="presence-mesa-actions">
+              <span><b>{t.mesa}</b><small>{joined ? t.mesaJoined : invited ? t.mesaInvited : confirmed ? t.mesaHint : t.mesaNeedsPresence}</small></span>
+              {!joined ? <button className="presence-button" disabled={busy || !confirmed || displaySession?.status !== 'open' || invited} onClick={() => void markMesa(person, 'invited')}>{invited ? <><Check size={15}/>{t.mesaInvited}</> : t.inviteMesa}</button> : null}
+              <button className={`presence-button ${joined ? 'success' : ''}`} disabled={busy || !confirmed || joined || displaySession?.status !== 'open'} onClick={() => void markMesa(person, 'joined')}>{joined ? <><Check size={15}/>{t.mesaJoined}</> : t.markMesaJoined}</button>
+            </div>
+          })()}
         </article>
       })}
     </section>
