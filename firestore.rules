@@ -655,6 +655,25 @@ service cloud.firestore {
         );
     }
 
+    function validFollowupFactDocument(orgId, factId) {
+      let eventType = request.resource.data.get('eventType', '');
+      let payload = request.resource.data.get('payload', {});
+      return request.resource.data.get('organizationId', '') == orgId
+        && request.resource.data.get('eventId', '') == factId
+        && request.resource.data.get('actorId', '') == request.auth.uid
+        && request.resource.data.get('sourceApp', '') == 'nestjourney'
+        && request.resource.data.get('version', 0) == 1
+        && request.resource.data.get('recordedAt', null) == request.time
+        && request.resource.data.get('occurredAt', null) == request.time
+        && request.resource.data.get('subjectRef', '') is string
+        && request.resource.data.get('scope', '') is string
+        && request.resource.data.get('evidenceRef', '') is string
+        && request.resource.data.get('evidenceRef', '').size() > 0
+        && request.resource.data.get('sensitivity', '') == 'confidential'
+        && eventType in ['FOLLOWUP_CREATED', 'FOLLOWUP_COMPLETED']
+        && validFollowupCanonicalFact(orgId, factId, eventType, payload);
+    }
+
     function validCanonicalFact(orgId, factId) {
       let eventType = request.resource.data.get('eventType', '');
       let payload = request.resource.data.get('payload', {});
@@ -680,8 +699,7 @@ service cloud.firestore {
         && request.resource.data.get('sensitivity', '') in ['public', 'internal', 'confidential', 'restricted']
         && eventType in [
           'VISITOR_REGISTERED', 'PRESENCE_SESSION_OPENED', 'PRESENCE_CONFIRMED',
-          'CARE_REQUESTED', 'CARE_ASSIGNED', 'CARE_RESOLVED',
-          'FOLLOWUP_CREATED', 'FOLLOWUP_COMPLETED'
+          'CARE_REQUESTED', 'CARE_ASSIGNED', 'CARE_RESOLVED'
         ]
         && (
           (eventType == 'VISITOR_REGISTERED'
@@ -749,11 +767,6 @@ service cloud.firestore {
             && request.resource.data.get('subjectRef', '') == 'person:' + personId
             && request.resource.data.get('evidenceRef', '') == 'careRequest:' + careRequestId
             && request.resource.data.get('scope', '') == 'congregation:' + getAfter(carePath).data.get('congregationId', ''))
-          ||
-          (
-            eventType in ['FOLLOWUP_CREATED', 'FOLLOWUP_COMPLETED']
-            && validFollowupCanonicalFact(orgId, factId, eventType, payload)
-          )
         );
     }
 
@@ -835,13 +848,19 @@ service cloud.firestore {
         }
         match /facts/{factId} {
           allow read: if isOrgAdmin(orgId);
-          allow create: if hasMembership(orgId)
-            && (
-              (request.resource.data.get('eventType', '') == 'VISITOR_REGISTERED' && canManagePeople(orgId))
-              || (request.resource.data.get('eventType', '') in ['PRESENCE_SESSION_OPENED', 'PRESENCE_CONFIRMED'] && canManagePresence(orgId))
-              || request.resource.data.get('eventType', '') in ['CARE_REQUESTED', 'CARE_ASSIGNED', 'CARE_RESOLVED', 'FOLLOWUP_CREATED', 'FOLLOWUP_COMPLETED']
+          allow create: if (
+              request.resource.data.get('eventType', '') in ['FOLLOWUP_CREATED', 'FOLLOWUP_COMPLETED']
+              && validFollowupFactDocument(orgId, factId)
             )
-            && validCanonicalFact(orgId, factId);
+            || (
+              hasMembership(orgId)
+              && (
+                (request.resource.data.get('eventType', '') == 'VISITOR_REGISTERED' && canManagePeople(orgId))
+                || (request.resource.data.get('eventType', '') in ['PRESENCE_SESSION_OPENED', 'PRESENCE_CONFIRMED'] && canManagePresence(orgId))
+                || request.resource.data.get('eventType', '') in ['CARE_REQUESTED', 'CARE_ASSIGNED', 'CARE_RESOLVED']
+              )
+              && validCanonicalFact(orgId, factId)
+            );
           allow update, delete: if false;
         }
         match /implementationCycles/{cycleId} {
