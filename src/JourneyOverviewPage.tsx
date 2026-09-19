@@ -27,6 +27,7 @@ import {
   type PresenceSessionRecord,
 } from './journeyRepository'
 import { getInitialLocale, journeyHomeCopy, localeLabels, persistLocale, type AppLocale } from './i18n'
+import { useJourneyLabels } from './journeyLabels'
 import './JourneyOverviewPage.css'
 
 type ModuleCardProps = {
@@ -56,6 +57,12 @@ function ModuleCard({ href, eyebrow, title, description, metric, detail, icon: I
 export default function JourneyOverviewPage() {
   const [locale,setLocale]=useState<AppLocale>(getInitialLocale)
   const t=journeyHomeCopy[locale]
+  const { labels } = useJourneyLabels()
+  const defaultReceptionParts = t.presence.split(' & ')
+  const presenceName = `${labels.presence || defaultReceptionParts[0]} & ${labels.table || defaultReceptionParts[1] || ''}`.replace(/\s*&\s*$/, '')
+  const careName = labels.care || t.care
+  const groupsName = labels.groups || t.groups
+  const rootName = labels.discipleship || t.raiz
   const [access,setAccess]=useState<JourneyAccessContext|null>(null)
   const [congregations,setCongregations]=useState<JourneyCongregation[]>([])
   const [congregationId,setCongregationId]=useState('')
@@ -151,20 +158,20 @@ export default function JourneyOverviewPage() {
     <section className="home-section">
       <div className="home-section-heading"><div><span className="overview-kicker">AGORA</span><h2>{t.attentionTitle}</h2></div></div>
       <div className="home-attention-grid">
-        {access && (access.canManageCare||access.broadJourneyAccess) ? <ModuleCard href="/care-integrity" eyebrow={t.care} title={overview.care?.debt ? `${overview.care.debt} ${t.careDebt}` : `${overview.care?.open??0} ${t.careOpen}`} description={t.careDesc} metric={overview.care?String(overview.care.open):'0'} detail={t.careOpen} icon={HeartHandshake}/> : null}
-        {access?.canManagePresence ? <ModuleCard href="/presence-assist" eyebrow={t.presence} title={`${overview.presence?.openSessions??0} ${t.openSessions}`} description={t.presenceDesc} icon={UserCheck}/> : null}
-        {access && (access.canManageGroups||access.broadJourneyAccess) ? <ModuleCard href="/groups-runtime" eyebrow={t.groups} title={String(overview.groups?.count??0)} description={t.groupsDesc} metric={overview.groups?String(overview.groups.nearCapacity):'0'} detail={t.nearCapacity} icon={House}/> : null}
-        {access && (access.canManageDiscipleship||access.broadJourneyAccess) ? <ModuleCard href="/discipleship-runtime" eyebrow={t.raiz} title={String(overview.discipleship?.active??0)} description={t.raizDesc} metric={overview.discipleship?String(overview.discipleship.active):'0'} detail={t.activeRelations} icon={Leaf}/> : null}
+        {access && (access.canManageCare||access.broadJourneyAccess) ? <ModuleCard href="/care-integrity" eyebrow={careName} title={overview.care?.debt ? `${overview.care.debt} ${t.careDebt}` : `${overview.care?.open??0} ${t.careOpen}`} description={t.careDesc} metric={overview.care?String(overview.care.open):'0'} detail={t.careOpen} icon={HeartHandshake}/> : null}
+        {access?.canManagePresence ? <ModuleCard href="/presence-assist" eyebrow={presenceName} title={`${overview.presence?.openSessions??0} ${t.openSessions}`} description={t.presenceDesc} icon={UserCheck}/> : null}
+        {access && (access.canManageGroups||access.broadJourneyAccess) ? <ModuleCard href="/groups-runtime" eyebrow={groupsName} title={String(overview.groups?.count??0)} description={t.groupsDesc} metric={overview.groups?String(overview.groups.nearCapacity):'0'} detail={t.nearCapacity} icon={House}/> : null}
+        {access && (access.canManageDiscipleship||access.broadJourneyAccess) ? <ModuleCard href="/discipleship-runtime" eyebrow={rootName} title={String(overview.discipleship?.active??0)} description={t.raizDesc} metric={overview.discipleship?String(overview.discipleship.active):'0'} detail={t.activeRelations} icon={Leaf}/> : null}
       </div>
     </section>
 
     <section className="home-section">
       <div className="home-section-heading"><div><span className="overview-kicker">FLUXO</span><h2>{t.journeyTitle}</h2><p>{t.journeySubtitle}</p></div></div>
       <div className="home-journey-flow">
-        {access?.canManagePresence ? <ModuleCard href="/presence-assist" eyebrow="01" title={t.stagePresence} description={t.stagePresenceDesc} icon={UserCheck}/> : null}
-        {access && (access.canManageCare||access.broadJourneyAccess) ? <ModuleCard href="/care-integrity" eyebrow="02" title={t.stageCare} description={t.stageCareDesc} icon={HeartHandshake}/> : null}
-        {access && (access.canManageGroups||access.broadJourneyAccess) ? <ModuleCard href="/groups-runtime" eyebrow="03" title={t.stageGroups} description={t.stageGroupsDesc} icon={House}/> : null}
-        {access && (access.canManageDiscipleship||access.broadJourneyAccess) ? <ModuleCard href="/discipleship-runtime" eyebrow="04" title={t.stageRoot} description={t.stageRootDesc} icon={Leaf}/> : null}
+        {access?.canManagePresence ? <ModuleCard href="/presence-assist" eyebrow="01" title={`1. ${presenceName}`} description={t.stagePresenceDesc} icon={UserCheck}/> : null}
+        {access && (access.canManageCare||access.broadJourneyAccess) ? <ModuleCard href="/care-integrity" eyebrow="02" title={`2. ${careName}`} description={t.stageCareDesc} icon={HeartHandshake}/> : null}
+        {access && (access.canManageGroups||access.broadJourneyAccess) ? <ModuleCard href="/groups-runtime" eyebrow="03" title={`3. ${groupsName}`} description={t.stageGroupsDesc} icon={House}/> : null}
+        {access && (access.canManageDiscipleship||access.broadJourneyAccess) ? <ModuleCard href="/discipleship-runtime" eyebrow="04" title={`4. ${rootName}`} description={t.stageRootDesc} icon={Leaf}/> : null}
       </div>
     </section>
 
