@@ -362,10 +362,85 @@ service cloud.firestore {
         && request.resource.data.get('status', '') == 'resolved'
         && request.resource.data.get('resolvedAt', null) == request.time
         && request.resource.data.get('resolvedBy', '') == request.auth.uid
-        && request.resource.data.get('resolutionCode', '') in ['contact_completed', 'pastoral_handoff', 'declined_contact', 'closed_no_response', 'other_resolved']
+        && request.resource.data.get('resolutionCode', '') in ['contact_completed', 'pastoral_handoff', 'declined_contact', 'invalid_contact', 'closed_no_response', 'other_resolved']
         && note is string
         && note.size() <= 160;
     }
+    function validFollowupCreate(orgId, followupId) {
+      let careRequestId = request.resource.data.get('careRequestId', '');
+      let personId = request.resource.data.get('personId', '');
+      let carePath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/careRequests/$(careRequestId);
+      let personPath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/people/$(personId);
+      let careData = get(carePath).data;
+      let personData = get(personPath).data;
+      return request.resource.data.keys().hasOnly([
+          'organizationId', 'congregationId', 'personId', 'careRequestId', 'kind',
+          'status', 'ownerRef', 'dueAt', 'createdAt', 'createdBy',
+          'completedAt', 'completedBy', 'outcomeCode', 'nextActionCode'
+        ])
+        && request.resource.data.get('organizationId', '') == orgId
+        && followupId == 'first-contact-' + careRequestId
+        && request.resource.data.get('kind', '') == 'first_contact'
+        && request.resource.data.get('status', '') == 'pending'
+        && request.resource.data.get('ownerRef', '') == request.auth.uid
+        && request.resource.data.get('createdAt', null) == request.time
+        && request.resource.data.get('createdBy', '') == request.auth.uid
+        && request.resource.data.get('completedAt', null) == null
+        && request.resource.data.get('completedBy', '') == ''
+        && request.resource.data.get('outcomeCode', '') == ''
+        && request.resource.data.get('nextActionCode', '') == ''
+        && canManageCare(orgId)
+        && careData.get('status', '') == 'open'
+        && careData.get('careType', '') == 'first_contact'
+        && careData.get('ownerRef', '') == request.auth.uid
+        && careData.get('personId', '') == personId
+        && careData.get('congregationId', '') == request.resource.data.get('congregationId', '')
+        && request.resource.data.get('dueAt', null) == careData.get('dueAt', null)
+        && personData.get('congregationId', '') == request.resource.data.get('congregationId', '')
+        && personData.get('consent', false) == true
+        && personData.get('phone', '') is string
+        && personData.get('phone', '').size() > 0;
+    }
+
+    function validFollowupOutcomePair(outcomeCode, nextActionCode) {
+      return
+        (outcomeCode == 'responded' && nextActionCode == 'none')
+        || (outcomeCode == 'prayer_requested' && nextActionCode == 'care_prayer')
+        || (outcomeCode == 'group_interest' && nextActionCode == 'group_entry')
+        || (outcomeCode == 'declined_contact' && nextActionCode == 'none')
+        || (outcomeCode == 'invalid_contact' && nextActionCode == 'data_correction')
+        || (outcomeCode == 'no_response' && nextActionCode == 'manual_review');
+    }
+
+    function validFollowupCareResolution(outcomeCode, resolutionCode) {
+      return
+        (outcomeCode in ['responded', 'prayer_requested', 'group_interest'] && resolutionCode == 'contact_completed')
+        || (outcomeCode == 'declined_contact' && resolutionCode == 'declined_contact')
+        || (outcomeCode == 'invalid_contact' && resolutionCode == 'invalid_contact')
+        || (outcomeCode == 'no_response' && resolutionCode == 'closed_no_response');
+    }
+
+    function validFollowupComplete(orgId) {
+      let careRequestId = resource.data.get('careRequestId', '');
+      let carePath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/careRequests/$(careRequestId);
+      let careData = getAfter(carePath).data;
+      let outcomeCode = request.resource.data.get('outcomeCode', '');
+      let nextActionCode = request.resource.data.get('nextActionCode', '');
+      return resource.data.get('status', '') == 'pending'
+        && resource.data.get('ownerRef', '') == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'status', 'completedAt', 'completedBy', 'outcomeCode', 'nextActionCode'
+        ])
+        && request.resource.data.get('status', '') == 'completed'
+        && request.resource.data.get('completedAt', null) == request.time
+        && request.resource.data.get('completedBy', '') == request.auth.uid
+        && validFollowupOutcomePair(outcomeCode, nextActionCode)
+        && careData.get('status', '') == 'resolved'
+        && careData.get('resolvedAt', null) == request.time
+        && careData.get('resolvedBy', '') == request.auth.uid
+        && validFollowupCareResolution(outcomeCode, careData.get('resolutionCode', ''));
+    }
+
     function validImplementationKey(key) {
       return key is string
         && key.matches('^(prep[.][1-7]|week[.]1[.](practice|teach[.][1-4])|week[.]2[.](practice|teach[.][1-5])|week[.]3[.](practice|teach[.][1-4])|week[.]4[.](practice|teach[.][1-5])|week[.]5[.](practice|teach[.][1-5])|week[.]6[.](practice|teach[.][1-4])|week[.]7[.](practice|teach[.][1-5]))$');
@@ -535,6 +610,84 @@ service cloud.firestore {
         && status in ['active', 'paused', 'completed']
         && (status != 'completed' || meeting == 7);
     }
+    function validFollowupCanonicalFact(orgId, factId, eventType, payload) {
+      let followupId = payload.get('followupId', '');
+      let careRequestId = payload.get('careRequestId', '');
+      let personId = payload.get('personId', '');
+      let followupPath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/followups/$(followupId);
+      let followupData = getAfter(followupPath).data;
+      return followupData.get('personId', '') == personId
+        && followupData.get('careRequestId', '') == careRequestId
+        && request.resource.data.get('subjectRef', '') == 'person:' + personId
+        && request.resource.data.get('evidenceRef', '') == 'followup:' + followupId
+        && request.resource.data.get('scope', '') == 'congregation:' + followupData.get('congregationId', '')
+        && (
+          (
+            eventType == 'FOLLOWUP_CREATED'
+            && factId == 'followup-created-' + followupId
+            && followupData.get('status', '') == 'pending'
+            && followupData.get('createdAt', null) == request.time
+            && followupData.get('createdBy', '') == request.auth.uid
+          )
+          ||
+          (
+            eventType == 'FOLLOWUP_COMPLETED'
+            && factId == 'followup-completed-' + followupId
+            && followupData.get('status', '') == 'completed'
+            && followupData.get('completedAt', null) == request.time
+            && followupData.get('completedBy', '') == request.auth.uid
+            && followupData.get('outcomeCode', '') == payload.get('outcomeCode', '')
+            && followupData.get('nextActionCode', '') == payload.get('nextActionCode', '')
+          )
+        );
+    }
+
+    function validCareResolvedFactDocument(orgId, factId) {
+      let payload = request.resource.data.get('payload', {});
+      let careRequestId = payload.get('careRequestId', '');
+      let personId = payload.get('personId', '');
+      let carePath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/careRequests/$(careRequestId);
+      let careData = getAfter(carePath).data;
+      return request.resource.data.get('organizationId', '') == orgId
+        && request.resource.data.get('eventId', '') == factId
+        && request.resource.data.get('eventType', '') == 'CARE_RESOLVED'
+        && request.resource.data.get('actorId', '') == request.auth.uid
+        && request.resource.data.get('sourceApp', '') == 'nestjourney'
+        && request.resource.data.get('version', 0) == 1
+        && request.resource.data.get('recordedAt', null) == request.time
+        && request.resource.data.get('occurredAt', null) == request.time
+        && request.resource.data.get('sensitivity', '') == 'confidential'
+        && factId == 'care-resolved-' + careRequestId
+        && careData.get('status', '') == 'resolved'
+        && careData.get('resolvedAt', null) == request.time
+        && careData.get('resolvedBy', '') == request.auth.uid
+        && careData.get('personId', '') == personId
+        && careData.get('careType', '') == payload.get('careType', '')
+        && careData.get('resolutionCode', '') == payload.get('resolutionCode', '')
+        && request.resource.data.get('subjectRef', '') == 'person:' + personId
+        && request.resource.data.get('evidenceRef', '') == 'careRequest:' + careRequestId
+        && request.resource.data.get('scope', '') == 'congregation:' + careData.get('congregationId', '');
+    }
+
+    function validFollowupFactDocument(orgId, factId) {
+      let eventType = request.resource.data.get('eventType', '');
+      let payload = request.resource.data.get('payload', {});
+      return request.resource.data.get('organizationId', '') == orgId
+        && request.resource.data.get('eventId', '') == factId
+        && request.resource.data.get('actorId', '') == request.auth.uid
+        && request.resource.data.get('sourceApp', '') == 'nestjourney'
+        && request.resource.data.get('version', 0) == 1
+        && request.resource.data.get('recordedAt', null) == request.time
+        && request.resource.data.get('occurredAt', null) == request.time
+        && request.resource.data.get('subjectRef', '') is string
+        && request.resource.data.get('scope', '') is string
+        && request.resource.data.get('evidenceRef', '') is string
+        && request.resource.data.get('evidenceRef', '').size() > 0
+        && request.resource.data.get('sensitivity', '') == 'confidential'
+        && eventType in ['FOLLOWUP_CREATED', 'FOLLOWUP_COMPLETED']
+        && validFollowupCanonicalFact(orgId, factId, eventType, payload);
+    }
+
     function validCanonicalFact(orgId, factId) {
       let eventType = request.resource.data.get('eventType', '');
       let payload = request.resource.data.get('payload', {});
@@ -560,7 +713,7 @@ service cloud.firestore {
         && request.resource.data.get('sensitivity', '') in ['public', 'internal', 'confidential', 'restricted']
         && eventType in [
           'VISITOR_REGISTERED', 'PRESENCE_SESSION_OPENED', 'PRESENCE_CONFIRMED',
-          'CARE_REQUESTED', 'CARE_ASSIGNED', 'CARE_RESOLVED'
+          'CARE_REQUESTED', 'CARE_ASSIGNED'
         ]
         && (
           (eventType == 'VISITOR_REGISTERED'
@@ -613,21 +766,7 @@ service cloud.firestore {
             && request.resource.data.get('subjectRef', '') == 'person:' + personId
             && request.resource.data.get('evidenceRef', '') == 'careRequest:' + careRequestId
             && request.resource.data.get('scope', '') == 'congregation:' + getAfter(carePath).data.get('congregationId', ''))
-          ||
-          (eventType == 'CARE_RESOLVED'
-            && careRequestId is string
-            && careRequestId.size() > 0
-            && factId == 'care-resolved-' + careRequestId
-            && existsAfter(carePath)
-            && getAfter(carePath).data.get('status', '') == 'resolved'
-            && getAfter(carePath).data.get('resolvedAt', null) == request.time
-            && getAfter(carePath).data.get('resolvedBy', '') == request.auth.uid
-            && getAfter(carePath).data.get('personId', '') == personId
-            && getAfter(carePath).data.get('careType', '') == payload.get('careType', '')
-            && getAfter(carePath).data.get('resolutionCode', '') == payload.get('resolutionCode', '')
-            && request.resource.data.get('subjectRef', '') == 'person:' + personId
-            && request.resource.data.get('evidenceRef', '') == 'careRequest:' + careRequestId
-            && request.resource.data.get('scope', '') == 'congregation:' + getAfter(carePath).data.get('congregationId', ''))
+
         );
     }
 
@@ -699,15 +838,33 @@ service cloud.firestore {
             && (validCareClaim(orgId) || validCareResolve(orgId));
           allow delete: if false;
         }
+        match /followups/{followupId} {
+          allow read: if canManageCare(orgId)
+            && canAccessCongregation(orgId, resource.data.get('congregationId', ''))
+            && (isOrgAdmin(orgId) || resource.data.get('ownerRef', '') == request.auth.uid);
+          allow create: if validFollowupCreate(orgId, followupId);
+          allow update: if validFollowupComplete(orgId);
+          allow delete: if false;
+        }
         match /facts/{factId} {
           allow read: if isOrgAdmin(orgId);
-          allow create: if hasMembership(orgId)
-            && (
-              (request.resource.data.get('eventType', '') == 'VISITOR_REGISTERED' && canManagePeople(orgId))
-              || (request.resource.data.get('eventType', '') in ['PRESENCE_SESSION_OPENED', 'PRESENCE_CONFIRMED'] && canManagePresence(orgId))
-              || request.resource.data.get('eventType', '') in ['CARE_REQUESTED', 'CARE_ASSIGNED', 'CARE_RESOLVED']
+          allow create: if (
+              request.resource.data.get('eventType', '') in ['FOLLOWUP_CREATED', 'FOLLOWUP_COMPLETED']
+              && validFollowupFactDocument(orgId, factId)
             )
-            && validCanonicalFact(orgId, factId);
+            || (
+              request.resource.data.get('eventType', '') == 'CARE_RESOLVED'
+              && validCareResolvedFactDocument(orgId, factId)
+            )
+            || (
+              hasMembership(orgId)
+              && (
+                (request.resource.data.get('eventType', '') == 'VISITOR_REGISTERED' && canManagePeople(orgId))
+                || (request.resource.data.get('eventType', '') in ['PRESENCE_SESSION_OPENED', 'PRESENCE_CONFIRMED'] && canManagePresence(orgId))
+                || request.resource.data.get('eventType', '') in ['CARE_REQUESTED', 'CARE_ASSIGNED']
+              )
+              && validCanonicalFact(orgId, factId)
+            );
           allow update, delete: if false;
         }
         match /implementationCycles/{cycleId} {
