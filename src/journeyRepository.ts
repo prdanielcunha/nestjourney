@@ -4,6 +4,7 @@ import {
 } from 'firebase/firestore'
 import { db } from './firebase'
 import { journeyCollectionPath } from './productIdentity'
+import { planFollowupOutcome, type FollowupNextActionCode, type FollowupOutcomeCode } from './followup'
 import type { CarePromise, PresenceCheck, PresenceSession, PresenceSource, PresenceVerificationState } from './intelligence'
 
 const SYSTEM_ROLES = new Set(['ceo', 'global_admin', 'ecosystem_owner', 'founder'])
@@ -166,6 +167,7 @@ export type CareResolutionCode =
   | 'contact_completed'
   | 'pastoral_handoff'
   | 'declined_contact'
+  | 'invalid_contact'
   | 'closed_no_response'
   | 'other_resolved'
 
@@ -189,6 +191,24 @@ export interface CareRequestRecord {
   resolvedBy?: string
   resolutionCode?: CareResolutionCode
   resolutionNote?: string
+}
+
+export interface JourneyFollowupRecord {
+  id: string
+  organizationId: string
+  congregationId: string
+  personId: string
+  careRequestId: string
+  kind: 'first_contact'
+  status: 'pending' | 'completed'
+  ownerRef: string
+  dueAt: string
+  createdAt: string
+  createdBy: string
+  completedAt?: string
+  completedBy?: string
+  outcomeCode?: FollowupOutcomeCode
+  nextActionCode?: FollowupNextActionCode
 }
 
 export type PrivacyRequestType = 'correction' | 'consent_revocation' | 'deletion_review' | 'retention_review'
@@ -1276,6 +1296,176 @@ export async function listCareRequests(organizationId: string, congregationId: s
       resolutionNote: asString(data.resolutionNote) || undefined,
     }
   }).sort((a, b) => Date.parse(a.dueAt) - Date.parse(b.dueAt))
+}
+
+export async function listJourneyFollowups(access: JourneyAccessContext, congregationId: string): Promise<JourneyFollowupRecord[]> {
+  if (!access.canManageCare && !access.broadJourneyAccess) return []
+  const firestore = requireDb()
+  const base = collection(firestore, journeyCollectionPath(access.organizationId, 'followups'))
+  const source = access.broadJourneyAccess
+    ? query(base, where('congregationId', '==', congregationId))
+    : query(base, where('congregationId', '==', congregationId), where('ownerRef', '==', access.userId))
+  const snapshot = await getDocs(source)
+  return snapshot.docs.map((item): JourneyFollowupRecord => {
+    const data = item.data()
+    const rawStatus = asString(data.status)
+    return {
+      id: item.id,
+      organizationId: access.organizationId,
+      congregationId: asString(data.congregationId),
+      personId: asString(data.personId),
+      careRequestId: asString(data.careRequestId),
+      kind: 'first_contact',
+      status: rawStatus === 'completed' ? 'completed' : 'pending',
+      ownerRef: asString(data.ownerRef),
+      dueAt: toIso(data.dueAt),
+      createdAt: toIso(data.createdAt),
+      createdBy: asString(data.createdBy),
+      completedAt: data.completedAt ? toIso(data.completedAt) : undefined,
+      completedBy: asString(data.completedBy) || undefined,
+      outcomeCode: asString(data.outcomeCode) ? asString(data.outcomeCode) as FollowupOutcomeCode : undefined,
+      nextActionCode: asString(data.nextActionCode) ? asString(data.nextActionCode) as FollowupNextActionCode : undefined,
+    }
+  }).sort((a, b) => {
+    if (a.status !== b.status) return a.status === 'pending' ? -1 : 1
+    return Date.parse(a.dueAt) - Date.parse(b.dueAt)
+  })
+}
+
+function followupIdForCare(careRequestId: string) {
+  return `first-contact-${careRequestId}`
+}
+
+export async function startJourneyFollowup(input: {
+  access: JourneyAccessContext
+  request: CareRequestRecord
+}) {
+  if (!input.access.canManageCare) throw new Error('followup_forbidden')
+  if (input.request.careType !== 'first_contact' || input.request.status !== 'open') throw new Error('followup_source_invalid')
+  if (input.request.ownerRef !== input.access.userId) throw new Error('followup_owner_required')
+
+  const firestore = requireDb()
+  const followupId = followupIdForCare(input.request.id)
+  const followupRef = doc(firestore, `${journeyCollectionPath(input.access.organizationId, 'followups')}/${followupId}`)
+  const factRef = doc(firestore, `${journeyCollectionPath(input.access.organizationId, 'facts')}/followup-created-${followupId}`)
+  const batch = writeBatch(firestore)
+  batch.set(followupRef, {
+    organizationId: input.access.organizationId,
+    congregationId: input.request.congregationId,
+    personId: input.request.personId,
+    careRequestId: input.request.id,
+    kind: 'first_contact',
+    status: 'pending',
+    ownerRef: input.access.userId,
+    dueAt: Timestamp.fromDate(new Date(input.request.dueAt)),
+    createdAt: serverTimestamp(),
+    createdBy: input.access.userId,
+    completedAt: null,
+    completedBy: '',
+    outcomeCode: '',
+    nextActionCode: '',
+  })
+  batch.set(factRef, {
+    eventId: factRef.id,
+    eventType: 'FOLLOWUP_CREATED',
+    occurredAt: serverTimestamp(),
+    recordedAt: serverTimestamp(),
+    organizationId: input.access.organizationId,
+    actorId: input.access.userId,
+    subjectRef: `person:${input.request.personId}`,
+    sourceApp: 'nestjourney',
+    scope: `congregation:${input.request.congregationId}`,
+    evidenceRef: `followup:${followupId}`,
+    sensitivity: 'confidential',
+    version: 1,
+    payload: {
+      followupId,
+      careRequestId: input.request.id,
+      personId: input.request.personId,
+      kind: 'first_contact',
+    },
+  })
+  await batch.commit()
+  return followupId
+}
+
+export async function completeJourneyFollowup(input: {
+  access: JourneyAccessContext
+  followup: JourneyFollowupRecord
+  request: CareRequestRecord
+  outcomeCode: FollowupOutcomeCode
+}) {
+  if (!input.access.canManageCare) throw new Error('followup_forbidden')
+  if (input.followup.status !== 'pending') return
+  if (input.followup.ownerRef !== input.access.userId) throw new Error('followup_owner_required')
+  if (input.request.id !== input.followup.careRequestId || input.request.personId !== input.followup.personId) throw new Error('followup_source_mismatch')
+  if (input.request.status !== 'open') throw new Error('care_already_resolved')
+
+  const plan = planFollowupOutcome(input.outcomeCode)
+  const firestore = requireDb()
+  const followupRef = doc(firestore, `${journeyCollectionPath(input.access.organizationId, 'followups')}/${input.followup.id}`)
+  const careRef = doc(firestore, `${journeyCollectionPath(input.access.organizationId, 'careRequests')}/${input.request.id}`)
+  const followupFactRef = doc(firestore, `${journeyCollectionPath(input.access.organizationId, 'facts')}/followup-completed-${input.followup.id}`)
+  const careFactRef = doc(firestore, `${journeyCollectionPath(input.access.organizationId, 'facts')}/care-resolved-${input.request.id}`)
+  const batch = writeBatch(firestore)
+
+  batch.update(followupRef, {
+    status: 'completed',
+    completedAt: serverTimestamp(),
+    completedBy: input.access.userId,
+    outcomeCode: plan.outcomeCode,
+    nextActionCode: plan.nextActionCode,
+  })
+  batch.update(careRef, {
+    status: 'resolved',
+    resolvedAt: serverTimestamp(),
+    resolvedBy: input.access.userId,
+    resolutionCode: plan.careResolutionCode,
+    resolutionNote: '',
+  })
+  batch.set(followupFactRef, {
+    eventId: followupFactRef.id,
+    eventType: 'FOLLOWUP_COMPLETED',
+    occurredAt: serverTimestamp(),
+    recordedAt: serverTimestamp(),
+    organizationId: input.access.organizationId,
+    actorId: input.access.userId,
+    subjectRef: `person:${input.followup.personId}`,
+    sourceApp: 'nestjourney',
+    scope: `congregation:${input.followup.congregationId}`,
+    evidenceRef: `followup:${input.followup.id}`,
+    sensitivity: 'confidential',
+    version: 1,
+    payload: {
+      followupId: input.followup.id,
+      careRequestId: input.request.id,
+      personId: input.followup.personId,
+      outcomeCode: plan.outcomeCode,
+      nextActionCode: plan.nextActionCode,
+    },
+  })
+  batch.set(careFactRef, {
+    eventId: careFactRef.id,
+    eventType: 'CARE_RESOLVED',
+    occurredAt: serverTimestamp(),
+    recordedAt: serverTimestamp(),
+    organizationId: input.access.organizationId,
+    actorId: input.access.userId,
+    subjectRef: `person:${input.followup.personId}`,
+    sourceApp: 'nestjourney',
+    scope: `congregation:${input.followup.congregationId}`,
+    evidenceRef: `careRequest:${input.request.id}`,
+    sensitivity: 'confidential',
+    version: 1,
+    payload: {
+      careRequestId: input.request.id,
+      personId: input.followup.personId,
+      careType: input.request.careType,
+      resolutionCode: plan.careResolutionCode,
+    },
+  })
+  await batch.commit()
+  return plan
 }
 
 export async function createCareRequest(input: {
