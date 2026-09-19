@@ -96,6 +96,7 @@ export default function TeamSetupPage(){
   const capabilities=access?[
     [t.people,access.canManagePeople||access.broadJourneyAccess],
     [presenceName,access.canManagePresence],
+    [tableName,access.canManageMesa],
     [careName,access.canManageCare||access.broadJourneyAccess],
     [groupsName,access.canManageGroups||access.broadJourneyAccess],
     [rootName,access.canManageDiscipleship||access.broadJourneyAccess],
