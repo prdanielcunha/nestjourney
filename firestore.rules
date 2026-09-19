@@ -96,7 +96,7 @@ service cloud.firestore {
         : '';
       let journeyRole = active ? member.get('journeyRole', '') : '';
       let permissions = active ? member.get('permissions', {}) : {};
-      let congregationIds = active ? member.get('congregationIds', []) : [];
+      let congregationIds = active ? member.get('journeyCongregationIds', member.get('congregationIds', [])) : [];
       let privileged = isSystemAdmin() || isOwner(orgId);
       let broad = roleName in ['owner', 'admin', 'pastor'];
       let capable = privileged || (
@@ -131,7 +131,7 @@ service cloud.firestore {
         : '';
       let journeyRole = active ? member.get('journeyRole', '') : '';
       let permissions = active ? member.get('permissions', {}) : {};
-      let congregationIds = active ? member.get('congregationIds', []) : [];
+      let congregationIds = active ? member.get('journeyCongregationIds', member.get('congregationIds', [])) : [];
       let privileged = isSystemAdmin() || isOwner(orgId);
       let broad = roleName in ['owner', 'admin', 'pastor'];
       let capable = privileged || (
@@ -188,7 +188,7 @@ service cloud.firestore {
       let ownsGroup = groupData.get('leaderId', '') == request.auth.uid || groupData.get('createdBy', '') == request.auth.uid;
       let inScope = privileged || broad || (
         active
-        && groupData.get('congregationId', '') in memberData.get('congregationIds', [])
+        && groupData.get('congregationId', '') in memberData.get('journeyCongregationIds', memberData.get('congregationIds', []))
       );
       let allowed = privileged || (
         active
@@ -238,7 +238,7 @@ service cloud.firestore {
     }
     function assignedToCongregation(orgId, congregationId) {
       return membershipIsActive(orgId) && congregationId is string
-        && congregationId in membership(orgId).get('congregationIds', []);
+        && congregationId in membership(orgId).get('journeyCongregationIds', membership(orgId).get('congregationIds', []));
     }
     function canAccessCongregation(orgId, congregationId) {
       return hasProductAccess(orgId)
@@ -257,7 +257,7 @@ service cloud.firestore {
         active && (
           roleName in ['owner', 'admin', 'pastor', 'data_admin']
           || journeyRole == 'pastor'
-          || (congregationId is string && congregationId in memberData.get('congregationIds', []))
+          || (congregationId is string && congregationId in memberData.get('journeyCongregationIds', memberData.get('congregationIds', [])))
         )
       );
       let hasCareCapability = privileged || (
