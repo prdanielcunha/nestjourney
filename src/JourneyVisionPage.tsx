@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { ArrowRight, Building2, Eye, HeartHandshake, ShieldCheck, Users } from 'lucide-react'
+import { ArrowRight, Eye, ShieldCheck } from 'lucide-react'
 import { auth } from './firebase'
 import { evaluateCarePromise } from './intelligence'
 import {
@@ -10,7 +10,7 @@ import {
   listJourneyCongregations,
   listJourneyDiscipleships,
   listJourneyGroups,
-  listJourneyModuleLabels,
+  loadJourneyModuleLabels,
   listJourneyOrganizationsForSystemAdmin,
   listJourneyPeople,
   listPastoralHandoffs,
@@ -144,7 +144,7 @@ export default function JourneyVisionPage(){
   const loadOrganization=useCallback(async(userId:string,nextOrgId:string)=>{
     const nextAccess=await loadJourneyAccess(userId,nextOrgId)
     setScopeAccess(nextAccess)
-    setLabels(await listJourneyModuleLabels(nextOrgId))
+    setLabels(await loadJourneyModuleLabels(nextOrgId))
     const nextUnits=await listJourneyCongregations(nextAccess);setUnits(nextUnits)
     const nextUnit=nextUnits[0]?.id??'';setUnitId(nextUnit)
     if(nextUnit)await loadUnit(nextAccess,nextUnit)
