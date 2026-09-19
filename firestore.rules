@@ -307,6 +307,24 @@ service cloud.firestore {
         && exists(personPath)
         && get(personPath).data.get('congregationId', '') == congregationId;
     }
+    function canManageJourneySettings(orgId) {
+      return isSystemAdmin() || role(orgId, ['owner', 'admin', 'pastor']);
+    }
+    function validModuleLabels(orgId) {
+      let labels = request.resource.data.get('labels', {});
+      return request.resource.data.get('organizationId', '') == orgId
+        && labels is map
+        && labels.keys().hasOnly(['presence', 'table', 'care', 'groups', 'discipleship'])
+        && labels.get('presence', '') is string && labels.get('presence', '').size() <= 48
+        && labels.get('table', '') is string && labels.get('table', '').size() <= 48
+        && labels.get('care', '') is string && labels.get('care', '').size() <= 48
+        && labels.get('groups', '') is string && labels.get('groups', '').size() <= 48
+        && labels.get('discipleship', '') is string && labels.get('discipleship', '').size() <= 48
+        && request.resource.data.get('updatedAt', null) == request.time
+        && request.resource.data.get('updatedBy', '') == request.auth.uid
+        && request.resource.data.keys().hasOnly(['organizationId', 'labels', 'updatedAt', 'updatedBy']);
+    }
+
     function validMesaParticipationCreate(orgId, recordId) {
       let sessionId = request.resource.data.get('sessionId', '');
       let congregationId = request.resource.data.get('congregationId', '');
@@ -821,6 +839,17 @@ service cloud.firestore {
         allow read: if hasMembership(orgId);
         allow write: if false;
 
+        match /settings/{settingsId} {
+          allow read: if hasMembership(orgId);
+          allow create: if settingsId == 'moduleLabels'
+            && canManageJourneySettings(orgId)
+            && validModuleLabels(orgId);
+          allow update: if settingsId == 'moduleLabels'
+            && canManageJourneySettings(orgId)
+            && resource.data.get('organizationId', '') == orgId
+            && validModuleLabels(orgId);
+          allow delete: if false;
+        }
         match /congregations/{congregationId} {
           allow read: if canAccessCongregation(orgId, congregationId);
           allow create: if isOrgAdmin(orgId) && tenantCreate(orgId);
