@@ -13,6 +13,7 @@ import {
   listJourneyGroups,
   listJourneyPeople,
   listMesaParticipationRecords,
+  loadMesaPreparation,
   listPastoralHandoffs,
   listPresenceSessions,
   loadJourneyAccess,
@@ -24,6 +25,7 @@ import {
   type JourneyPastoralHandoff,
   type JourneyPersonRecord,
   type MesaParticipationRecord,
+  type MesaPreparationRecord,
   type PresenceSessionRecord,
 } from './journeyRepository'
 import { resolveJourneyResponsibility, type JourneyResponsibility } from './journeyExperience'
@@ -93,6 +95,7 @@ export default function MyTodayPage(){
   const [discipleships,setDiscipleships]=useState<JourneyDiscipleshipRecord[]>([])
   const [sessions,setSessions]=useState<PresenceSessionRecord[]>([])
   const [mesa,setMesa]=useState<MesaParticipationRecord[]>([])
+  const [mesaPreparation,setMesaPreparation]=useState<MesaPreparationRecord|null>(null)
   const [pastoralHandoffs,setPastoralHandoffs]=useState<JourneyPastoralHandoff[]>([])
   const [filter,setFilter]=useState<Filter>('all')
   const [loading,setLoading]=useState(true)
@@ -108,15 +111,16 @@ export default function MyTodayPage(){
   }):[],[access,people,care,groups,discipleships,sessions,pastoralHandoffs])
 
   const mesaPending=useMemo(()=>mesa.filter(x=>x.status==='invited'),[mesa])
+  const mesaPreparationPending=Boolean(access?.canManageMesa&&sessions.find(x=>x.status==='open')&&mesaPreparation?.status!=='ready')
   const visible=filter==='all'?items:filter==='mesa'?[]:items.filter(item=>filterFor(item.kind)===filter)
   const counts=useMemo(()=>({
     care:items.filter(item=>filterFor(item.kind)==='care').length,
     presence:items.filter(item=>filterFor(item.kind)==='presence').length,
-    mesa:mesaPending.length,
+    mesa:mesaPending.length+(mesaPreparationPending?1:0),
     groups:items.filter(item=>filterFor(item.kind)==='groups').length,
     discipleship:items.filter(item=>filterFor(item.kind)==='discipleship').length,
     pastoral:items.filter(item=>filterFor(item.kind)==='pastoral').length,
-  }),[items,mesaPending])
+  }),[items,mesaPending,mesaPreparationPending])
 
   const refreshScope=useCallback(async(nextAccess:JourneyAccessContext,unitId:string)=>{
     const [nextPeople,nextCare,nextSessions,nextGroups,nextDiscipleships,nextPastoral]=await Promise.all([
@@ -132,7 +136,15 @@ export default function MyTodayPage(){
       :nextGroups
     setPeople(nextPeople);setCare(nextCare);setSessions(nextSessions);setGroups(scopedGroups);setDiscipleships(nextDiscipleships);setPastoralHandoffs(nextPastoral)
     const mesaSession=nextSessions.find(x=>x.status==='open')??nextSessions[0]
-    setMesa(nextAccess.canManageMesa&&mesaSession?await listMesaParticipationRecords(nextAccess.organizationId,unitId,mesaSession.id):[])
+    if(nextAccess.canManageMesa&&mesaSession){
+      const [nextMesa,nextPreparation]=await Promise.all([
+        listMesaParticipationRecords(nextAccess.organizationId,unitId,mesaSession.id),
+        loadMesaPreparation(nextAccess.organizationId,unitId,mesaSession.id),
+      ])
+      setMesa(nextMesa);setMesaPreparation(nextPreparation)
+    }else{
+      setMesa([]);setMesaPreparation(null)
+    }
   },[])
 
   const bootstrap=useCallback(async()=>{
@@ -177,7 +189,7 @@ export default function MyTodayPage(){
   ].filter(Boolean) as Array<{href:string;label:string;Icon:typeof UserCheck}>
 
   const showMesa=filter==='all'||filter==='mesa'
-  const hasAnything=visible.length>0||(showMesa&&mesaPending.length>0)
+  const hasAnything=visible.length>0||(showMesa&&(mesaPending.length>0||mesaPreparationPending))
 
   return <main className="today-page"><div className="today-shell">
     <header className="today-topbar"><div className="today-brand"><img src="/icon.svg" alt=""/><span><strong>{t.product}</strong><small>{focus.title}</small></span></div><div className="today-actions"><a href="/journey-profile"><UserRound size={16}/>{t.profile}</a><select value={locale} aria-label="Language" onChange={event=>{const next=event.target.value as AppLocale;setLocale(next);persistLocale(next)}}>{(Object.keys(localeLabels) as AppLocale[]).map(id=><option value={id} key={id}>{localeLabels[id]}</option>)}</select></div></header>
@@ -210,6 +222,12 @@ export default function MyTodayPage(){
     </div>
 
     <section className="today-list">
+      {showMesa&&mesaPreparationPending?<article className="today-panel today-item">
+        <span className="today-icon warning"><UsersRound size={18}/></span>
+        <div className="today-item-body"><span className="today-item-kind">{labels.table||(locale==='en'?'Open Table':locale==='es'?'Mesa Abierta':'Mesa Aberta')}</span><h2>{locale==='en'?'Prepare the next Table':locale==='es'?'Preparar la próxima Mesa':'Preparar a próxima Mesa'}</h2><p>{locale==='en'?'Confirm environment, hosts, welcome, and simple supplies before the service.':locale==='es'?'Confirma ambiente, anfitriones, recepción y elementos simples antes del culto.':'Confirme ambiente, anfitriões, acolhimento e itens simples antes do culto.'}</p></div>
+        <a className="today-button" href="/mesa-runtime">{locale==='en'?'Prepare':locale==='es'?'Preparar':'Preparar'}</a>
+      </article>:null}
+
       {showMesa&&mesaPending.length>0?<article className="today-panel today-item">
         <span className="today-icon info"><UsersRound size={18}/></span>
         <div className="today-item-body"><span className="today-item-kind">{labels.table||(locale==='en'?'Open Table':locale==='es'?'Mesa Abierta':'Mesa Aberta')}</span><h2>{mesaPending.length} {locale==='en'?'guest(s) awaiting participation record':locale==='es'?'invitado(s) esperando registro de participación':'convidado(s) aguardando registro de participação'}</h2><p>{focusCopy[locale].mesa_team.body}</p></div>
