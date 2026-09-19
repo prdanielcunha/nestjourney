@@ -158,6 +158,14 @@ export interface MesaParticipationRecord {
   updatedBy: string
 }
 
+export interface JourneyModuleLabels {
+  presence?: string
+  table?: string
+  care?: string
+  groups?: string
+  discipleship?: string
+}
+
 export interface MinimalVisitorInput {
   organizationId: string
   congregationId: string
@@ -352,6 +360,53 @@ export async function loadJourneyAccess(userId: string, organizationId: string):
     canManagePastoral: isSystemAdmin || isOwner || PASTORAL_ROLES.has(role) || permissions.canManagePastoral === true,
     broadJourneyAccess: isSystemAdmin || isOwner || BROAD_JOURNEY_ROLES.has(role),
   }
+}
+
+export async function loadJourneyModuleLabels(organizationId: string): Promise<JourneyModuleLabels> {
+  const firestore = requireDb()
+  const ref = doc(firestore, `${journeyCollectionPath(organizationId, 'settings')}/moduleLabels`)
+  const snapshot = await getDoc(ref)
+  if (!snapshot.exists()) return {}
+  const labels = snapshot.data().labels
+  if (!labels || typeof labels !== 'object') return {}
+  const source = labels as Record<string, unknown>
+  const clean = (key: string) => {
+    const value = asString(source[key]).trim()
+    return value && value.length <= 48 ? value : undefined
+  }
+  return {
+    presence: clean('presence'),
+    table: clean('table'),
+    care: clean('care'),
+    groups: clean('groups'),
+    discipleship: clean('discipleship'),
+  }
+}
+
+export async function saveJourneyModuleLabels(access: JourneyAccessContext, labels: JourneyModuleLabels) {
+  const firestore = requireDb()
+  if (!(access.isSystemAdmin || access.isOwner || ['owner','admin','pastor'].includes(access.role))) {
+    throw new Error('settings_access_denied')
+  }
+  const normalize = (value: string | undefined) => String(value ?? '').trim().slice(0, 48)
+  const ref = doc(firestore, `${journeyCollectionPath(access.organizationId, 'settings')}/moduleLabels`)
+  const payload = {
+    organizationId: access.organizationId,
+    labels: {
+      presence: normalize(labels.presence),
+      table: normalize(labels.table),
+      care: normalize(labels.care),
+      groups: normalize(labels.groups),
+      discipleship: normalize(labels.discipleship),
+    },
+    updatedAt: serverTimestamp(),
+    updatedBy: access.userId,
+  }
+  const existing = await getDoc(ref)
+  const batch = writeBatch(firestore)
+  if (existing.exists()) batch.update(ref, payload)
+  else batch.set(ref, payload)
+  await batch.commit()
 }
 
 export async function listJourneyCongregations(access: JourneyAccessContext): Promise<JourneyCongregation[]> {
