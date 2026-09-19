@@ -1,89 +1,176 @@
-import { useCallback, useEffect, useState } from 'react'
-import { ArrowUpRight, ClipboardCheck, HeartHandshake, House, Leaf, ShieldCheck, UserCheck, Users } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import {
+  ArrowUpRight, Check, ClipboardCheck, HeartHandshake, House, Leaf,
+  Save, ShieldCheck, UserCheck, Users,
+} from 'lucide-react'
 import { auth } from './firebase'
-import { getActiveJourneyOrganizationId, loadJourneyAccess, type JourneyAccessContext } from './journeyRepository'
+import {
+  getActiveJourneyOrganizationId,
+  listJourneyCongregations,
+  listJourneyOrganizationMembers,
+  loadJourneyAccess,
+  type JourneyAccessContext,
+  type JourneyCongregation,
+  type JourneyOrganizationMember,
+} from './journeyRepository'
 import { getInitialLocale, localeLabels, persistLocale, type AppLocale } from './i18n'
 import { useJourneyLabels } from './journeyLabels'
 import './TeamSetupPage.css'
 
 const HUB_MEMBERS_URL='https://www.millionsnest.com/dashboard/organization/members'
 const HUB_ROLES_URL='https://www.millionsnest.com/dashboard/organization/roles'
+const HUB_API_BASE=(import.meta.env.VITE_MILLIONSNEST_URL||'https://www.millionsnest.com').replace(/\/$/,'')
+
+type Responsibility='member'|'presence_host'|'mesa_team'|'caregiver'|'group_leader'|'discipler'|'coordinator'|'pastor'
+type ResponsibilityDraft={responsibility:Responsibility;congregationIds:string[]}
+
+const responsibilityOrder:Responsibility[]=[
+  'member','presence_host','mesa_team','caregiver','group_leader','discipler','coordinator','pastor',
+]
+
+function responsibilityCopy(locale:AppLocale){
+  if(locale==='en')return{
+    member:['No operational responsibility','Uses only what is explicitly available to a regular member.'],
+    presence_host:['Presence Host','Next service, attendance, visitors, and real relationship registration.'],
+    mesa_team:['Table Team','Preparation, guests, participation, and relationship continuity.'],
+    caregiver:['Caregiver','Assigned contacts, 24–48h promise, outcome, and next step.'],
+    group_leader:['House Leader','Meetings, participants, guests, capacity, and operations for their house.'],
+    discipler:['Discipler','People accompanied, meeting 1–7, preparation, and next step.'],
+    coordinator:['Coordinator','Operational pending work, workload distribution, and team quality.'],
+    pastor:['Pastor','Care Debt, pastoral handoffs, and whole-journey pastoral vision.'],
+  } as const
+  if(locale==='es')return{
+    member:['Sin responsabilidad operativa','Usa solamente lo que está disponible para un miembro regular.'],
+    presence_host:['Anfitrión de Presencia','Próximo culto, presencia, visitantes y registro de vínculo real.'],
+    mesa_team:['Equipo de la Mesa','Preparación, invitados, participación y continuidad del vínculo.'],
+    caregiver:['Cuidador','Contactos asignados, plazo de 24–48h, resultado y próximo paso.'],
+    group_leader:['Líder de Casa','Encuentros, participantes, invitados, capacidad y operación de su Casa.'],
+    discipler:['Discipulador','Personas acompañadas, encuentro 1–7, preparación y próximo paso.'],
+    coordinator:['Coordinador','Pendientes operativos, distribución de carga y calidad del equipo.'],
+    pastor:['Pastor','Care Debt, derivaciones pastorales y visión pastoral de toda la jornada.'],
+  } as const
+  return{
+    member:['Sem função operacional','Usa apenas o que estiver liberado para um membro comum.'],
+    presence_host:['Anfitrião de Presença','Próximo culto, presença, visitantes e registro de vínculo real.'],
+    mesa_team:['Equipe da Mesa','Preparação, convidados, participação e continuidade do vínculo.'],
+    caregiver:['Cuidador','Contatos atribuídos, prazo de 24–48h, resultado e próximo passo.'],
+    group_leader:['Líder de Casa','Encontros, participantes, convidados, capacidade e operação da sua Casa.'],
+    discipler:['Discipulador','Pessoas acompanhadas, encontro 1–7, preparação e próximo passo.'],
+    coordinator:['Coordenador','Pendências operacionais, distribuição de carga e qualidade da equipe.'],
+    pastor:['Pastor','Care Debt, encaminhamentos pastorais e visão pastoral de toda a jornada.'],
+  } as const
+}
 
 const copy={
   'pt-BR':{
-    title:'Equipe & Papéis',subtitle:'Veja as frentes do NestJourney, quem precisa existir em cada uma e quais acessos o seu perfil possui.',
-    back:'Início',loading:'Carregando equipe…',unit:'Organização',yourAccess:'Seu acesso no NestJourney',role:'Papel atual',
-    full:'Acesso amplo',yes:'Permitido',no:'Sem acesso',members:'Membros & Convites',roles:'Cargos & Permissões',
-    hubNote:'Usuários, convites e cargos pertencem ao MillionsNest Hub. O NestJourney usa esse cadastro compartilhado e não cria uma segunda lista de pessoas.',
+    title:'Equipe & Papéis',subtitle:'Defina claramente quem faz o quê. Cada pessoa entra no NestJourney vendo somente o trabalho que depende dela.',
+    back:'Início',loading:'Carregando equipe…',yourAccess:'Seu acesso no NestJourney',
+    full:'Acesso amplo',yes:'Permitido',no:'Sem acesso',members:'Membros & Convites',roles:'Cargos da organização',
+    hubNote:'Identidade, convites e cargos da organização continuam no MillionsNest Hub. Aqui você define a responsabilidade operacional específica do NestJourney.',
     fronts:'Frentes do projeto',frontsDesc:'Estrutura inicial baseada nos manuais do Raiz e Mesa. Comece pequeno e aumente conforme a cultura amadurecer.',
     pastor:'Pastor guardião',pastorDesc:'Guarda visão, doutrina, segurança, correção e casos sensíveis.',pastorSize:'1 pastor + 1 auxiliar de referência',
-    presence:'Equipe Presença',presenceDesc:'Coordenador, anfitrião de entrada, salão e vínculo. Recebe, nota, conecta e acompanha.',presenceSize:'Ideal inicial: 4–6 pessoas',
-    table:'Mesa Aberta',tableDesc:'Prepara o ambiente simples e ajuda a igreja a permanecer, conversar e criar vínculos.',tableSize:'Ideal inicial: 3–5 pessoas',
-    care:'Cuidado & Conexão',careDesc:'Garante contato autorizado em 24–48h, acompanha respostas e encaminha próximos passos.',careSize:'Ideal inicial: 3–4 pessoas',
+    presence:'Equipe Presença',presenceDesc:'Recebe, nota, conecta e acompanha sem transformar pessoas em números.',presenceSize:'Ideal inicial: 4–6 pessoas',
+    table:'Mesa Aberta',tableDesc:'Prepara um ambiente simples para permanência, conversa e vínculo.',tableSize:'Ideal inicial: 3–5 pessoas',
+    care:'Cuidado & Conexão',careDesc:'Garante contato autorizado em 24–48h e registra resultado e próximo passo.',careSize:'Ideal inicial: 3–4 pessoas',
     houses:'Casa de Paz',housesDesc:'Líder, anfitrião e aprendiz para comunidade pequena, Bíblia, conversa e oração.',housesSize:'Por Casa: 2–4 pessoas na equipe',
     root:'Raiz',rootDesc:'Discipuladores preparados para caminhar 1:1 ou 1:2 durante os sete encontros iniciais.',rootSize:'Ideal: 2 relações ativas por discipulador',
     capabilities:'O que você consegue operar',people:'Pessoas',implementation:'Implantação',privacy:'Privacidade & Auditoria',pastoralView:'Visão Pastoral',
-    guidance:'Próximo passo',guidanceText:'Se a equipe ainda não foi formada, volte para Implantação. A preparação e as semanas indicam quando ativar cada frente.',
-    error:'Não foi possível carregar seu acesso.'
+    responsibilities:'Responsabilidades no NestJourney',responsibilitiesDesc:'O cargo no Hub diz a autoridade na organização. A função abaixo diz o que esta pessoa encontra e opera dentro do NestJourney.',
+    orgAccess:'Acesso amplo pela organização',orgAccessDesc:'Dono e administrador continuam vendo todas as áreas, independentemente de uma função operacional.',
+    scope:'Unidades em que serve',scopeHint:'Selecione ao menos uma unidade para funções operacionais. Pastor possui visão ampla da organização.',
+    save:'Salvar função',saved:'Função atualizada.',saving:'Salvando…',chooseScope:'Escolha ao menos uma unidade.',emptyMembers:'Nenhum membro ativo encontrado.',
+    guidance:'Próximo passo',guidanceText:'Depois de definir as funções, cada pessoa pode abrir Hoje e receber uma experiência própria, sem precisar aprender o sistema inteiro.',
+    error:'Não foi possível carregar ou atualizar a equipe.'
   },
   en:{
-    title:'Team & Roles',subtitle:'See NestJourney ministry fronts, the people each one needs, and the access your profile currently has.',
-    back:'Home',loading:'Loading team…',unit:'Organization',yourAccess:'Your NestJourney access',role:'Current role',
-    full:'Broad access',yes:'Allowed',no:'No access',members:'Members & Invites',roles:'Roles & Permissions',
-    hubNote:'Users, invitations, and organization roles belong to MillionsNest Hub. NestJourney uses that shared identity and does not create a second people directory.',
+    title:'Team & Roles',subtitle:'Define clearly who does what. Each person enters NestJourney seeing only the work that depends on them.',
+    back:'Home',loading:'Loading team…',yourAccess:'Your NestJourney access',
+    full:'Broad access',yes:'Allowed',no:'No access',members:'Members & Invites',roles:'Organization roles',
+    hubNote:'Identity, invitations, and organization roles stay in MillionsNest Hub. Here you define each person’s NestJourney operational responsibility.',
     fronts:'Ministry fronts',frontsDesc:'Initial structure based on the Raiz e Mesa manuals. Start small and expand as the culture matures.',
     pastor:'Pastoral guardian',pastorDesc:'Protects vision, doctrine, safety, correction, and sensitive cases.',pastorSize:'1 pastor + 1 reference assistant',
-    presence:'Welcome Team',presenceDesc:'Coordinator plus entrance, hall, and relationship hosts. Welcomes, notices, connects, and follows people.',presenceSize:'Initial ideal: 4–6 people',
-    table:'Open Table',tableDesc:'Prepares a simple environment and helps the church stay, talk, and form relationships.',tableSize:'Initial ideal: 3–5 people',
-    care:'Care & Connection',careDesc:'Ensures authorized contact within 24–48h, follows responses, and routes next steps.',careSize:'Initial ideal: 3–4 people',
+    presence:'Presence Team',presenceDesc:'Welcomes, notices, connects, and follows people without turning them into numbers.',presenceSize:'Initial ideal: 4–6 people',
+    table:'Open Table',tableDesc:'Prepares a simple place for people to stay, talk, and form relationships.',tableSize:'Initial ideal: 3–5 people',
+    care:'Care & Connection',careDesc:'Ensures authorized contact within 24–48h and records outcome and next step.',careSize:'Initial ideal: 3–4 people',
     houses:'Peace House',housesDesc:'Leader, host, and apprentice for small community, Bible, conversation, and prayer.',housesSize:'Per house: 2–4 team members',
-    root:'Root',rootDesc:'Prepared disciplers walking 1:1 or 1:2 through the seven initial meetings.',rootSize:'Ideal: 2 active relationships per discipler',
+    root:'Root',rootDesc:'Prepared disciplers walking 1:1 or 1:2 through seven initial meetings.',rootSize:'Ideal: 2 active relationships per discipler',
     capabilities:'What you can operate',people:'People',implementation:'Implementation',privacy:'Privacy & Audit',pastoralView:'Pastoral View',
-    guidance:'Next step',guidanceText:'If the team is not formed yet, return to Implementation. Preparation and the weeks show when each front should start.',
-    error:'Your access could not be loaded.'
+    responsibilities:'NestJourney responsibilities',responsibilitiesDesc:'The Hub role defines organization authority. The responsibility below defines what this person sees and operates inside NestJourney.',
+    orgAccess:'Broad organization access',orgAccessDesc:'Owners and administrators keep access to every area regardless of an operational responsibility.',
+    scope:'Campuses served',scopeHint:'Select at least one campus for operational roles. Pastor has organization-wide vision.',
+    save:'Save responsibility',saved:'Responsibility updated.',saving:'Saving…',chooseScope:'Choose at least one campus.',emptyMembers:'No active members found.',
+    guidance:'Next step',guidanceText:'After responsibilities are defined, each person can open Today and receive their own experience without learning the whole system.',
+    error:'The team could not be loaded or updated.'
   },
   es:{
-    title:'Equipo & Papeles',subtitle:'Ve los frentes de NestJourney, quién necesita existir en cada uno y los accesos que tiene tu perfil.',
-    back:'Inicio',loading:'Cargando equipo…',unit:'Organización',yourAccess:'Tu acceso en NestJourney',role:'Papel actual',
-    full:'Acceso amplio',yes:'Permitido',no:'Sin acceso',members:'Miembros & Invitaciones',roles:'Cargos & Permisos',
-    hubNote:'Usuarios, invitaciones y cargos pertenecen al MillionsNest Hub. NestJourney usa esa identidad compartida y no crea una segunda lista de personas.',
+    title:'Equipo & Papeles',subtitle:'Define con claridad quién hace qué. Cada persona entra en NestJourney viendo solo el trabajo que depende de ella.',
+    back:'Inicio',loading:'Cargando equipo…',yourAccess:'Tu acceso en NestJourney',
+    full:'Acceso amplio',yes:'Permitido',no:'Sin acceso',members:'Miembros & Invitaciones',roles:'Cargos de la organización',
+    hubNote:'Identidad, invitaciones y cargos siguen en MillionsNest Hub. Aquí defines la responsabilidad operativa específica de NestJourney.',
     fronts:'Frentes del proyecto',frontsDesc:'Estructura inicial basada en los manuales de Raiz e Mesa. Empieza pequeño y crece con la cultura.',
     pastor:'Pastor guardián',pastorDesc:'Guarda visión, doctrina, seguridad, corrección y casos sensibles.',pastorSize:'1 pastor + 1 auxiliar de referencia',
-    presence:'Equipo Recepción',presenceDesc:'Coordinador y anfitriones de entrada, salón y vínculo. Recibe, conecta y acompaña.',presenceSize:'Ideal inicial: 4–6 personas',
-    table:'Mesa Abierta',tableDesc:'Prepara un ambiente simple y ayuda a la iglesia a permanecer, conversar y crear vínculos.',tableSize:'Ideal inicial: 3–5 personas',
-    care:'Cuidado & Conexión',careDesc:'Garantiza contacto autorizado en 24–48h, acompaña respuestas y dirige próximos pasos.',careSize:'Ideal inicial: 3–4 personas',
-    houses:'Casa de Paz',housesDesc:'Líder, anfitrión y aprendiz para comunidad pequeña, Biblia, conversación y oración.',housesSize:'Por Casa: 2–4 personas en el equipo',
-    root:'Raíz',rootDesc:'Discipuladores preparados para caminar 1:1 o 1:2 durante los siete encuentros iniciales.',rootSize:'Ideal: 2 relaciones activas por discipulador',
+    presence:'Equipo Presencia',presenceDesc:'Recibe, observa, conecta y acompaña sin convertir personas en números.',presenceSize:'Ideal inicial: 4–6 personas',
+    table:'Mesa Abierta',tableDesc:'Prepara un ambiente simple para permanecer, conversar y crear vínculos.',tableSize:'Ideal inicial: 3–5 personas',
+    care:'Cuidado & Conexión',careDesc:'Garantiza contacto autorizado en 24–48h y registra resultado y próximo paso.',careSize:'Ideal inicial: 3–4 personas',
+    houses:'Casa de Paz',housesDesc:'Líder, anfitrión y aprendiz para comunidad pequeña, Biblia, conversación y oración.',housesSize:'Por Casa: 2–4 personas',
+    root:'Raíz',rootDesc:'Discipuladores preparados para caminar 1:1 o 1:2 durante siete encuentros.',rootSize:'Ideal: 2 relaciones activas por discipulador',
     capabilities:'Lo que puedes operar',people:'Personas',implementation:'Implementación',privacy:'Privacidad & Auditoría',pastoralView:'Visión Pastoral',
-    guidance:'Próximo paso',guidanceText:'Si el equipo aún no está formado, vuelve a Implementación. La preparación y las semanas indican cuándo activar cada frente.',
-    error:'No se pudo cargar tu acceso.'
+    responsibilities:'Responsabilidades en NestJourney',responsibilitiesDesc:'El cargo en Hub define autoridad organizacional. La función abajo define lo que esta persona ve y opera dentro de NestJourney.',
+    orgAccess:'Acceso amplio por la organización',orgAccessDesc:'Dueño y administrador siguen viendo todas las áreas sin depender de una función operativa.',
+    scope:'Sedes donde sirve',scopeHint:'Selecciona al menos una sede para funciones operativas. Pastor tiene visión amplia de la organización.',
+    save:'Guardar función',saved:'Función actualizada.',saving:'Guardando…',chooseScope:'Elige al menos una sede.',emptyMembers:'No se encontraron miembros activos.',
+    guidance:'Próximo paso',guidanceText:'Después de definir las funciones, cada persona puede abrir Hoy y recibir su propia experiencia sin aprender todo el sistema.',
+    error:'No se pudo cargar o actualizar el equipo.'
   }
 } as const
 
 export default function TeamSetupPage(){
   const [locale,setLocale]=useState<AppLocale>(getInitialLocale)
   const t=copy[locale]
-  const { labels } = useJourneyLabels()
+  const responsibilities=responsibilityCopy(locale)
+  const { labels }=useJourneyLabels()
   const presenceName=labels.presence||t.presence
   const tableName=labels.table||t.table
   const careName=labels.care||t.care
   const groupsName=labels.groups||t.houses
   const rootName=labels.discipleship||t.root
   const [access,setAccess]=useState<JourneyAccessContext|null>(null)
+  const [members,setMembers]=useState<JourneyOrganizationMember[]>([])
+  const [congregations,setCongregations]=useState<JourneyCongregation[]>([])
+  const [drafts,setDrafts]=useState<Record<string,ResponsibilityDraft>>({})
+  const [savingId,setSavingId]=useState('')
+  const [savedId,setSavedId]=useState('')
   const [loading,setLoading]=useState(true)
   const [error,setError]=useState('')
+
+  const canAssign=Boolean(access&&(access.isSystemAdmin||access.isOwner||['owner','admin'].includes(access.organizationRole)))
 
   const bootstrap=useCallback(async()=>{
     setLoading(true);setError('')
     try{
       const user=auth?.currentUser,organizationId=getActiveJourneyOrganizationId()
       if(!user||!organizationId)throw new Error('missing_ecosystem_context')
-      setAccess(await loadJourneyAccess(user.uid,organizationId))
+      const nextAccess=await loadJourneyAccess(user.uid,organizationId)
+      setAccess(nextAccess)
+      const canManage=nextAccess.isSystemAdmin||nextAccess.isOwner||['owner','admin'].includes(nextAccess.organizationRole)
+      if(canManage){
+        const [nextMembers,nextCongregations]=await Promise.all([
+          listJourneyOrganizationMembers(nextAccess),
+          listJourneyCongregations(nextAccess),
+        ])
+        setMembers(nextMembers)
+        setCongregations(nextCongregations)
+        setDrafts(Object.fromEntries(nextMembers.map(member=>[
+          member.id,
+          {
+            responsibility:(responsibilityOrder.includes(member.journeyRole as Responsibility)?member.journeyRole:'member') as Responsibility,
+            congregationIds:member.congregationIds,
+          },
+        ])))
+      }
     }catch(cause){console.error(cause);setError(t.error)}finally{setLoading(false)}
   },[t.error])
   useEffect(()=>{void bootstrap()},[bootstrap])
-
-  if(loading)return <main className="team-setup"><div className="team-loading">{t.loading}</div></main>
 
   const fronts=[
     {icon:ShieldCheck,title:t.pastor,description:t.pastorDesc,size:t.pastorSize},
@@ -105,14 +192,107 @@ export default function TeamSetupPage(){
     [t.privacy,access.canViewGovernance],
   ]:[]
 
+  const memberById=useMemo(()=>new Map(members.map(member=>[member.id,member])),[members])
+
+  function setResponsibility(memberId:string,responsibility:Responsibility){
+    setSavedId('')
+    setDrafts(current=>({
+      ...current,
+      [memberId]:{
+        responsibility,
+        congregationIds:current[memberId]?.congregationIds??[],
+      },
+    }))
+  }
+
+  function toggleCongregation(memberId:string,congregationId:string){
+    setSavedId('')
+    setDrafts(current=>{
+      const draft=current[memberId]??{responsibility:'member' as Responsibility,congregationIds:[]}
+      const congregationIds=draft.congregationIds.includes(congregationId)
+        ?draft.congregationIds.filter(id=>id!==congregationId)
+        :[...draft.congregationIds,congregationId]
+      return{...current,[memberId]:{...draft,congregationIds}}
+    })
+  }
+
+  async function saveResponsibility(memberId:string){
+    if(!access||!canAssign)return
+    const user=auth?.currentUser
+    const draft=drafts[memberId]
+    if(!user||!draft)return
+    if(!['member','pastor'].includes(draft.responsibility)&&draft.congregationIds.length===0){
+      setError(t.chooseScope);return
+    }
+    setSavingId(memberId);setSavedId('');setError('')
+    try{
+      const token=await user.getIdToken()
+      const response=await fetch(
+        `${HUB_API_BASE}/api/v1/organizations/${encodeURIComponent(access.organizationId)}/members/${encodeURIComponent(memberId)}/nestjourney-responsibility`,
+        {
+          method:'PATCH',
+          headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},
+          body:JSON.stringify({
+            responsibility:draft.responsibility,
+            congregationIds:draft.responsibility==='pastor'?[]:draft.congregationIds,
+          }),
+        },
+      )
+      const data=await response.json().catch(()=>({}))
+      if(!response.ok||data?.success!==true)throw new Error(data?.reasonCode||'RESPONSIBILITY_UPDATE_FAILED')
+      setMembers(current=>current.map(member=>member.id===memberId?{
+        ...member,
+        journeyRole:draft.responsibility,
+        congregationIds:draft.responsibility==='pastor'?[]:draft.congregationIds,
+      }:member))
+      setSavedId(memberId)
+    }catch(cause){console.error(cause);setError(t.error)}
+    finally{setSavingId('')}
+  }
+
+  if(loading)return <main className="team-setup"><div className="team-loading">{t.loading}</div></main>
+
   return <main className="team-setup"><div className="team-shell">
     <header className="team-topbar"><div><span className="team-kicker">NestJourney / Team</span><h1>{t.title}</h1><p>{t.subtitle}</p></div><select value={locale} onChange={e=>{const next=e.target.value as AppLocale;setLocale(next);persistLocale(next)}}>{(Object.keys(localeLabels) as AppLocale[]).map(id=><option value={id} key={id}>{localeLabels[id]}</option>)}</select></header>
     {error?<div className="team-error">{error}</div>:null}
+
     <section className="team-access-card">
       <div><span className="team-kicker">{t.yourAccess}</span><h2>{access?.isSystemAdmin||access?.isOwner?t.full:(access?.role||'—')}</h2><p>{t.hubNote}</p></div>
       <div className="team-hub-actions"><a href={HUB_MEMBERS_URL}>{t.members}<ArrowUpRight size={15}/></a><a href={HUB_ROLES_URL}>{t.roles}<ArrowUpRight size={15}/></a></div>
     </section>
+
     <section className="team-capabilities"><div className="team-section-heading"><span className="team-kicker">{t.capabilities}</span></div><div>{capabilities.map(([label,allowed])=><span className={allowed?'allowed':'blocked'} key={String(label)}><b>{String(label)}</b><small>{allowed?t.yes:t.no}</small></span>)}</div></section>
+
+    {canAssign?<section className="team-section team-responsibility-section">
+      <div className="team-section-heading"><span className="team-kicker">{t.responsibilities}</span><h2>{t.responsibilities}</h2><p>{t.responsibilitiesDesc}</p></div>
+      <div className="team-member-list">
+        {members.map(member=>{
+          const orgWide=['owner','admin'].includes(member.organizationRole)
+          const draft=drafts[member.id]??{responsibility:'member' as Responsibility,congregationIds:[]}
+          const roleMeta=responsibilities[draft.responsibility]
+          const changed=!orgWide&&(
+            draft.responsibility!==member.journeyRole ||
+            draft.congregationIds.join('|')!==member.congregationIds.join('|')
+          )
+          return <article className="team-member-card" key={member.id}>
+            <div className="team-member-identity"><span className="team-member-avatar">{member.name.split(' ').filter(Boolean).map(part=>part[0]).slice(0,2).join('').toUpperCase()}</span><div><strong>{member.name}</strong><small>{member.email||member.organizationRole}</small></div></div>
+            {orgWide?<div className="team-org-wide"><ShieldCheck size={17}/><div><strong>{t.orgAccess}</strong><small>{t.orgAccessDesc}</small></div></div>:<>
+              <div className="team-role-editor">
+                <label><span>{t.role}</span><select value={draft.responsibility} disabled={savingId===member.id} onChange={e=>setResponsibility(member.id,e.target.value as Responsibility)}>{responsibilityOrder.map(role=><option key={role} value={role}>{responsibilities[role][0]}</option>)}</select></label>
+                <p>{roleMeta[1]}</p>
+              </div>
+              {draft.responsibility!=='member'&&draft.responsibility!=='pastor'?<div className="team-scope-editor"><span>{t.scope}</span><div>{congregations.map(unit=>{
+                const selected=draft.congregationIds.includes(unit.id)
+                return <button type="button" className={selected?'selected':''} key={unit.id} disabled={savingId===member.id} onClick={()=>toggleCongregation(member.id,unit.id)}>{selected?<Check size={13}/>:null}{unit.name}</button>
+              })}</div><small>{t.scopeHint}</small></div>:null}
+              <div className="team-member-actions"><span>{savedId===member.id?t.saved:''}</span><button className="team-save-button" disabled={!changed||savingId===member.id} onClick={()=>void saveResponsibility(member.id)}><Save size={14}/>{savingId===member.id?t.saving:t.save}</button></div>
+            </>}
+          </article>
+        })}
+        {!members.length?<div className="team-empty">{t.emptyMembers}</div>:null}
+      </div>
+    </section>:null}
+
     <section className="team-section"><div className="team-section-heading"><span className="team-kicker">{t.fronts}</span><h2>{t.fronts}</h2><p>{t.frontsDesc}</p></div><div className="team-front-grid">{fronts.map(item=>{const Icon=item.icon;return <article key={item.title}><span><Icon size={18}/></span><div><strong>{item.title}</strong><p>{item.description}</p><small>{item.size}</small></div></article>})}</div></section>
     <section className="team-guidance"><ClipboardCheck size={20}/><div><strong>{t.guidance}</strong><p>{t.guidanceText}</p></div><a href="/implementation-runtime">{t.implementation}<ArrowUpRight size={14}/></a></section>
   </div></main>
