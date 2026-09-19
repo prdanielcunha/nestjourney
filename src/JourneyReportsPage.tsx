@@ -74,10 +74,10 @@ export default function JourneyReportsPage(){
   const loadScope=useCallback(async(nextAccess:JourneyAccessContext,nextUnit:string)=>{
     const [p,c,s,g,d,h]=await Promise.all([
       listJourneyPeople(nextAccess.organizationId,nextUnit),
-      listCareRequests(nextAccess.organizationId,nextUnit),
-      listPresenceSessions(nextAccess.organizationId,nextUnit),
-      listJourneyGroups(nextAccess.organizationId,nextUnit),
-      listJourneyDiscipleships(nextAccess,nextUnit),
+      nextAccess.canManageCare||nextAccess.broadJourneyAccess?listCareRequests(nextAccess.organizationId,nextUnit):Promise.resolve([]),
+      nextAccess.canManagePresence||nextAccess.canManageMesa?listPresenceSessions(nextAccess.organizationId,nextUnit):Promise.resolve([]),
+      nextAccess.canManageGroups||nextAccess.broadJourneyAccess?listJourneyGroups(nextAccess.organizationId,nextUnit):Promise.resolve([]),
+      nextAccess.canManageDiscipleship||nextAccess.broadJourneyAccess?listJourneyDiscipleships(nextAccess,nextUnit):Promise.resolve([]),
       nextAccess.canManagePastoral?listPastoralHandoffs(nextAccess.organizationId,nextUnit):Promise.resolve([]),
     ])
     setPeople(p);setCare(c);setSessions(s);setGroups(g);setDiscipleships(d);setPastoral(h)
