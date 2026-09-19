@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { CheckCircle2, ChevronLeft, Leaf, Pause, Play, Plus, ShieldCheck, X } from 'lucide-react'
+import { BookOpen, CheckCircle2, ChevronLeft, Leaf, Pause, Play, Plus, ShieldCheck, X } from 'lucide-react'
 import { auth } from './firebase'
 import {
   createJourneyDiscipleship,
@@ -56,10 +56,17 @@ export default function DiscipleshipRuntimePage(){
     {error?<div className="runtime-error">{error}</div>:null}
     <section className="runtime-panel runtime-toolbar"><label><span>{t.congregation}</span><select value={congregationId} disabled={busy} onChange={e=>void selectUnit(e.target.value)}>{congregations.map(x=><option key={x.id} value={x.id}>{x.name}{x.city?` · ${x.city}`:''}</option>)}</select></label></section>
     <section className="runtime-grid">
-      {items.map(item=><article className="runtime-panel runtime-card" key={item.id}><div className="runtime-card-head"><span className="runtime-icon"><Leaf size={18}/></span><div><h2>{item.personName||item.personId}</h2><p>{t.discipler}: {item.disciplerName||item.disciplerId}</p></div><span className={`runtime-badge ${item.status==='paused'?'attention':''}`}>{item.status==='completed'?t.completed:item.status==='paused'?t.paused:t.active}</span></div>
+      {items.map(item=>{
+        const prep=locale==='en'
+          ? {title:'Prepare this meeting',items:['Pray before the conversation','Review the official material for this meeting','Prepare open questions and listen without rushing','Do not record intimate or sensitive narratives']}
+          : locale==='es'
+            ? {title:'Prepara este encuentro',items:['Ora antes de la conversación','Revisa el material oficial de este encuentro','Prepara preguntas abiertas y escucha sin prisa','No registres relatos íntimos o sensibles']}
+            : {title:'Prepare este encontro',items:['Ore antes da conversa','Revise o material oficial deste encontro','Prepare perguntas abertas e escute sem pressa','Não registre relatos íntimos ou sensíveis']}
+        return <article className="runtime-panel runtime-card" key={item.id}><div className="runtime-card-head"><span className="runtime-icon"><Leaf size={18}/></span><div><h2>{item.personName||item.personId}</h2><p>{t.discipler}: {item.disciplerName||item.disciplerId}</p></div><span className={`runtime-badge ${item.status==='paused'?'attention':''}`}>{item.status==='completed'?t.completed:item.status==='paused'?t.paused:t.active}</span></div>
         <div className="runtime-progress"><span><small>{t.meeting}</small><strong>{item.meeting}/7</strong></span><div><i style={{width:`${Math.min(100,item.meeting/7*100)}%`}}/></div></div><p className="runtime-next"><b>{t.next}:</b> {item.nextMeeting||'—'}</p>
+        {item.status!=='completed'?<div className="runtime-preparation"><span><BookOpen size={15}/><strong>{prep.title} · {item.meeting}/7</strong></span><ul>{prep.items.map(step=><li key={step}>{step}</li>)}</ul></div>:null}
         <div className="runtime-card-actions">{item.status!=='completed'?<><button className="runtime-button primary" disabled={busy||item.status==='paused'} onClick={()=>void act(item,'advance')}><CheckCircle2 size={16}/>{t.advance}</button>{item.status==='paused'?<button className="runtime-button" disabled={busy} onClick={()=>void act(item,'resume')}><Play size={16}/>{t.resume}</button>:<button className="runtime-button" disabled={busy} onClick={()=>void act(item,'pause')}><Pause size={16}/>{t.pause}</button>}</>:null}</div>
-      </article>)}
+      </article>})}
       {!items.length?<div className="runtime-panel runtime-empty">{t.empty}</div>:null}
     </section><p className="runtime-rule"><ShieldCheck size={15}/>{t.sourceRule}</p>
   </div>
