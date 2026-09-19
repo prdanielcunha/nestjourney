@@ -621,6 +621,38 @@ service cloud.firestore {
         && status in ['active', 'paused', 'completed']
         && (status != 'completed' || meeting == 7);
     }
+    function validFollowupCanonicalFact(orgId, factId, eventType, payload) {
+      let careRequestId = payload.get('careRequestId', '');
+      let personId = payload.get('personId', '');
+      return followupId is string
+        && followupId.size() > 0
+        && existsAfter(followupPath)
+        && getAfter(followupPath).data.get('personId', '') == personId
+        && getAfter(followupPath).data.get('careRequestId', '') == careRequestId
+        && request.resource.data.get('subjectRef', '') == 'person:' + personId
+        && request.resource.data.get('evidenceRef', '') == 'followup:' + followupId
+        && request.resource.data.get('scope', '') == 'congregation:' + getAfter(followupPath).data.get('congregationId', '')
+        && (
+          (
+            eventType == 'FOLLOWUP_CREATED'
+            && factId == 'followup-created-' + followupId
+            && getAfter(followupPath).data.get('status', '') == 'pending'
+            && getAfter(followupPath).data.get('createdAt', null) == request.time
+            && getAfter(followupPath).data.get('createdBy', '') == request.auth.uid
+          )
+          ||
+          (
+            eventType == 'FOLLOWUP_COMPLETED'
+            && factId == 'followup-completed-' + followupId
+            && getAfter(followupPath).data.get('status', '') == 'completed'
+            && getAfter(followupPath).data.get('completedAt', null) == request.time
+            && getAfter(followupPath).data.get('completedBy', '') == request.auth.uid
+            && getAfter(followupPath).data.get('outcomeCode', '') == payload.get('outcomeCode', '')
+            && getAfter(followupPath).data.get('nextActionCode', '') == payload.get('nextActionCode', '')
+          )
+        );
+    }
+
     function validCanonicalFact(orgId, factId) {
       let eventType = request.resource.data.get('eventType', '');
       let payload = request.resource.data.get('payload', {});
@@ -718,35 +750,10 @@ service cloud.firestore {
             && request.resource.data.get('evidenceRef', '') == 'careRequest:' + careRequestId
             && request.resource.data.get('scope', '') == 'congregation:' + getAfter(carePath).data.get('congregationId', ''))
           ||
-          (eventType == 'FOLLOWUP_CREATED'
-            && followupId is string
-            && followupId.size() > 0
-            && factId == 'followup-created-' + followupId
-            && existsAfter(followupPath)
-            && getAfter(followupPath).data.get('status', '') == 'pending'
-            && getAfter(followupPath).data.get('createdAt', null) == request.time
-            && getAfter(followupPath).data.get('createdBy', '') == request.auth.uid
-            && getAfter(followupPath).data.get('personId', '') == personId
-            && getAfter(followupPath).data.get('careRequestId', '') == careRequestId
-            && request.resource.data.get('subjectRef', '') == 'person:' + personId
-            && request.resource.data.get('evidenceRef', '') == 'followup:' + followupId
-            && request.resource.data.get('scope', '') == 'congregation:' + getAfter(followupPath).data.get('congregationId', ''))
-          ||
-          (eventType == 'FOLLOWUP_COMPLETED'
-            && followupId is string
-            && followupId.size() > 0
-            && factId == 'followup-completed-' + followupId
-            && existsAfter(followupPath)
-            && getAfter(followupPath).data.get('status', '') == 'completed'
-            && getAfter(followupPath).data.get('completedAt', null) == request.time
-            && getAfter(followupPath).data.get('completedBy', '') == request.auth.uid
-            && getAfter(followupPath).data.get('personId', '') == personId
-            && getAfter(followupPath).data.get('careRequestId', '') == careRequestId
-            && getAfter(followupPath).data.get('outcomeCode', '') == payload.get('outcomeCode', '')
-            && getAfter(followupPath).data.get('nextActionCode', '') == payload.get('nextActionCode', '')
-            && request.resource.data.get('subjectRef', '') == 'person:' + personId
-            && request.resource.data.get('evidenceRef', '') == 'followup:' + followupId
-            && request.resource.data.get('scope', '') == 'congregation:' + getAfter(followupPath).data.get('congregationId', ''))
+          (
+            eventType in ['FOLLOWUP_CREATED', 'FOLLOWUP_COMPLETED']
+            && validFollowupCanonicalFact(orgId, factId, eventType, payload)
+          )
         );
     }
 
