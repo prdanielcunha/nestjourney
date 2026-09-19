@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { ArrowUpRight, HeartHandshake, House, Leaf, ShieldCheck, UserCheck, Users } from 'lucide-react'
+import { ArrowUpRight, ClipboardCheck, HeartHandshake, House, Leaf, ShieldCheck, UserCheck, Users } from 'lucide-react'
 import { auth } from './firebase'
 import { getActiveJourneyOrganizationId, loadJourneyAccess, type JourneyAccessContext } from './journeyRepository'
 import { getInitialLocale, localeLabels, persistLocale, type AppLocale } from './i18n'
