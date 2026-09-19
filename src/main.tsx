@@ -2,6 +2,7 @@ import { StrictMode, Suspense, lazy, useEffect, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
 import { EcosystemSessionGate } from './EcosystemSessionGate.tsx'
+import { JourneyShell } from './JourneyShell.tsx'
 import { resolveJourneyRoute } from './routeResolver'
 
 const PresenceAssistPage = lazy(() => import('./PresenceAssistPage.tsx'))
@@ -93,9 +94,11 @@ function RouteFallback() {
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <EcosystemSessionGate>
-      <Suspense fallback={<RouteFallback />}>
-        <JourneyRoute />
-      </Suspense>
+      <JourneyShell>
+        <Suspense fallback={<RouteFallback />}>
+          <JourneyRoute />
+        </Suspense>
+      </JourneyShell>
     </EcosystemSessionGate>
   </StrictMode>,
 )
