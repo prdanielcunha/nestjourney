@@ -6,6 +6,12 @@ import { JourneyShell } from './JourneyShell.tsx'
 import { JourneyLabelsProvider } from './journeyLabels.tsx'
 import { resolveJourneyRoute } from './routeResolver'
 
+const AreasPage = lazy(() => import('./AreasPage.tsx'))
+const MesaRuntimePage = lazy(() => import('./MesaRuntimePage.tsx'))
+const JourneyVisionPage = lazy(() => import('./JourneyVisionPage.tsx'))
+const MorePage = lazy(() => import('./MorePage.tsx'))
+const JourneyReportsPage = lazy(() => import('./JourneyReportsPage.tsx'))
+const HelpPage = lazy(() => import('./HelpPage.tsx'))
 const PresenceAssistPage = lazy(() => import('./PresenceAssistPage.tsx'))
 const CareIntegrityPage = lazy(() => import('./CareIntegrityPage.tsx'))
 const FollowupRuntimePage = lazy(() => import('./FollowupRuntimePage.tsx'))
@@ -64,6 +70,18 @@ function JourneyRoute() {
   }, [])
 
   switch (resolveJourneyRoute(pathname)) {
+    case 'areas':
+      return <AreasPage />
+    case 'mesa':
+      return <MesaRuntimePage />
+    case 'vision':
+      return <JourneyVisionPage />
+    case 'more':
+      return <MorePage />
+    case 'reports':
+      return <JourneyReportsPage />
+    case 'help':
+      return <HelpPage />
     case 'presence':
       return <PresenceAssistPage />
     case 'care':
