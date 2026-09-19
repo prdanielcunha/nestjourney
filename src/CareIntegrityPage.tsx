@@ -20,6 +20,7 @@ import {
   type PresencePerson,
 } from './journeyRepository'
 import { careIntegrityCopy, getInitialLocale, localeLabels, persistLocale, type AppLocale } from './i18n'
+import { useJourneyLabels } from './journeyLabels'
 import './CareIntegrityPage.css'
 
 type CareTab = 'attention' | 'open' | 'resolved'
@@ -35,7 +36,9 @@ function formatDistance(ms: number) {
 
 export default function CareIntegrityPage() {
   const [locale, setLocale] = useState<AppLocale>(getInitialLocale)
-  const t = careIntegrityCopy[locale]
+  const baseCopy = careIntegrityCopy[locale]
+  const { labels } = useJourneyLabels()
+  const t = { ...baseCopy, title: labels.care || baseCopy.title }
   const [access, setAccess] = useState<JourneyAccessContext | null>(null)
   const [congregations, setCongregations] = useState<JourneyCongregation[]>([])
   const [congregationId, setCongregationId] = useState('')
