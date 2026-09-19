@@ -138,18 +138,29 @@ service cloud.firestore {
           || hasPermission(orgId, 'canCoordinateJourney')
         );
     }
-    function canManageDiscipleship(orgId) {
+    function canOperateDiscipleship(orgId, congregationId, disciplerId) {
       let active = membershipIsActive(orgId);
       let memberData = active ? membership(orgId) : {};
-      let roleName = active ? memberData.get('organizationRole', memberData.get('role', '')) : '';
+      let roleName = active
+        ? memberData.get('organizationRole', memberData.get('role', ''))
+        : '';
       let permissions = active ? memberData.get('permissions', {}) : {};
-      return isSystemAdmin()
-        || isOwner(orgId)
-        || (
-          active
-          && (
-            roleName in ['owner', 'admin', 'pastor', 'discipler']
-            || permissions.get('canManageDiscipleship', false) == true
+      let privileged = isSystemAdmin() || isOwner(orgId);
+      let broad = privileged
+        || roleName in ['owner', 'admin', 'pastor']
+        || permissions.get('canCoordinateJourney', false) == true;
+      return hasProductAccess(orgId)
+        && (
+          broad
+          || (
+            active
+            && congregationId is string
+            && congregationId in memberData.get('congregationIds', [])
+            && disciplerId == request.auth.uid
+            && (
+              roleName == 'discipler'
+              || permissions.get('canManageDiscipleship', false) == true
+            )
           )
         );
     }
@@ -1207,29 +1218,23 @@ service cloud.firestore {
           allow update, delete: if false;
         }
         match /discipleships/{discipleshipId} {
-          allow read: if canManageDiscipleship(orgId)
-            && canAccessCongregation(orgId, resource.data.get('congregationId', ''))
-            && (
-              isOrgAdmin(orgId)
-              || hasPermission(orgId, 'canCoordinateJourney')
-              || resource.data.get('disciplerId', '') == request.auth.uid
-            );
-          allow create: if canManageDiscipleship(orgId)
-            && tenantCreate(orgId)
-            && canAccessCongregation(orgId, request.resource.data.get('congregationId', ''))
-            && (
-              isOrgAdmin(orgId)
-              || hasPermission(orgId, 'canCoordinateJourney')
-              || request.resource.data.get('disciplerId', '') == request.auth.uid
+          allow read: if canOperateDiscipleship(
+            orgId,
+            resource.data.get('congregationId', ''),
+            resource.data.get('disciplerId', '')
+          );
+          allow create: if tenantCreate(orgId)
+            && canOperateDiscipleship(
+              orgId,
+              request.resource.data.get('congregationId', ''),
+              request.resource.data.get('disciplerId', '')
             )
             && validDiscipleshipCreate();
-          allow update: if canManageDiscipleship(orgId)
-            && tenantUnchanged(orgId) && congregationUnchanged()
-            && canAccessCongregation(orgId, resource.data.get('congregationId', ''))
-            && (
-              isOrgAdmin(orgId)
-              || hasPermission(orgId, 'canCoordinateJourney')
-              || resource.data.get('disciplerId', '') == request.auth.uid
+          allow update: if tenantUnchanged(orgId) && congregationUnchanged()
+            && canOperateDiscipleship(
+              orgId,
+              resource.data.get('congregationId', ''),
+              resource.data.get('disciplerId', '')
             )
             && request.resource.data.get('disciplerId', '') == resource.data.get('disciplerId', '')
             && validDiscipleshipUpdate();
