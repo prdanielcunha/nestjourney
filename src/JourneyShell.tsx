@@ -94,9 +94,15 @@ export function JourneyShell({ children }: { children: ReactNode }) {
   const [access, setAccess] = useState<JourneyAccessContext | null>(null)
   const [open, setOpen] = useState(false)
   const [locale, setLocale] = useState<AppLocale>(getInitialLocale)
-  const pathname = window.location.pathname
+  const [pathname, setPathname] = useState(() => window.location.pathname)
   const copy = shellCopy[locale]
   const groups = useMemo(() => buildGroups(copy), [copy])
+
+  useEffect(() => {
+    const syncPath = () => setPathname(window.location.pathname)
+    window.addEventListener('popstate', syncPath)
+    return () => window.removeEventListener('popstate', syncPath)
+  }, [])
 
   useEffect(() => {
     const syncLocale = (event: Event) => {
