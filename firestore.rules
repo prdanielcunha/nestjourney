@@ -441,8 +441,6 @@ service cloud.firestore {
         && request.resource.data.get('completedAt', null) == request.time
         && request.resource.data.get('completedBy', '') == request.auth.uid
         && validFollowupOutcomePair(outcomeCode, nextActionCode)
-        && canManageCare(orgId)
-        && canAccessCongregation(orgId, resource.data.get('congregationId', ''))
         && existsAfter(carePath)
         && getAfter(carePath).data.get('status', '') == 'resolved'
         && getAfter(carePath).data.get('resolvedAt', null) == request.time
