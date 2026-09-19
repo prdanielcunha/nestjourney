@@ -23,6 +23,7 @@ import {
   type MesaParticipationRecord,
 } from './journeyRepository'
 import { getInitialLocale, localeLabels, persistLocale, presenceAssistCopy, type AppLocale } from './i18n'
+import { useJourneyLabels } from './journeyLabels'
 import './PresenceAssistPage.css'
 
 function initials(name: string) {
@@ -31,7 +32,14 @@ function initials(name: string) {
 
 export default function PresenceAssistPage() {
   const [locale, setLocale] = useState<AppLocale>(getInitialLocale)
-  const t = presenceAssistCopy[locale]
+  const baseCopy = presenceAssistCopy[locale]
+  const { labels } = useJourneyLabels()
+  const defaultTitleParts = baseCopy.title.split(' & ')
+  const t = {
+    ...baseCopy,
+    title: `${labels.presence || defaultTitleParts[0]} & ${labels.table || defaultTitleParts[1] || baseCopy.mesa}`,
+    mesa: labels.table || baseCopy.mesa,
+  }
   const [access, setAccess] = useState<JourneyAccessContext | null>(null)
   const [congregations, setCongregations] = useState<JourneyCongregation[]>([])
   const [congregationId, setCongregationId] = useState('')
