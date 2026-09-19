@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import {
-  ArrowUpRight, Check, ClipboardCheck, HeartHandshake, House, Leaf,
+  ArrowUpRight, ClipboardCheck, HeartHandshake, House, Leaf,
   Save, ShieldCheck, UserCheck, Users,
 } from 'lucide-react'
 import { auth } from './firebase'
@@ -22,7 +22,7 @@ const HUB_ROLES_URL='https://www.millionsnest.com/dashboard/organization/roles'
 const HUB_API_BASE=(import.meta.env.VITE_MILLIONSNEST_URL||'https://www.millionsnest.com').replace(/\/$/,'')
 
 type Responsibility='member'|'presence_host'|'mesa_team'|'caregiver'|'group_leader'|'discipler'|'coordinator'|'pastor'
-type ResponsibilityDraft={responsibility:Responsibility;congregationIds:string[]}
+type ResponsibilityDraft={responsibility:Responsibility}
 
 const responsibilityOrder:Responsibility[]=[
   'member','presence_host','mesa_team','caregiver','group_leader','discipler','coordinator','pastor',
@@ -77,8 +77,8 @@ const copy={
     capabilities:'O que você consegue operar',people:'Pessoas',implementation:'Implantação',privacy:'Privacidade & Auditoria',pastoralView:'Visão Pastoral',
     responsibilities:'Responsabilidades no NestJourney',responsibilitiesDesc:'O cargo no Hub diz a autoridade na organização. A função abaixo diz o que esta pessoa encontra e opera dentro do NestJourney.',
     orgAccess:'Acesso amplo pela organização',orgAccessDesc:'Dono e administrador continuam vendo todas as áreas, independentemente de uma função operacional.',
-    scope:'Unidades em que serve',scopeHint:'Selecione ao menos uma unidade para funções operacionais. Pastor possui visão ampla da organização.',
-    save:'Salvar função',saved:'Função atualizada.',saving:'Salvando…',chooseScope:'Escolha ao menos uma unidade.',emptyMembers:'Nenhum membro ativo encontrado.',
+    scope:'Unidades definidas no Hub',scopeHint:'A unidade em que a pessoa serve é governada pelo MillionsNest Hub. Aqui você altera somente a responsabilidade dentro do NestJourney.',
+    save:'Salvar função',saved:'Função atualizada.',saving:'Salvando…',emptyMembers:'Nenhum membro ativo encontrado.',
     guidance:'Próximo passo',guidanceText:'Depois de definir as funções, cada pessoa pode abrir Hoje e receber uma experiência própria, sem precisar aprender o sistema inteiro.',
     error:'Não foi possível carregar ou atualizar a equipe.'
   },
@@ -97,8 +97,8 @@ const copy={
     capabilities:'What you can operate',people:'People',implementation:'Implementation',privacy:'Privacy & Audit',pastoralView:'Pastoral View',
     responsibilities:'NestJourney responsibilities',responsibilitiesDesc:'The Hub role defines organization authority. The responsibility below defines what this person sees and operates inside NestJourney.',
     orgAccess:'Broad organization access',orgAccessDesc:'Owners and administrators keep access to every area regardless of an operational responsibility.',
-    scope:'Campuses served',scopeHint:'Select at least one campus for operational roles. Pastor has organization-wide vision.',
-    save:'Save responsibility',saved:'Responsibility updated.',saving:'Saving…',chooseScope:'Choose at least one campus.',emptyMembers:'No active members found.',
+    scope:'Campuses defined in Hub',scopeHint:'Where a person serves is governed by MillionsNest Hub. Here you change only their NestJourney responsibility.',
+    save:'Save responsibility',saved:'Responsibility updated.',saving:'Saving…',emptyMembers:'No active members found.',
     guidance:'Next step',guidanceText:'After responsibilities are defined, each person can open Today and receive their own experience without learning the whole system.',
     error:'The team could not be loaded or updated.'
   },
@@ -117,8 +117,8 @@ const copy={
     capabilities:'Lo que puedes operar',people:'Personas',implementation:'Implementación',privacy:'Privacidad & Auditoría',pastoralView:'Visión Pastoral',
     responsibilities:'Responsabilidades en NestJourney',responsibilitiesDesc:'El cargo en Hub define autoridad organizacional. La función abajo define lo que esta persona ve y opera dentro de NestJourney.',
     orgAccess:'Acceso amplio por la organización',orgAccessDesc:'Dueño y administrador siguen viendo todas las áreas sin depender de una función operativa.',
-    scope:'Sedes donde sirve',scopeHint:'Selecciona al menos una sede para funciones operativas. Pastor tiene visión amplia de la organización.',
-    save:'Guardar función',saved:'Función actualizada.',saving:'Guardando…',chooseScope:'Elige al menos una sede.',emptyMembers:'No se encontraron miembros activos.',
+    scope:'Sedes definidas en Hub',scopeHint:'La sede donde sirve la persona es gobernada por MillionsNest Hub. Aquí cambias solamente su responsabilidad en NestJourney.',
+    save:'Guardar función',saved:'Función actualizada.',saving:'Guardando…',emptyMembers:'No se encontraron miembros activos.',
     guidance:'Próximo paso',guidanceText:'Después de definir las funciones, cada persona puede abrir Hoy y recibir su propia experiencia sin aprender todo el sistema.',
     error:'No se pudo cargar o actualizar el equipo.'
   }
@@ -164,7 +164,6 @@ export default function TeamSetupPage(){
           member.id,
           {
             responsibility:(responsibilityOrder.includes(member.journeyRole as Responsibility)?member.journeyRole:'member') as Responsibility,
-            congregationIds:member.congregationIds,
           },
         ])))
       }
@@ -197,22 +196,8 @@ export default function TeamSetupPage(){
     setSavedId('')
     setDrafts(current=>({
       ...current,
-      [memberId]:{
-        responsibility,
-        congregationIds:current[memberId]?.congregationIds??[],
-      },
+      [memberId]:{responsibility},
     }))
-  }
-
-  function toggleCongregation(memberId:string,congregationId:string){
-    setSavedId('')
-    setDrafts(current=>{
-      const draft=current[memberId]??{responsibility:'member' as Responsibility,congregationIds:[]}
-      const congregationIds=draft.congregationIds.includes(congregationId)
-        ?draft.congregationIds.filter(id=>id!==congregationId)
-        :[...draft.congregationIds,congregationId]
-      return{...current,[memberId]:{...draft,congregationIds}}
-    })
   }
 
   async function saveResponsibility(memberId:string){
@@ -220,9 +205,6 @@ export default function TeamSetupPage(){
     const user=auth?.currentUser
     const draft=drafts[memberId]
     if(!user||!draft)return
-    if(!['member','pastor'].includes(draft.responsibility)&&draft.congregationIds.length===0){
-      setError(t.chooseScope);return
-    }
     setSavingId(memberId);setSavedId('');setError('')
     try{
       const token=await user.getIdToken()
@@ -231,10 +213,7 @@ export default function TeamSetupPage(){
         {
           method:'PATCH',
           headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},
-          body:JSON.stringify({
-            responsibility:draft.responsibility,
-            congregationIds:draft.responsibility==='pastor'?[]:draft.congregationIds,
-          }),
+          body:JSON.stringify({responsibility:draft.responsibility}),
         },
       )
       const data=await response.json().catch(()=>({}))
@@ -242,7 +221,6 @@ export default function TeamSetupPage(){
       setMembers(current=>current.map(member=>member.id===memberId?{
         ...member,
         journeyRole:draft.responsibility,
-        congregationIds:draft.responsibility==='pastor'?[]:draft.congregationIds,
       }:member))
       setSavedId(memberId)
     }catch(cause){console.error(cause);setError(t.error)}
@@ -267,12 +245,9 @@ export default function TeamSetupPage(){
       <div className="team-member-list">
         {members.map(member=>{
           const orgWide=['owner','admin'].includes(member.organizationRole)
-          const draft=drafts[member.id]??{responsibility:'member' as Responsibility,congregationIds:[]}
+          const draft=drafts[member.id]??{responsibility:'member' as Responsibility}
           const roleMeta=responsibilities[draft.responsibility]
-          const changed=!orgWide&&(
-            draft.responsibility!==member.journeyRole ||
-            draft.congregationIds.join('|')!==member.congregationIds.join('|')
-          )
+          const changed=!orgWide&&draft.responsibility!==member.journeyRole
           return <article className="team-member-card" key={member.id}>
             <div className="team-member-identity"><span className="team-member-avatar">{member.name.split(' ').filter(Boolean).map(part=>part[0]).slice(0,2).join('').toUpperCase()}</span><div><strong>{member.name}</strong><small>{member.email||member.organizationRole}</small></div></div>
             {orgWide?<div className="team-org-wide"><ShieldCheck size={17}/><div><strong>{t.orgAccess}</strong><small>{t.orgAccessDesc}</small></div></div>:<>
@@ -280,10 +255,7 @@ export default function TeamSetupPage(){
                 <label><span>{t.role}</span><select value={draft.responsibility} disabled={savingId===member.id} onChange={e=>setResponsibility(member.id,e.target.value as Responsibility)}>{responsibilityOrder.map(role=><option key={role} value={role}>{responsibilities[role][0]}</option>)}</select></label>
                 <p>{roleMeta[1]}</p>
               </div>
-              {draft.responsibility!=='member'&&draft.responsibility!=='pastor'?<div className="team-scope-editor"><span>{t.scope}</span><div>{congregations.map(unit=>{
-                const selected=draft.congregationIds.includes(unit.id)
-                return <button type="button" className={selected?'selected':''} key={unit.id} disabled={savingId===member.id} onClick={()=>toggleCongregation(member.id,unit.id)}>{selected?<Check size={13}/>:null}{unit.name}</button>
-              })}</div><small>{t.scopeHint}</small></div>:null}
+              <div className="team-scope-editor readonly"><span>{t.scope}</span><div>{member.congregationIds.length?member.congregationIds.map(id=><span className="team-scope-chip" key={id}>{congregations.find(unit=>unit.id===id)?.name||id}</span>):<span className="team-scope-chip muted">—</span>}</div><small>{t.scopeHint}</small></div>
               <div className="team-member-actions"><span>{savedId===member.id?t.saved:''}</span><button className="team-save-button" disabled={!changed||savingId===member.id} onClick={()=>void saveResponsibility(member.id)}><Save size={14}/>{savingId===member.id?t.saving:t.save}</button></div>
             </>}
           </article>
