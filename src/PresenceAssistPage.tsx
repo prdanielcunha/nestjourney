@@ -173,7 +173,6 @@ export default function PresenceAssistPage() {
 
     {displaySession ? <section className="presence-panel presence-session-card">
       <div className="presence-session-head"><div><span className="presence-kicker">{t.session}</span><h2>{displaySession.eventName ?? new Date(displaySession.openedAt).toLocaleString(locale)}</h2><p>{new Date(displaySession.openedAt).toLocaleString(locale)} · {displaySession.status === 'closed' ? t.closed : displaySession.eventRef}</p></div><span className="presence-badge"><UserCheck size={15} /> {displaySession.status === 'open' ? t.session : t.closed}</span></div>
-      <div className="presence-mesa-summary"><div><span className="presence-kicker">{t.mesa}</span><strong>{mesa.filter(item => item.status === 'joined').length}</strong><small>{t.mesaJoined}</small></div><p>{t.mesaHint}</p></div>
       {coverage ? <><div className="coverage-wrap"><span className="coverage-number">{coverage.percent}%</span><div className="coverage-track" aria-label={`${t.coverage}: ${coverage.percent}%`}><span style={{ width: `${coverage.percent}%` }} /></div><div className="coverage-meta">{coverage.verified} {t.verified}<br />{coverage.unverified} {t.unverified}</div></div><p className="coverage-note">{coverage.meetsMinimum ? t.qualityReady : t.qualityNotReady}</p></> : null}
     </section> : <div className="presence-panel presence-empty">{t.noSession}</div>}
 
