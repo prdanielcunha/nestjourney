@@ -9,12 +9,12 @@ import type { CarePromise, PresenceCheck, PresenceSession, PresenceSource, Prese
 
 const SYSTEM_ROLES = new Set(['ceo', 'global_admin', 'ecosystem_owner', 'founder'])
 const BROAD_JOURNEY_ROLES = new Set(['owner', 'admin', 'pastor', 'data_admin'])
-const PRESENCE_ROLES = new Set(['owner', 'admin', 'pastor', 'coordinator'])
-const MESA_ROLES = new Set(['owner', 'admin', 'pastor', 'coordinator', 'mesa', 'table_host'])
-const CARE_ROLES = new Set(['owner', 'admin', 'pastor', 'care'])
-const GROUP_ROLES = new Set(['owner', 'admin', 'pastor', 'group_leader'])
+const PRESENCE_ROLES = new Set(['owner', 'admin', 'pastor', 'coordinator', 'presence_host'])
+const MESA_ROLES = new Set(['owner', 'admin', 'pastor', 'coordinator', 'mesa', 'table_host', 'mesa_team'])
+const CARE_ROLES = new Set(['owner', 'admin', 'pastor', 'care', 'caregiver', 'coordinator'])
+const GROUP_ROLES = new Set(['owner', 'admin', 'pastor', 'group_leader', 'coordinator'])
 const GROUP_ROSTER_BROAD_ROLES = new Set(['owner', 'admin', 'pastor'])
-const DISCIPLESHIP_ROLES = new Set(['owner', 'admin', 'pastor', 'discipler'])
+const DISCIPLESHIP_ROLES = new Set(['owner', 'admin', 'pastor', 'discipler', 'coordinator'])
 const IMPLEMENTATION_ROLES = new Set(['owner', 'admin', 'pastor', 'coordinator'])
 const GOVERNANCE_ROLES = new Set(['owner', 'admin', 'pastor', 'data_admin'])
 const PRIVACY_ROLES = new Set(['owner', 'admin', 'data_admin'])
@@ -54,6 +54,16 @@ export interface JourneyOrganizationSummary {
   city?: string
   status?: string
   journeyStatus: 'active' | 'trialing' | 'inactive' | 'not_configured'
+}
+
+export interface JourneyOrganizationMember {
+  id: string
+  name: string
+  email?: string
+  organizationRole: string
+  journeyRole: string
+  congregationIds: string[]
+  status: string
 }
 
 export interface PresencePerson {
@@ -383,6 +393,34 @@ export async function listJourneyOrganizationsForSystemAdmin(access: JourneyAcce
   }).sort((a,b) => a.name.localeCompare(b.name))
 }
 
+export async function listJourneyOrganizationMembers(access: JourneyAccessContext): Promise<JourneyOrganizationMember[]> {
+  const canManage = access.isSystemAdmin || access.isOwner || ['owner', 'admin'].includes(
+    asString(access.role),
+  )
+  if (!canManage) return []
+
+  const firestore = requireDb()
+  const snapshot = await getDocs(collection(
+    firestore,
+    `organizations/${access.organizationId}/members`,
+  ))
+
+  return snapshot.docs.map((item): JourneyOrganizationMember => {
+    const data = item.data()
+    return {
+      id: item.id,
+      name: asString(data.displayName || data.name || data.email) || item.id,
+      email: asString(data.email) || undefined,
+      organizationRole: asString(data.organizationRole || data.role) || 'member',
+      journeyRole: asString(data.journeyRole) || 'member',
+      congregationIds: asStringArray(data.congregationIds),
+      status: asString(data.status) || 'active',
+    }
+  }).filter((item) => !['removed', 'inactive', 'suspended', 'revoked', 'deleted'].includes(item.status))
+    .sort((a, b) => a.name.localeCompare(b.name))
+}
+
+
 export async function loadJourneyAccess(userId: string, organizationId: string): Promise<JourneyAccessContext> {
   const firestore = requireDb()
   const nestedRef = doc(firestore, `organizations/${organizationId}/members/${userId}`)
@@ -420,7 +458,12 @@ export async function loadJourneyAccess(userId: string, organizationId: string):
   const isSystemAdmin = SYSTEM_ROLES.has(systemRole)
   const ownerUid = asString(orgData.ownerUid || orgData.ownerId)
   const isOwner = ownerUid === userId
-  const role = asString(membership.organizationRole || membership.role || (isOwner ? 'owner' : ''))
+  const role = asString(
+    membership.journeyRole ||
+    membership.organizationRole ||
+    membership.role ||
+    (isOwner ? 'owner' : ''),
+  )
   const congregationIds = asStringArray(membership.congregationIds)
 
   return {
@@ -433,7 +476,7 @@ export async function loadJourneyAccess(userId: string, organizationId: string):
     isOwner,
     canManagePresence: isSystemAdmin || isOwner || PRESENCE_ROLES.has(role) || permissions.canManagePresence === true,
     canManageMesa: isSystemAdmin || isOwner || MESA_ROLES.has(role) || permissions.canManageMesa === true || permissions.canManagePresence === true,
-    canManagePeople: isSystemAdmin || isOwner || BROAD_JOURNEY_ROLES.has(role) || permissions.canManagePeople === true,
+    canManagePeople: isSystemAdmin || isOwner || BROAD_JOURNEY_ROLES.has(role) || role === 'presence_host' || role === 'coordinator' || permissions.canManagePeople === true,
     canManageCare: isSystemAdmin || isOwner || CARE_ROLES.has(role) || permissions.canManageCare === true,
     canManageGroups: isSystemAdmin || isOwner || GROUP_ROLES.has(role) || permissions.canManageGroups === true,
     canManageDiscipleship: isSystemAdmin || isOwner || DISCIPLESHIP_ROLES.has(role) || permissions.canManageDiscipleship === true,
