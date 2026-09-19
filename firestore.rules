@@ -73,6 +73,25 @@ service cloud.firestore {
         || role(orgId, ['owner', 'admin', 'pastor', 'coordinator'])
         || hasPermission(orgId, 'canManagePresence');
     }
+    function canManagePresenceInScope(orgId, congregationId) {
+      let active = membershipIsActive(orgId);
+      let memberData = active ? membership(orgId) : {};
+      let roleName = active ? memberData.get('organizationRole', memberData.get('role', '')) : '';
+      let permissions = active ? memberData.get('permissions', {}) : {};
+      let congregationIds = active ? memberData.get('congregationIds', []) : [];
+      let privileged = isSystemAdmin() || isOwner(orgId);
+      let broad = roleName in ['owner', 'admin', 'pastor'];
+      let capable = privileged || (
+        active && (
+          roleName in ['owner', 'admin', 'pastor', 'coordinator']
+          || permissions.get('canManagePresence', false) == true
+        )
+      );
+      let inScope = privileged || broad || (
+        active && congregationId is string && congregationId in congregationIds
+      );
+      return hasProductAccess(orgId) && capable && inScope;
+    }
     function canManagePeople(orgId) {
       return isOrgAdmin(orgId) || hasPermission(orgId, 'canManagePeople');
     }
@@ -841,10 +860,8 @@ service cloud.firestore {
           allow delete: if false;
         }
         match /presenceChecks/{checkId} {
-          allow read: if canManagePresence(orgId)
-            && canAccessCongregation(orgId, resource.data.get('congregationId', ''));
-          allow create: if canManagePresence(orgId)
-            && canAccessCongregation(orgId, request.resource.data.get('congregationId', ''))
+          allow read: if canManagePresenceInScope(orgId, resource.data.get('congregationId', ''));
+          allow create: if canManagePresenceInScope(orgId, request.resource.data.get('congregationId', ''))
             && validPresenceCheckCreate(orgId);
           allow update, delete: if false;
         }
@@ -881,10 +898,20 @@ service cloud.firestore {
               && validCareResolvedFactDocument(orgId, factId)
             )
             || (
+              request.resource.data.get('eventType', '') == 'PRESENCE_CORRECTED'
+              && canManagePresenceInScope(
+                orgId,
+                getAfter(
+                  /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/presenceChecks/$(request.resource.data.get('payload', {}).get('checkId', ''))
+                ).data.get('congregationId', '')
+              )
+              && validCanonicalFact(orgId, factId)
+            )
+            || (
               hasMembership(orgId)
               && (
                 (request.resource.data.get('eventType', '') == 'VISITOR_REGISTERED' && canManagePeople(orgId))
-                || (request.resource.data.get('eventType', '') in ['PRESENCE_SESSION_OPENED', 'PRESENCE_CONFIRMED', 'PRESENCE_CORRECTED'] && canManagePresence(orgId))
+                || (request.resource.data.get('eventType', '') in ['PRESENCE_SESSION_OPENED', 'PRESENCE_CONFIRMED'] && canManagePresence(orgId))
                 || request.resource.data.get('eventType', '') in ['CARE_REQUESTED', 'CARE_ASSIGNED']
               )
               && validCanonicalFact(orgId, factId)
