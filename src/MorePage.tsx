@@ -59,7 +59,7 @@ export default function MorePage(){
   useEffect(()=>{void bootstrap()},[bootstrap])
   if(loading)return <main className="journey-section-page"><div className="journey-loading">{t.loading}</div></main>
 
-  const canManageSettings=Boolean(access&&(access.isSystemAdmin||access.isOwner||['owner','admin','pastor'].includes(access.role)))
+  const canManageSettings=Boolean(access&&(access.isSystemAdmin||access.isOwner||['owner','admin','pastor'].includes(access.organizationRole)||access.role==='pastor'))
   const cards=[
     {title:t.team,desc:t.teamDesc,href:'/team-runtime',Icon:UserCog,allowed:Boolean(access&&(access.isSystemAdmin||access.isOwner||access.canManageImplementation||access.canViewGovernance))},
     {title:t.implementation,desc:t.implementationDesc,href:'/implementation-runtime',Icon:ClipboardCheck,allowed:Boolean(access?.canManageImplementation)},
