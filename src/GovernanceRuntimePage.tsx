@@ -44,7 +44,7 @@ export default function GovernanceRuntimePage() {
   const [people,setPeople]=useState<JourneyPersonRecord[]>([])
   const [requests,setRequests]=useState<JourneyPrivacyRequest[]>([])
   const [audit,setAudit]=useState<JourneyAuditEvent[]>([])
-  const [tab,setTab]=useState<Tab>('privacy')
+  const [tab,setTab]=useState<Tab>(()=>{const view=new URLSearchParams(window.location.search).get('view');return view==='audit'||view==='boundaries'||view==='privacy'?view:'privacy'})
   const [personId,setPersonId]=useState('')
   const [requestType,setRequestType]=useState<PrivacyRequestType>('consent_revocation')
   const [targetField,setTargetField]=useState<PrivacyCorrectionField>('name')
@@ -82,7 +82,10 @@ export default function GovernanceRuntimePage() {
       const nextAccess=await loadJourneyAccess(user.uid,organizationId)
       setAccess(nextAccess)
       if(!nextAccess.canViewGovernance)return
-      if(!nextAccess.canManagePrivacy)setTab('audit')
+      const requestedView=new URLSearchParams(window.location.search).get('view')
+      if(!nextAccess.canManagePrivacy||requestedView==='audit')setTab('audit')
+      else if(requestedView==='boundaries')setTab('boundaries')
+      else if(requestedView==='privacy')setTab('privacy')
       const units=await listJourneyCongregations(nextAccess)
       setCongregations(units)
       const unitId=units[0]?.id??''
