@@ -414,7 +414,7 @@ export async function listJourneyOrganizationMembers(access: JourneyAccessContex
       email: asString(data.email) || undefined,
       organizationRole: asString(data.organizationRole || data.role) || 'member',
       journeyRole: asString(data.journeyRole) || 'member',
-      congregationIds: asStringArray(data.journeyCongregationIds ?? data.congregationIds),
+      congregationIds: asStringArray(data.congregationIds),
       status: asString(data.status) || 'active',
     }
   }).filter((item) => !['removed', 'inactive', 'suspended', 'revoked', 'deleted'].includes(item.status))
@@ -465,7 +465,7 @@ export async function loadJourneyAccess(userId: string, organizationId: string):
     (isOwner ? 'owner' : ''),
   )
   const role = asString(membership.journeyRole || organizationRole)
-  const congregationIds = asStringArray(membership.journeyCongregationIds ?? membership.congregationIds)
+  const congregationIds = asStringArray(membership.congregationIds)
   const organizationHasBroadAccess = ['owner', 'admin', 'pastor', 'data_admin'].includes(organizationRole)
 
   return {
