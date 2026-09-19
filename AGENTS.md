@@ -36,3 +36,14 @@ O NestJourney opera em **modo autônomo**. Leia e siga `docs/OPENCLAW_AUTONOMY.m
 - O agente executor não dá a aprovação técnica final da própria mudança sensível.
 - Após promoção: smoke test e inspeção de erros/logs.
 - Em regressão de produção: rollback automático para o último estado conhecido como bom antes de uma nova tentativa.
+
+
+## Canonical app entry and authentication
+
+The ecosystem-wide source of truth is `prdanielcunha/millionsnest/docs/ECOSYSTEM_APP_ENTRY_AUTH_STANDARD.md`.
+
+Permanent rule: this standalone app must be usable from its own domain/PWA without requiring a manual Hub round-trip just to restore authentication. When unauthenticated it must offer a product-native Google entry (unless a documented security exception exists), while Hub handoff remains supported.
+
+Google/Firebase authenticates identity only. MillionsNest canonical organization, membership, entitlement and RBAC data authorizes access. Never use client-provided organization IDs, local/session storage, e-mail, UID aliases or UI roles as authorization. Direct entry and Hub handoff must converge on the same authorization truth, support wrong-account recovery, multi-organization handling, safe return paths and PT/EN/ES.
+
+Current conformance: NestJourney supports native Google entry plus Hub handoff. Firestore Rules and canonical MillionsNest membership/product access remain the authorization boundary.
