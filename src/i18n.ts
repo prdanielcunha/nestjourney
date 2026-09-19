@@ -72,7 +72,7 @@ export const presenceAssistCopy = {
   },
   en: {
     product: 'NestJourney',
-    title: 'Presence Assist',
+    title: 'Recepção & Mesa Aberta',
     subtitle: 'Human confirmation, visible coverage, and no assumed absences.',
     back: 'Back to NestJourney',
     loading: 'Loading secure context…',
@@ -114,7 +114,7 @@ export const presenceAssistCopy = {
   },
   es: {
     product: 'NestJourney',
-    title: 'Presence Assist',
+    title: 'Recepção & Mesa Aberta',
     subtitle: 'Confirmación humana, cobertura visible y ninguna ausencia presumida.',
     back: 'Volver a NestJourney',
     loading: 'Cargando contexto seguro…',
@@ -185,7 +185,7 @@ export const careIntegrityCopy = {
     resolutions: { contact_completed: 'Contato concluído', pastoral_handoff: 'Encaminhado ao pastor', declined_contact: 'Pessoa não deseja contato', invalid_contact: 'Contato inválido', closed_no_response: 'Encerrado sem resposta', other_resolved: 'Outro resultado concluído' },
   },
   en: {
-    product: 'NestJourney', title: 'Care Integrity',
+    product: 'NestJourney', title: 'Cuidado & Conexão',
     subtitle: 'Care commitments with owner, deadline, and outcome — without scoring spirituality.',
     back: 'Back to NestJourney', loading: 'Loading care queue…', noAccessTitle: 'Access unavailable',
     noAccess: 'Your current profile does not have permission to operate Care Requests in this scope.', retry: 'Try again',
@@ -210,7 +210,7 @@ export const careIntegrityCopy = {
     resolutions: { contact_completed: 'Contact completed', pastoral_handoff: 'Handed off to pastor', declined_contact: 'Person does not want contact', invalid_contact: 'Invalid contact', closed_no_response: 'Closed without response', other_resolved: 'Other resolved outcome' },
   },
   es: {
-    product: 'NestJourney', title: 'Care Integrity',
+    product: 'NestJourney', title: 'Cuidado & Conexão',
     subtitle: 'Compromisos de cuidado con responsable, plazo y resultado — sin medir espiritualidad.',
     back: 'Volver al NestJourney', loading: 'Cargando fila de cuidado…', noAccessTitle: 'Acceso no disponible',
     noAccess: 'Tu perfil actual no tiene permiso para operar Care Requests en este alcance.', retry: 'Intentar de nuevo',
@@ -322,7 +322,7 @@ export const journeyProfileCopy = {
     error: 'Não foi possível carregar esta jornada.',
   },
   en: {
-    product: 'NestJourney', title: 'Journey Profile',
+    product: 'NestJourney', title: 'Pessoas',
     subtitle: 'A factual view of each person’s journey, combining existing sources without inventing stages or diagnoses.',
     back: 'Back to NestJourney', loading: 'Loading journey…', noAccessTitle: 'Access unavailable',
     noAccess: 'Your current profile does not have an authorized Lens to view Journey Profiles in this scope.', retry: 'Try again',
@@ -344,7 +344,7 @@ export const journeyProfileCopy = {
     error: 'This journey could not be loaded.',
   },
   es: {
-    product: 'NestJourney', title: 'Journey Profile',
+    product: 'NestJourney', title: 'Pessoas',
     subtitle: 'Una visión factual de la jornada de cada persona, reuniendo fuentes existentes sin inventar etapas ni diagnósticos.',
     back: 'Volver al NestJourney', loading: 'Cargando jornada…', noAccessTitle: 'Acceso no disponible',
     noAccess: 'Tu perfil actual no tiene una Lens autorizada para consultar Journey Profiles en este alcance.', retry: 'Intentar de nuevo',
@@ -427,7 +427,7 @@ export const groupsRuntimeCopy = {
     error: 'Não foi possível concluir a operação.',
   },
   en: {
-    product: 'NestJourney', title: 'Groups', subtitle: 'Real community structure, capacity, and ownership — without turning attendance into judgment.',
+    product: 'NestJourney', title: 'Peace Houses', subtitle: 'Real community structure, capacity, and ownership — without turning attendance into judgment.',
     back: 'Back to NestJourney', loading: 'Loading groups…', noAccessTitle: 'Access unavailable',
     noAccess: 'Your profile cannot manage groups in this scope.', retry: 'Try again',
     congregation: 'Campus', newGroup: 'New group', empty: 'No groups recorded for this campus.',
@@ -463,7 +463,7 @@ export const discipleshipRuntimeCopy = {
     error: 'Não foi possível concluir a operação.',
   },
   en: {
-    product: 'NestJourney', title: 'Discipleship', subtitle: 'Real relationships, recorded meetings, and an explicit next step. No spiritual maturity scoring.',
+    product: 'NestJourney', title: 'Root', subtitle: 'Real relationships, recorded meetings, and an explicit next step. No spiritual maturity scoring.',
     back: 'Back to NestJourney', loading: 'Loading discipleship…', noAccessTitle: 'Access unavailable',
     noAccess: 'Your profile cannot operate discipleship in this scope.', retry: 'Try again',
     congregation: 'Campus', newRelation: 'Start relationship', empty: 'No discipleship relationships found in this campus.',
@@ -474,7 +474,7 @@ export const discipleshipRuntimeCopy = {
     error: 'The operation could not be completed.',
   },
   es: {
-    product: 'NestJourney', title: 'Discipulado', subtitle: 'Relaciones reales, encuentros registrados y próximo paso explícito. Sin puntuar madurez espiritual.',
+    product: 'NestJourney', title: 'Raiz', subtitle: 'Relaciones reales, encuentros registrados y próximo paso explícito. Sin puntuar madurez espiritual.',
     back: 'Volver al NestJourney', loading: 'Cargando discipulado…', noAccessTitle: 'Acceso no disponible',
     noAccess: 'Tu perfil no puede operar discipulado en este alcance.', retry: 'Intentar de nuevo',
     congregation: 'Sede', newRelation: 'Iniciar relación', empty: 'No se encontraron relaciones de discipulado en esta sede.',
