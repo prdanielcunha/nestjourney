@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { ArrowRight, CheckCircle2, ChevronLeft, Clock3, HeartHandshake, ShieldCheck, UserCheck, X } from 'lucide-react'
+import { ArrowRight, CheckCircle2, ChevronLeft, Clock3, HeartHandshake, MessageCircle, ShieldCheck, UserCheck, X } from 'lucide-react'
 import { auth } from './firebase'
 import {
   completeJourneyFollowup,
@@ -17,6 +17,7 @@ import {
   type JourneyPersonRecord,
 } from './journeyRepository'
 import type { FollowupOutcomeCode, FollowupNextActionCode } from './followup'
+import { buildConnectFollowupLaunchUrl, resolveRequestedFollowupId } from './connectBridge'
 import { followupRuntimeCopy, getInitialLocale, localeLabels, persistLocale, type AppLocale } from './i18n'
 import './FollowupRuntimePage.css'
 
@@ -46,6 +47,7 @@ export default function FollowupRuntimePage() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const requestedCareId = useMemo(() => new URLSearchParams(window.location.search).get('care') ?? '', [])
+  const requestedFollowupId = useMemo(() => resolveRequestedFollowupId(window.location.search), [])
 
   const peopleById = useMemo(() => new Map(people.map((person) => [person.id, person])), [people])
   const followupByCare = useMemo(() => new Map(followups.map((item) => [item.careRequestId, item])), [followups])
@@ -85,6 +87,16 @@ export default function FollowupRuntimePage() {
 
   useEffect(() => { void bootstrap() }, [bootstrap])
 
+  useEffect(() => {
+    if (!requestedFollowupId || resolving || !access) return
+    const requested = followups.find((item) =>
+      item.id === requestedFollowupId
+      && item.status === 'pending'
+      && item.ownerRef === access.userId
+    )
+    if (requested) setResolving(requested)
+  }, [access, followups, requestedFollowupId, resolving])
+
   async function selectUnit(unitId: string) {
     if (!access) return
     setCongregationId(unitId); setBusy(true); setError('')
@@ -116,8 +128,8 @@ export default function FollowupRuntimePage() {
     if (!access) return
     setBusy(true); setError('')
     try {
-      await startJourneyFollowup({ access, request })
-      await refresh(access, congregationId)
+      const followupId = await startJourneyFollowup({ access, request })
+      window.location.assign(buildConnectFollowupLaunchUrl(followupId))
     } catch (cause) {
       console.error(cause)
       const code = cause instanceof Error ? cause.message : ''
@@ -179,7 +191,10 @@ export default function FollowupRuntimePage() {
           return <article className="followup-panel followup-card" key={item.id}>
             <div className="followup-card-head"><span className="followup-icon warning"><Clock3 size={18}/></span><div><h3>{person?.name??t.unknownPerson}</h3><p>{t.due}: {formatDate(item.dueAt,locale)}</p></div><span className="followup-badge attention">{t.pending}</span></div>
             <div className="followup-facts"><span><small>{t.contact}</small><b>{person?.consent&&person.phone?person.phone:t.contactUnavailable}</b></span><span><small>{t.source}</small><b>{t.firstContact}</b></span></div>
-            <button className="followup-button primary" disabled={busy||item.ownerRef!==access.userId} onClick={()=>setResolving(item)}><CheckCircle2 size={16}/>{t.recordOutcome}</button>
+            <div className="followup-card-actions">
+              <a className="followup-button" aria-disabled={item.ownerRef!==access.userId} href={item.ownerRef===access.userId?buildConnectFollowupLaunchUrl(item.id):undefined} onClick={(event)=>{if(item.ownerRef!==access.userId)event.preventDefault()}}><MessageCircle size={16}/>{t.openConnect}</a>
+              <button className="followup-button primary" disabled={busy||item.ownerRef!==access.userId} onClick={()=>setResolving(item)}><CheckCircle2 size={16}/>{t.recordOutcome}</button>
+            </div>
           </article>
         })}
         {!pending.length?<div className="followup-panel followup-empty">{t.noPending}</div>:null}
