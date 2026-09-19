@@ -72,8 +72,8 @@ export const presenceAssistCopy = {
   },
   en: {
     product: 'NestJourney',
-    title: 'Recepção & Mesa Aberta',
-    subtitle: 'Human confirmation, visible coverage, and no assumed absences.',
+    title: 'Welcome & Open Table',
+    subtitle: 'Welcome people, record presence safely, and follow the relationships created during the service.',
     back: 'Back to NestJourney',
     loading: 'Loading secure context…',
     noAccessTitle: 'Access unavailable',
@@ -114,8 +114,8 @@ export const presenceAssistCopy = {
   },
   es: {
     product: 'NestJourney',
-    title: 'Recepção & Mesa Aberta',
-    subtitle: 'Confirmación humana, cobertura visible y ninguna ausencia presumida.',
+    title: 'Recepción & Mesa Abierta',
+    subtitle: 'Recibe bien, registra presencia con seguridad y acompaña los vínculos creados en el culto.',
     back: 'Volver a NestJourney',
     loading: 'Cargando contexto seguro…',
     noAccessTitle: 'Acceso no disponible',
@@ -162,7 +162,7 @@ export const careIntegrityCopy = {
     product: 'NestJourney', title: 'Cuidado & Conexão',
     subtitle: 'Organize os contatos autorizados de 24–48h, responsáveis, respostas e próximos passos.',
     back: 'Voltar ao NestJourney', loading: 'Carregando fila de cuidado…', noAccessTitle: 'Acesso não disponível',
-    noAccess: 'Seu perfil atual não possui permissão para operar Care Requests neste escopo.', retry: 'Tentar novamente',
+    noAccess: 'Seu perfil atual não possui permissão para operar a fila de Cuidado & Conexão neste escopo.', retry: 'Tentar novamente',
     congregation: 'Unidade', search: 'Buscar pessoa', newRequest: 'Novo cuidado',
     debt: 'Care Debt', debtHint: 'promessas vencidas sem resolução', dueSoon: 'Vence em breve', dueSoonHint: 'até 4 horas',
     unassigned: 'Sem responsável', unassignedHint: 'precisam ser assumidos', myLoad: 'Minha carga',
@@ -185,8 +185,8 @@ export const careIntegrityCopy = {
     resolutions: { contact_completed: 'Contato concluído', pastoral_handoff: 'Encaminhado ao pastor', declined_contact: 'Pessoa não deseja contato', invalid_contact: 'Contato inválido', closed_no_response: 'Encerrado sem resposta', other_resolved: 'Outro resultado concluído' },
   },
   en: {
-    product: 'NestJourney', title: 'Cuidado & Conexão',
-    subtitle: 'Care commitments with owner, deadline, and outcome — without scoring spirituality.',
+    product: 'NestJourney', title: 'Care & Connection',
+    subtitle: 'Organize authorized 24–48h contacts, owners, responses, and next steps.',
     back: 'Back to NestJourney', loading: 'Loading care queue…', noAccessTitle: 'Access unavailable',
     noAccess: 'Your current profile does not have permission to operate Care Requests in this scope.', retry: 'Try again',
     congregation: 'Campus', search: 'Search person', newRequest: 'New care request',
@@ -210,7 +210,7 @@ export const careIntegrityCopy = {
     resolutions: { contact_completed: 'Contact completed', pastoral_handoff: 'Handed off to pastor', declined_contact: 'Person does not want contact', invalid_contact: 'Invalid contact', closed_no_response: 'Closed without response', other_resolved: 'Other resolved outcome' },
   },
   es: {
-    product: 'NestJourney', title: 'Cuidado & Conexão',
+    product: 'NestJourney', title: 'Cuidado & Conexión',
     subtitle: 'Compromisos de cuidado con responsable, plazo y resultado — sin medir espiritualidad.',
     back: 'Volver al NestJourney', loading: 'Cargando fila de cuidado…', noAccessTitle: 'Acceso no disponible',
     noAccess: 'Tu perfil actual no tiene permiso para operar Care Requests en este alcance.', retry: 'Intentar de nuevo',
@@ -303,7 +303,7 @@ export const journeyProfileCopy = {
     product: 'NestJourney', title: 'Pessoas',
     subtitle: 'Cadastro, consentimento e histórico factual da jornada de cada pessoa em um só lugar.',
     back: 'Voltar ao NestJourney', loading: 'Carregando jornada…', noAccessTitle: 'Acesso não disponível',
-    noAccess: 'Seu perfil atual não possui uma Lens autorizada para consultar Journey Profiles neste escopo.', retry: 'Tentar novamente',
+    noAccess: 'Seu perfil atual não possui acesso autorizado aos cadastros de pessoas neste escopo.', retry: 'Tentar novamente',
     congregation: 'Unidade', search: 'Buscar pessoa', people: 'Pessoas', profile: 'Perfil de jornada',
     selectPerson: 'Selecione uma pessoa para abrir a jornada.', noPeople: 'Nenhuma pessoa encontrada neste escopo.',
     firstVisit: 'Primeira visita', visits: 'Presenças/visitas registradas', contact: 'Contato', authorized: 'Autorizado',
@@ -317,13 +317,13 @@ export const journeyProfileCopy = {
     meeting: 'Encontro', status: 'Status', discipler: 'Discipulador', active: 'Ativo', paused: 'Pausado', completed: 'Concluído',
     capacity: 'Capacidade', participants: 'Participantes', source: 'Fonte', peopleSource: 'People',
     careSource: 'Care Requests', groupSourceLabel: 'Group Memberships', discipleshipSource: 'Discipleships',
-    openPresence: 'Abrir Presence Assist', openCarePage: 'Abrir Care Integrity',
+    openPresence: 'Abrir Recepção & Mesa', openCarePage: 'Abrir Cuidado & Conexão',
     sourceRule: 'NO SOURCE → NO CLAIM: ausência de registro aparece como “não registrado”; não é convertida em conclusão sobre a pessoa.',
     error: 'Não foi possível carregar esta jornada.',
   },
   en: {
-    product: 'NestJourney', title: 'Pessoas',
-    subtitle: 'A factual view of each person’s journey, combining existing sources without inventing stages or diagnoses.',
+    product: 'NestJourney', title: 'People',
+    subtitle: 'Profile, consent, and factual journey history for each person in one place.',
     back: 'Back to NestJourney', loading: 'Loading journey…', noAccessTitle: 'Access unavailable',
     noAccess: 'Your current profile does not have an authorized Lens to view Journey Profiles in this scope.', retry: 'Try again',
     congregation: 'Campus', search: 'Search person', people: 'People', profile: 'Journey profile',
@@ -344,7 +344,7 @@ export const journeyProfileCopy = {
     error: 'This journey could not be loaded.',
   },
   es: {
-    product: 'NestJourney', title: 'Pessoas',
+    product: 'NestJourney', title: 'Personas',
     subtitle: 'Una visión factual de la jornada de cada persona, reuniendo fuentes existentes sin inventar etapas ni diagnósticos.',
     back: 'Volver al NestJourney', loading: 'Cargando jornada…', noAccessTitle: 'Acceso no disponible',
     noAccess: 'Tu perfil actual no tiene una Lens autorizada para consultar Journey Profiles en este alcance.', retry: 'Intentar de nuevo',
@@ -474,7 +474,7 @@ export const discipleshipRuntimeCopy = {
     error: 'The operation could not be completed.',
   },
   es: {
-    product: 'NestJourney', title: 'Raiz', subtitle: 'Relaciones reales, encuentros registrados y próximo paso explícito. Sin puntuar madurez espiritual.',
+    product: 'NestJourney', title: 'Raíz', subtitle: 'Relaciones reales, encuentros registrados y próximo paso explícito. Sin puntuar madurez espiritual.',
     back: 'Volver al NestJourney', loading: 'Cargando discipulado…', noAccessTitle: 'Acceso no disponible',
     noAccess: 'Tu perfil no puede operar discipulado en este alcance.', retry: 'Intentar de nuevo',
     congregation: 'Sede', newRelation: 'Iniciar relación', empty: 'No se encontraron relaciones de discipulado en esta sede.',
@@ -617,7 +617,7 @@ export const implementationRuntimeCopy = {
 
 export const governanceRuntimeCopy = {
   'pt-BR': {
-    product:'NestJourney', title:'Governança e privacidade', subtitle:'Acesso mínimo necessário, solicitações de dados e trilha operacional sem transformar cuidado em prontuário.',
+    product:'NestJourney', title:'Privacidade & Auditoria', subtitle:'Acesso mínimo necessário, solicitações de dados e trilha operacional sem transformar cuidado em prontuário.',
     back:'Visão da Jornada', loading:'Carregando governança…', noAccessTitle:'Governança não disponível', noAccess:'Seu perfil atual não possui acesso à governança do NestJourney.', retry:'Tentar novamente',
     congregation:'Unidade', systemRole:'Administrador do ecossistema', openRequests:'Solicitações abertas', openRequestsHint:'correção, revogação, exclusão ou retenção', auditEvents:'Eventos de auditoria', auditHint:'alterações operacionais registradas', accessBoundary:'Escopo de acesso', accessBoundaryHint:'unidades atribuídas ao perfil',
     sections:'Seções de governança', privacy:'Privacidade', audit:'Auditoria', boundaries:'Limites de acesso', restricted:'restrito à governança de dados',
@@ -636,7 +636,7 @@ export const governanceRuntimeCopy = {
     error:'Não foi possível concluir a operação.',
   },
   en: {
-    product:'NestJourney', title:'Governance & privacy', subtitle:'Least-necessary access, data requests, and an operational trail without turning care into a case file.',
+    product:'NestJourney', title:'Privacy & Audit', subtitle:'Least-necessary access, data requests, and an operational trail without turning care into a case file.',
     back:'Journey Overview', loading:'Loading governance…', noAccessTitle:'Governance unavailable', noAccess:'Your current profile does not have access to NestJourney governance.', retry:'Try again',
     congregation:'Campus', systemRole:'Ecosystem administrator', openRequests:'Open requests', openRequestsHint:'correction, revocation, deletion, or retention', auditEvents:'Audit events', auditHint:'recorded operational changes', accessBoundary:'Access scope', accessBoundaryHint:'campuses assigned to the profile',
     sections:'Governance sections', privacy:'Privacy', audit:'Audit', boundaries:'Access boundaries', restricted:'restricted to data governance',
@@ -655,7 +655,7 @@ export const governanceRuntimeCopy = {
     error:'The operation could not be completed.',
   },
   es: {
-    product:'NestJourney', title:'Gobernanza y privacidad', subtitle:'Acceso mínimo necesario, solicitudes de datos y trazabilidad operativa sin convertir el cuidado en expediente.',
+    product:'NestJourney', title:'Privacidad & Auditoría', subtitle:'Acceso mínimo necesario, solicitudes de datos y trazabilidad operativa sin convertir el cuidado en expediente.',
     back:'Visión de la Jornada', loading:'Cargando gobernanza…', noAccessTitle:'Gobernanza no disponible', noAccess:'Tu perfil actual no tiene acceso a la gobernanza de NestJourney.', retry:'Intentar de nuevo',
     congregation:'Sede', systemRole:'Administrador del ecosistema', openRequests:'Solicitudes abiertas', openRequestsHint:'corrección, revocación, exclusión o retención', auditEvents:'Eventos de auditoría', auditHint:'cambios operativos registrados', accessBoundary:'Alcance de acceso', accessBoundaryHint:'sedes asignadas al perfil',
     sections:'Secciones de gobernanza', privacy:'Privacidad', audit:'Auditoría', boundaries:'Límites de acceso', restricted:'restringido a gobernanza de datos',
@@ -678,7 +678,7 @@ export const governanceRuntimeCopy = {
 
 export const pastoralHandoffCopy = {
   'pt-BR': {
-    product:'NestJourney', title:'Contato pastoral', subtitle:'Uma fila restrita de encaminhamentos explícitos — sem transformar conversas sensíveis em prontuário.',
+    product:'NestJourney', title:'Visão Pastoral', subtitle:'Uma fila restrita de encaminhamentos explícitos — sem transformar conversas sensíveis em prontuário.',
     back:'Visão da Jornada', loading:'Carregando encaminhamentos…', noAccessTitle:'Contato pastoral restrito', noAccess:'Seu perfil atual não possui acesso à fila pastoral reservada.', retry:'Tentar novamente',
     restricted:'Acesso pastoral restrito', congregation:'Unidade', open:'Precisa de contato', openHint:'marcadores pastorais abertos', resolved:'Contato registrado', resolvedHint:'encaminhamentos concluídos',
     safety:'Em risco de suicídio, autoagressão, violência, abuso, risco infantil, emergência médica ou alegação de crime, não espere pelo aplicativo: acione imediatamente o pastor responsável e siga os protocolos legais e de proteção aplicáveis.',
@@ -689,7 +689,7 @@ export const pastoralHandoffCopy = {
     error:'Não foi possível concluir a operação.',
   },
   en: {
-    product:'NestJourney', title:'Pastoral contact', subtitle:'A restricted queue of explicit handoffs — without turning sensitive conversations into case files.',
+    product:'NestJourney', title:'Pastoral View', subtitle:'A restricted queue of explicit handoffs — without turning sensitive conversations into case files.',
     back:'Journey Overview', loading:'Loading handoffs…', noAccessTitle:'Restricted pastoral contact', noAccess:'Your current profile does not have access to the reserved pastoral queue.', retry:'Try again',
     restricted:'Restricted pastoral access', congregation:'Campus', open:'Needs contact', openHint:'open pastoral markers', resolved:'Contact recorded', resolvedHint:'completed handoffs',
     safety:'For suicide or self-harm risk, violence, abuse, child risk, medical emergency, or alleged crime, do not wait for the app: contact the responsible pastor immediately and follow applicable legal and protection protocols.',
@@ -700,7 +700,7 @@ export const pastoralHandoffCopy = {
     error:'The operation could not be completed.',
   },
   es: {
-    product:'NestJourney', title:'Contacto pastoral', subtitle:'Una fila restringida de encaminamientos explícitos — sin convertir conversaciones sensibles en expediente.',
+    product:'NestJourney', title:'Visión Pastoral', subtitle:'Una fila restringida de encaminamientos explícitos — sin convertir conversaciones sensibles en expediente.',
     back:'Visión de la Jornada', loading:'Cargando encaminamientos…', noAccessTitle:'Contacto pastoral restringido', noAccess:'Tu perfil actual no tiene acceso a la fila pastoral reservada.', retry:'Intentar de nuevo',
     restricted:'Acceso pastoral restringido', congregation:'Sede', open:'Necesita contacto', openHint:'marcadores pastorales abiertos', resolved:'Contacto registrado', resolvedHint:'encaminamientos concluidos',
     safety:'Ante riesgo de suicidio o autolesión, violencia, abuso, riesgo infantil, emergencia médica o alegación de delito, no esperes al aplicativo: avisa inmediatamente al pastor responsable y sigue los protocolos legales y de protección aplicables.',
