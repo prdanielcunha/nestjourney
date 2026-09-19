@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, CheckCircle2, ChevronLeft, Clock3, HeartHandshake, Plus, ShieldCheck, X } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, ChevronLeft, Clock3, Copy, HeartHandshake, MessageSquareText, Plus, ShieldCheck, X } from 'lucide-react'
 import { auth } from './firebase'
 import { evaluateCarePromise } from './intelligence'
 import {
@@ -32,6 +32,19 @@ function initials(name: string) {
 function formatDistance(ms: number) {
   const hours = Math.max(1, Math.ceil(ms / (60 * 60 * 1000)))
   return `${hours}h`
+}
+
+function suggestedFirstContact(locale: AppLocale, name: string) {
+  const firstName = name.trim().split(' ')[0] || name
+  if (locale === 'en') return `Hi, ${firstName}. It was good to have you with us. Thank you for coming. If you would like to talk or ask for prayer, we are here for you.`
+  if (locale === 'es') return `Hola, ${firstName}. Fue una alegría tenerte con nosotros. Gracias por venir. Si quieres conversar o pedir oración, estamos aquí para ti.`
+  return `Oi, ${firstName}. Foi uma alegria ter você com a gente. Obrigado por estar conosco. Se quiser conversar ou pedir oração, estamos por aqui.`
+}
+
+function suggestedMessageLabel(locale: AppLocale) {
+  if (locale === 'en') return { title: 'Suggested message', copy: 'Copy message', hint: 'Use as a starting point and keep the conversation human.' }
+  if (locale === 'es') return { title: 'Mensaje sugerido', copy: 'Copiar mensaje', hint: 'Úsalo como punto de partida y mantén la conversación humana.' }
+  return { title: 'Mensagem sugerida', copy: 'Copiar mensagem', hint: 'Use como ponto de partida e mantenha a conversa humana.' }
 }
 
 export default function CareIntegrityPage() {
@@ -187,6 +200,11 @@ export default function CareIntegrityPage() {
             <div><span>{t.owner}</span><strong>{request.ownerRef ? (request.ownerRef === access.userId ? t.you : t.assigned) : t.unassigned}</strong><small>{request.source === 'visitor_registration' ? t.fromVisitor : t.manual}</small></div>
           </div>
           {request.summary ? <p className="care-summary">{request.summary}</p> : null}
+          {request.status === 'open' && request.careType === 'first_contact' && person?.consent ? <div className="care-suggested-message">
+            <span><MessageSquareText size={15}/><strong>{suggestedMessageLabel(locale).title}</strong></span>
+            <p>{suggestedFirstContact(locale, person.name)}</p>
+            <div><small>{suggestedMessageLabel(locale).hint}</small><button className="care-copy-button" type="button" onClick={()=>void navigator.clipboard?.writeText(suggestedFirstContact(locale, person.name))}><Copy size={14}/>{suggestedMessageLabel(locale).copy}</button></div>
+          </div> : null}
           <div className="care-card-actions">
             {!request.ownerRef && request.status === 'open' ? <button className="care-button" disabled={busy} onClick={() => void claim(request)}>{t.claim}</button> : null}
             {request.status === 'open' && request.ownerRef && request.careType === 'first_contact'
