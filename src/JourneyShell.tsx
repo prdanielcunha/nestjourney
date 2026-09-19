@@ -1,219 +1,174 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import {
-  ClipboardCheck, HeartHandshake, House, LayoutDashboard, Leaf, Menu, ShieldCheck,
-  Sparkles, UserCheck, Users, X, ListTodo, UserCog, Settings2
+  BarChart3, Eye, HeartHandshake, House, Leaf, LayoutGrid, ListTodo,
+  MoreHorizontal, Settings2, UserCheck, Users, UsersRound,
 } from 'lucide-react'
 import { auth } from './firebase'
 import { getActiveJourneyOrganizationId, loadJourneyAccess, type JourneyAccessContext } from './journeyRepository'
+import { canOpenJourneyArea } from './journeyExperience'
 import { getInitialLocale, localeLabels, persistLocale, type AppLocale } from './i18n'
 import { useJourneyLabels } from './journeyLabels'
 import './JourneyShell.css'
 
-type NavItem = {
-  href: string
-  label: string
-  description: string
-  icon: typeof LayoutDashboard
-  allowed: (access: JourneyAccessContext) => boolean
+type NavItem={
+  href:string
+  label:string
+  description:string
+  icon:typeof ListTodo
+  enabled?:(access:JourneyAccessContext)=>boolean
 }
 
-const shellCopy: Record<AppLocale, {
-  start: string; home: string; homeDesc: string; today: string; todayDesc: string; implementation: string; implementationDesc: string; team: string; teamDesc: string;
-  journey: string; people: string; peopleDesc: string; reception: string; receptionDesc: string; care: string; careDesc: string;
-  groups: string; groupsDesc: string; root: string; rootDesc: string; management: string; pastoral: string; pastoralDesc: string;
-  privacy: string; privacyDesc: string; settings: string; settingsDesc: string; helpTitle: string; helpText: string; tagline: string; modules: string; quick: string; more: string; close: string;
-}> = {
-  'pt-BR': {
-    start:'Começar', home:'Início', homeDesc:'Visão simples da jornada', today:'Meu Hoje', todayDesc:'O que precisa da sua atenção',
-    implementation:'Implantação', implementationDesc:'As 7 semanas, passo a passo', team:'Equipe & Papéis', teamDesc:'Frentes, responsabilidades e acessos', journey:'Jornada da pessoa',
-    people:'Pessoas', peopleDesc:'Cadastro e histórico da jornada', reception:'Recepção & Mesa', receptionDesc:'Chegada, vínculo e presença',
-    care:'Cuidado & Conexão', careDesc:'Contato em 24–48h e próximos passos', groups:'Casas de Paz', groupsDesc:'Casas, participantes e entradas',
-    root:'Raiz', rootDesc:'Discipulado inicial em 7 encontros', management:'Pastoral & gestão', pastoral:'Visão Pastoral', pastoralDesc:'Casos que pedem atenção pastoral',
-    privacy:'Privacidade & Auditoria', privacyDesc:'LGPD, correções e histórico', settings:'Configurações', settingsDesc:'Nomes dos módulos e preferências', helpTitle:'Não sabe por onde começar?',
-    helpText:'Abra Implantação. O NestJourney guia a igreja pelas 7 semanas e depois acompanha a jornada no dia a dia.',
-    tagline:'cuidado em cada passo', modules:'Módulos do NestJourney', quick:'Navegação rápida', more:'Mais', close:'Fechar',
+const copy={
+  'pt-BR':{
+    tagline:'cuidado em cada passo',primary:'Principal',today:'Hoje',todayDesc:'O que depende de você agora',
+    people:'Pessoas',peopleDesc:'Cadastro, busca e jornada permitida',areas:'Áreas',areasDesc:'As cinco frentes operacionais',
+    vision:'Visão',visionDesc:'Coordenação, pastoral, gestão e CEO',more:'Mais',moreDesc:'Gestão, implantação e ajustes',
+    presence:'Presença',presenceDesc:'Cultos, visitantes e vínculo',table:'Mesa Aberta',tableDesc:'Convidados e participação',
+    care:'Cuidado & Conexão',careDesc:'Contato em 24–48h e próximos passos',groups:'Casas de Paz',groupsDesc:'Casas, participantes e operação',
+    root:'Raiz',rootDesc:'Discipulado inicial 1–7',available:'Disponível',restricted:'Sem acesso neste papel',
+    language:'Idioma',role:'Seu acesso',
   },
-  en: {
-    start:'Start', home:'Home', homeDesc:'A simple journey overview', today:'My Today', todayDesc:'What needs your attention',
-    implementation:'Implementation', implementationDesc:'The 7 weeks, step by step', team:'Team & Roles', teamDesc:'Ministry fronts, responsibilities and access', journey:'Person journey',
-    people:'People', peopleDesc:'Profile and journey history', reception:'Welcome & Table', receptionDesc:'Arrival, relationship and presence',
-    care:'Care & Connection', careDesc:'24–48h contact and next steps', groups:'Peace Houses', groupsDesc:'Groups, participants and entry',
-    root:'Root', rootDesc:'Initial discipleship in 7 meetings', management:'Pastoral & management', pastoral:'Pastoral View', pastoralDesc:'Cases needing pastoral attention',
-    privacy:'Privacy & Audit', privacyDesc:'Privacy, corrections and history', settings:'Settings', settingsDesc:'Module names and preferences', helpTitle:'Not sure where to start?',
-    helpText:'Open Implementation. NestJourney guides the church through the 7 weeks and then supports the daily journey.',
-    tagline:'care at every step', modules:'NestJourney modules', quick:'Quick navigation', more:'More', close:'Close',
+  en:{
+    tagline:'care at every step',primary:'Main',today:'Today',todayDesc:'What depends on you now',
+    people:'People',peopleDesc:'Profile, search, and permitted journey',areas:'Areas',areasDesc:'The five operational fronts',
+    vision:'Vision',visionDesc:'Coordination, pastoral, management, and CEO',more:'More',moreDesc:'Management, implementation, and settings',
+    presence:'Presence',presenceDesc:'Services, visitors, and relationship',table:'Open Table',tableDesc:'Guests and participation',
+    care:'Care & Connection',careDesc:'24–48h contact and next steps',groups:'Peace Houses',groupsDesc:'Houses, participants, and operations',
+    root:'Root',rootDesc:'Initial discipleship 1–7',available:'Available',restricted:'Not available for this role',
+    language:'Language',role:'Your access',
   },
-  es: {
-    start:'Comenzar', home:'Inicio', homeDesc:'Visión simple de la jornada', today:'Mi Hoy', todayDesc:'Lo que necesita tu atención',
-    implementation:'Implementación', implementationDesc:'Las 7 semanas, paso a paso', team:'Equipo & Papeles', teamDesc:'Frentes, responsabilidades y accesos', journey:'Jornada de la persona',
-    people:'Personas', peopleDesc:'Registro e historial de la jornada', reception:'Recepción & Mesa', receptionDesc:'Llegada, vínculo y presencia',
-    care:'Cuidado & Conexión', careDesc:'Contacto en 24–48h y próximos pasos', groups:'Casas de Paz', groupsDesc:'Casas, participantes y entradas',
-    root:'Raíz', rootDesc:'Discipulado inicial en 7 encuentros', management:'Pastoral & gestión', pastoral:'Visión Pastoral', pastoralDesc:'Casos que requieren atención pastoral',
-    privacy:'Privacidad & Auditoría', privacyDesc:'Privacidad, correcciones e historial', settings:'Configuración', settingsDesc:'Nombres de módulos y preferencias', helpTitle:'¿No sabes por dónde empezar?',
-    helpText:'Abre Implementación. NestJourney guía a la iglesia durante las 7 semanas y luego acompaña la jornada diaria.',
-    tagline:'cuidado en cada paso', modules:'Módulos de NestJourney', quick:'Navegación rápida', more:'Más', close:'Cerrar',
+  es:{
+    tagline:'cuidado en cada paso',primary:'Principal',today:'Hoy',todayDesc:'Lo que depende de ti ahora',
+    people:'Personas',peopleDesc:'Registro, búsqueda y jornada permitida',areas:'Áreas',areasDesc:'Los cinco frentes operativos',
+    vision:'Visión',visionDesc:'Coordinación, pastoral, gestión y CEO',more:'Más',moreDesc:'Gestión, implementación y configuración',
+    presence:'Presencia',presenceDesc:'Cultos, visitantes y vínculo',table:'Mesa Abierta',tableDesc:'Invitados y participación',
+    care:'Cuidado & Conexión',careDesc:'Contacto en 24–48h y próximos pasos',groups:'Casas de Paz',groupsDesc:'Casas, participantes y operación',
+    root:'Raíz',rootDesc:'Discipulado inicial 1–7',available:'Disponible',restricted:'Sin acceso en este papel',
+    language:'Idioma',role:'Tu acceso',
   },
+} as const
+
+function sameRoute(href:string,pathname:string){
+  if(href==='/my-today')return pathname==='/'||pathname==='/my-today'
+  if(href==='/areas')return pathname==='/areas'||['/presence-assist','/mesa-runtime','/care-integrity','/groups-runtime','/discipleship-runtime'].includes(pathname)
+  if(href==='/more')return pathname==='/more'||['/team-runtime','/implementation-runtime','/reports','/governance-runtime','/settings-runtime','/help'].includes(pathname)
+  return pathname===href
 }
 
-function buildGroups(copy: typeof shellCopy[AppLocale]): Array<{ label: string; items: NavItem[] }> {
-  return [
-    {
-      label: copy.start,
-      items: [
-        { href: '/', label: copy.home, description: copy.homeDesc, icon: LayoutDashboard, allowed: () => true },
-        { href: '/my-today', label: copy.today, description: copy.todayDesc, icon: ListTodo, allowed: (a) => a.broadJourneyAccess || a.canManageCare || a.canManagePresence || a.canManageGroups || a.canManageDiscipleship || a.canManagePastoral },
-        { href: '/implementation-runtime', label: copy.implementation, description: copy.implementationDesc, icon: ClipboardCheck, allowed: (a) => a.canManageImplementation },
-        { href: '/team-runtime', label: copy.team, description: copy.teamDesc, icon: UserCog, allowed: (a) => a.isOwner || a.isSystemAdmin || a.canManageImplementation || a.canViewGovernance },
-      ],
-    },
-    {
-      label: copy.journey,
-      items: [
-        { href: '/journey-profile', label: copy.people, description: copy.peopleDesc, icon: Users, allowed: (a) => a.broadJourneyAccess || a.canManagePeople },
-        { href: '/presence-assist', label: copy.reception, description: copy.receptionDesc, icon: UserCheck, allowed: (a) => a.canManagePresence },
-        { href: '/care-integrity', label: copy.care, description: copy.careDesc, icon: HeartHandshake, allowed: (a) => a.broadJourneyAccess || a.canManageCare },
-        { href: '/groups-runtime', label: copy.groups, description: copy.groupsDesc, icon: House, allowed: (a) => a.broadJourneyAccess || a.canManageGroups },
-        { href: '/discipleship-runtime', label: copy.root, description: copy.rootDesc, icon: Leaf, allowed: (a) => a.broadJourneyAccess || a.canManageDiscipleship },
-      ],
-    },
-    {
-      label: copy.management,
-      items: [
-        { href: '/pastoral-handoff', label: copy.pastoral, description: copy.pastoralDesc, icon: Sparkles, allowed: (a) => a.canManagePastoral },
-        { href: '/governance-runtime', label: copy.privacy, description: copy.privacyDesc, icon: ShieldCheck, allowed: (a) => a.canViewGovernance },
-        { href: '/settings-runtime', label: copy.settings, description: copy.settingsDesc, icon: Settings2, allowed: (a) => a.isSystemAdmin || a.isOwner || ['owner','admin','pastor'].includes(a.role) },
-      ],
-    },
+export function JourneyShell({children}:{children:ReactNode}){
+  const [access,setAccess]=useState<JourneyAccessContext|null>(null)
+  const [locale,setLocale]=useState<AppLocale>(getInitialLocale)
+  const [pathname,setPathname]=useState(()=>window.location.pathname)
+  const {labels}=useJourneyLabels()
+  const t=copy[locale]
+
+  useEffect(()=>{
+    const syncPath=()=>setPathname(window.location.pathname)
+    window.addEventListener('popstate',syncPath)
+    return()=>window.removeEventListener('popstate',syncPath)
+  },[])
+  useEffect(()=>{
+    const syncLocale=(event:Event)=>{
+      const next=(event as CustomEvent<AppLocale>).detail
+      if(next)setLocale(next)
+    }
+    window.addEventListener('nestjourney:locale',syncLocale)
+    return()=>window.removeEventListener('nestjourney:locale',syncLocale)
+  },[])
+  useEffect(()=>{
+    const user=auth?.currentUser,organizationId=getActiveJourneyOrganizationId()
+    if(!user||!organizationId)return
+    void loadJourneyAccess(user.uid,organizationId).then(setAccess).catch(()=>setAccess(null))
+  },[pathname])
+
+  const names=useMemo(()=>({
+    presence:labels.presence||t.presence,
+    mesa:labels.table||t.table,
+    care:labels.care||t.care,
+    groups:labels.groups||t.groups,
+    root:labels.discipleship||t.root,
+  }),[labels,t])
+
+  const primary:NavItem[]=[
+    {href:'/my-today',label:t.today,description:t.todayDesc,icon:ListTodo},
+    {href:'/journey-profile',label:t.people,description:t.peopleDesc,icon:Users},
+    {href:'/vision',label:t.vision,description:t.visionDesc,icon:Eye},
   ]
-}
+  const areas:NavItem[]=[
+    {href:'/presence-assist',label:names.presence,description:t.presenceDesc,icon:UserCheck,enabled:a=>canOpenJourneyArea(a,'presence')},
+    {href:'/mesa-runtime',label:names.mesa,description:t.tableDesc,icon:UsersRound,enabled:a=>canOpenJourneyArea(a,'mesa')},
+    {href:'/care-integrity',label:names.care,description:t.careDesc,icon:HeartHandshake,enabled:a=>canOpenJourneyArea(a,'care')},
+    {href:'/groups-runtime',label:names.groups,description:t.groupsDesc,icon:House,enabled:a=>canOpenJourneyArea(a,'groups')},
+    {href:'/discipleship-runtime',label:names.root,description:t.rootDesc,icon:Leaf,enabled:a=>canOpenJourneyArea(a,'discipleship')},
+  ]
 
-function sameRoute(href: string, pathname: string) {
-  if (href === '/') return pathname === '/' || pathname === '/journey-overview'
-  return pathname === href
-}
-
-export function JourneyShell({ children }: { children: ReactNode }) {
-  const [access, setAccess] = useState<JourneyAccessContext | null>(null)
-  const [open, setOpen] = useState(false)
-  const [locale, setLocale] = useState<AppLocale>(getInitialLocale)
-  const [pathname, setPathname] = useState(() => window.location.pathname)
-  const { labels } = useJourneyLabels()
-  const copy = shellCopy[locale]
-  const moduleCopy = useMemo(() => {
-    const [defaultPresence, defaultTable] = copy.reception.split(' & ')
-    return {
-      ...copy,
-      reception: `${labels.presence || defaultPresence} & ${labels.table || defaultTable}`,
-      care: labels.care || copy.care,
-      groups: labels.groups || copy.groups,
-      root: labels.discipleship || copy.root,
-    }
-  }, [copy, labels])
-  const groups = useMemo(() => buildGroups(moduleCopy), [moduleCopy])
-
-  useEffect(() => {
-    const syncPath = () => setPathname(window.location.pathname)
-    window.addEventListener('popstate', syncPath)
-    return () => window.removeEventListener('popstate', syncPath)
-  }, [])
-
-  useEffect(() => {
-    const syncLocale = (event: Event) => {
-      const next = (event as CustomEvent<AppLocale>).detail
-      if (next) setLocale(next)
-    }
-    window.addEventListener('nestjourney:locale', syncLocale)
-    return () => window.removeEventListener('nestjourney:locale', syncLocale)
-  }, [])
-
-  useEffect(() => {
-    const user = auth?.currentUser
-    const organizationId = getActiveJourneyOrganizationId()
-    if (!user || !organizationId) return
-    void loadJourneyAccess(user.uid, organizationId).then(setAccess).catch(() => setAccess(null))
-  }, [pathname])
-
-  const visibleGroups = useMemo(() => {
-    if (!access) return groups.map(group => ({ ...group, items: group.items.filter(item => item.href === '/') }))
-    return groups
-      .map(group => ({ ...group, items: group.items.filter(item => item.allowed(access)) }))
-      .filter(group => group.items.length)
-  }, [access, groups])
-
-  const navigate = (href: string) => {
-    if (href !== window.location.pathname) {
-      window.history.pushState({}, '', href)
+  const navigate=(href:string,enabled=true)=>{
+    if(!enabled)return
+    if(href!==window.location.pathname){
+      window.history.pushState({},'',href)
       window.dispatchEvent(new PopStateEvent('popstate'))
     }
-    setOpen(false)
   }
 
-  const essentials = [
-    { href: '/', label: copy.home, icon: LayoutDashboard },
-    { href: '/my-today', label: copy.today, icon: ListTodo },
-    { href: '/presence-assist', label: moduleCopy.reception.split(' & ')[0], icon: UserCheck },
-    { href: '/care-integrity', label: moduleCopy.care.split(' & ')[0], icon: HeartHandshake },
-  ].filter(item => visibleGroups.some(group => group.items.some(nav => nav.href === item.href)))
+  const renderItem=(item:NavItem)=>{
+    const Icon=item.icon
+    const enabled=!item.enabled||Boolean(access&&item.enabled(access))
+    return <button key={item.href} className={(sameRoute(item.href,pathname)?'active ':'')+(enabled?'':'disabled')} onClick={()=>navigate(item.href,enabled)}>
+      <span className="journey-nav-icon"><Icon size={17}/></span>
+      <span className="journey-nav-copy"><strong>{item.label}</strong><small>{enabled?item.description:t.restricted}</small></span>
+    </button>
+  }
+
+  const mobile=[
+    {href:'/my-today',label:t.today,icon:ListTodo},
+    {href:'/journey-profile',label:t.people,icon:Users},
+    {href:'/areas',label:t.areas,icon:LayoutGrid},
+    {href:'/vision',label:t.vision,icon:BarChart3},
+    {href:'/more',label:t.more,icon:MoreHorizontal},
+  ]
 
   return <div className="journey-app-frame">
     <aside className="journey-side-nav">
-      <button className="journey-side-brand" onClick={() => navigate('/')} aria-label={copy.home}>
-        <img src="/icon.svg" alt="" />
-        <span><strong>NestJourney</strong><small>{copy.tagline}</small></span>
+      <button className="journey-side-brand" onClick={()=>navigate('/my-today')}>
+        <img src="/icon.svg" alt=""/>
+        <span><strong>NestJourney</strong><small>{t.tagline}</small></span>
       </button>
 
-      <nav aria-label={copy.modules}>
-        {visibleGroups.map(group => <section className="journey-nav-group" key={group.label}>
-          <span className="journey-nav-label">{group.label}</span>
-          {group.items.map(item => {
-            const Icon = item.icon
-            const active = sameRoute(item.href, pathname)
-            return <button key={item.href} className={active ? 'active' : ''} onClick={() => navigate(item.href)}>
-              <span className="journey-nav-icon"><Icon size={17} /></span>
-              <span className="journey-nav-copy"><strong>{item.label}</strong><small>{item.description}</small></span>
-            </button>
-          })}
-        </section>)}
+      <nav aria-label="NestJourney">
+        <section className="journey-nav-group">
+          <span className="journey-nav-label">{t.primary}</span>
+          {primary.map(renderItem)}
+        </section>
+
+        <section className="journey-nav-group">
+          <button className={sameRoute('/areas',pathname)?'active section-link':''} onClick={()=>navigate('/areas')}>
+            <span className="journey-nav-icon"><LayoutGrid size={17}/></span>
+            <span className="journey-nav-copy"><strong>{t.areas}</strong><small>{t.areasDesc}</small></span>
+          </button>
+          <div className="journey-nav-children">{areas.map(renderItem)}</div>
+        </section>
+
+        <section className="journey-nav-group">
+          <button className={sameRoute('/more',pathname)?'active section-link':''} onClick={()=>navigate('/more')}>
+            <span className="journey-nav-icon"><MoreHorizontal size={17}/></span>
+            <span className="journey-nav-copy"><strong>{t.more}</strong><small>{t.moreDesc}</small></span>
+          </button>
+        </section>
       </nav>
 
       <div className="journey-side-footer">
-        <div className="journey-side-help">
-          <strong>{copy.helpTitle}</strong>
-          <span>{copy.helpText}</span>
-        </div>
-        <select className="journey-locale" value={locale} aria-label="Language" onChange={(event) => { const next=event.target.value as AppLocale; setLocale(next); persistLocale(next) }}>
-          {(Object.keys(localeLabels) as AppLocale[]).map(id => <option value={id} key={id}>{localeLabels[id]}</option>)}
-        </select>
+        {access?<div className="journey-access-chip"><Settings2 size={14}/><span><small>{t.role}</small><strong>{access.isSystemAdmin?'CEO MillionsNest':access.isOwner?'Owner':access.role||'member'}</strong></span></div>:null}
+        <label className="journey-language"><span>{t.language}</span><select className="journey-locale" value={locale} onChange={event=>{const next=event.target.value as AppLocale;setLocale(next);persistLocale(next)}}>{(Object.keys(localeLabels) as AppLocale[]).map(id=><option value={id} key={id}>{localeLabels[id]}</option>)}</select></label>
       </div>
     </aside>
 
     <section className="journey-app-content">{children}</section>
 
-    <nav className="journey-mobile-bar" aria-label={copy.quick}>
-      {essentials.map(item => {
+    <nav className="journey-mobile-bar" aria-label="NestJourney">
+      {mobile.map(item=>{
         const Icon=item.icon
-        return <button className={sameRoute(item.href, pathname)?'active':''} key={item.href} onClick={() => navigate(item.href)}>
-          <Icon size={18}/><span>{item.label}</span>
-        </button>
+        return <button className={sameRoute(item.href,pathname)?'active':''} key={item.href} onClick={()=>navigate(item.href)}><Icon size={19}/><span>{item.label}</span></button>
       })}
-      <button className={open?'active':''} onClick={() => setOpen(true)}><Menu size={18}/><span>{copy.more}</span></button>
     </nav>
-
-    {open ? <>
-      <button className="journey-mobile-scrim" aria-label={copy.close} onClick={() => setOpen(false)} />
-      <aside className="journey-mobile-drawer">
-        <header><div><strong>NestJourney</strong><span>{copy.modules}</span></div><button onClick={() => setOpen(false)} aria-label={copy.close}><X size={19}/></button></header>
-        {visibleGroups.map(group => <section className="journey-nav-group" key={group.label}>
-          <span className="journey-nav-label">{group.label}</span>
-          {group.items.map(item => {
-            const Icon=item.icon
-            return <button key={item.href} className={sameRoute(item.href,pathname)?'active':''} onClick={() => navigate(item.href)}>
-              <span className="journey-nav-icon"><Icon size={17}/></span>
-              <span className="journey-nav-copy"><strong>{item.label}</strong><small>{item.description}</small></span>
-            </button>
-          })}
-        </section>)}
-      </aside>
-    </> : null}
   </div>
 }
