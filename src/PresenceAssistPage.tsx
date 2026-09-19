@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Check, ChevronLeft, Plus, ShieldCheck, UserCheck, X } from 'lucide-react'
 import { auth } from './firebase'
-import { calculatePresenceCoverage, type PresenceCheck } from './intelligence'
+import { calculatePresenceCoverage, confirmedAbsencePersonIds, type PresenceCheck } from './intelligence'
 import {
   closePresenceSession,
   createMinimalVisitor,
@@ -46,6 +46,10 @@ export default function PresenceAssistPage() {
   const latest = useMemo(() => latestChecksByPerson(checks), [checks])
   const coverage = useMemo(
     () => displaySession ? calculatePresenceCoverage(displaySession, checks) : null,
+    [displaySession, checks],
+  )
+  const confirmedAbsences = useMemo(
+    () => displaySession ? confirmedAbsencePersonIds(displaySession, checks) : [],
     [displaySession, checks],
   )
   const visiblePeople = useMemo(() => {
@@ -99,10 +103,11 @@ export default function PresenceAssistPage() {
     finally { setBusy(false) }
   }
 
-  async function markPresent(person: PresencePerson) {
+  async function markPresenceState(person: PresencePerson, state: 'present_confirmed' | 'absent_confirmed') {
     if (!access || !displaySession || displaySession.status !== 'open') return
     const previous = latest.get(person.id)
-    if (previous?.state === 'present_confirmed') return
+    if (previous?.state === state) return
+    if (state === 'absent_confirmed' && !window.confirm(t.confirmAbsent.replace('{name}', person.name))) return
     setBusy(true)
     setError('')
     try {
@@ -112,8 +117,8 @@ export default function PresenceAssistPage() {
         sessionId: displaySession.id,
         personId: person.id,
         actorId: access.userId,
-        state: 'present_confirmed',
-        correctedFromCheckId: previous?.id,
+        state,
+        correctedFromCheckId: previous && previous.state !== 'unverified' ? previous.id : undefined,
       })
       setChecks(await listPresenceChecks(access.organizationId, congregationId, displaySession.id))
     } catch (cause) { console.error(cause); setError(t.error) }
@@ -162,23 +167,27 @@ export default function PresenceAssistPage() {
 
     {displaySession ? <section className="presence-panel presence-session-card">
       <div className="presence-session-head"><div><span className="presence-kicker">{t.session}</span><h2>{displaySession.eventName ?? new Date(displaySession.openedAt).toLocaleString(locale)}</h2><p>{new Date(displaySession.openedAt).toLocaleString(locale)} · {displaySession.status === 'closed' ? t.closed : displaySession.eventRef}</p></div><span className="presence-badge"><UserCheck size={15} /> {displaySession.status === 'open' ? t.session : t.closed}</span></div>
-      {coverage ? <><div className="coverage-wrap"><span className="coverage-number">{coverage.percent}%</span><div className="coverage-track" aria-label={`${t.coverage}: ${coverage.percent}%`}><span style={{ width: `${coverage.percent}%` }} /></div><div className="coverage-meta">{coverage.verified} {t.verified}<br />{coverage.unverified} {t.unverified}</div></div><p className="coverage-note">{coverage.meetsMinimum ? t.qualityReady : t.qualityNotReady}</p></> : null}
+      {coverage ? <><div className="coverage-wrap"><span className="coverage-number">{coverage.percent}%</span><div className="coverage-track" aria-label={`${t.coverage}: ${coverage.percent}%`}><span style={{ width: `${coverage.percent}%` }} /></div><div className="coverage-meta">{coverage.verified} {t.verified}<br />{coverage.unverified} {t.unverified}</div></div><p className="coverage-note">{coverage.meetsMinimum ? t.qualityReady : t.qualityNotReady}</p>{displaySession.status === 'closed' ? <p className="coverage-note">{coverage.meetsMinimum ? `${t.absenceEvidence}: ${confirmedAbsences.length}` : t.absenceBlocked}</p> : null}</> : null}
     </section> : <div className="presence-panel presence-empty">{t.noSession}</div>}
 
     <div className="presence-list-head"><h2>{t.people} · {visiblePeople.length}</h2><span className="presence-badge"><ShieldCheck size={14} /> {t.sourceRule}</span></div>
     <section className="presence-grid">
       {visiblePeople.map((person) => {
         const current = latest.get(person.id)
-        const confirmed = current?.state === 'present_confirmed'
+        const present = current?.state === 'present_confirmed'
+        const absent = current?.state === 'absent_confirmed'
         return <article className="presence-panel presence-person" key={person.id}>
           <div className="presence-person-top"><span className="presence-avatar">{person.photoUrl ? <img src={person.photoUrl} alt="" /> : initials(person.name)}</span><div className="presence-person-name"><strong>{person.name}</strong><small>{person.visits ? `${person.visits}x` : t.notVerified}</small></div></div>
-          <span className={`presence-state ${confirmed ? 'confirmed' : ''}`}>{confirmed ? t.present : t.notVerified}{current?.correctedFromCheckId ? ` · ${t.correcting}` : ''}</span>
-          <button className={`presence-button ${confirmed ? 'success' : 'primary'}`} disabled={busy || confirmed || displaySession?.status !== 'open'} onClick={() => void markPresent(person)}>{confirmed ? <><Check size={17} /> {t.present}</> : t.markPresent}</button>
+          <span className={`presence-state ${present ? 'confirmed' : absent ? 'absent' : ''}`}>{present ? t.present : absent ? t.absent : t.notVerified}{current?.correctedFromCheckId ? ` · ${t.correcting}` : ''}</span>
+          <div className="presence-person-actions">
+            <button className={`presence-button ${present ? 'success' : 'primary'}`} disabled={busy || present || displaySession?.status !== 'open'} onClick={() => void markPresenceState(person, 'present_confirmed')}>{present ? <><Check size={17} /> {t.present}</> : t.markPresent}</button>
+            <button className={`presence-button ${absent ? 'absence' : ''}`} disabled={busy || absent || displaySession?.status !== 'open'} onClick={() => void markPresenceState(person, 'absent_confirmed')}>{absent ? <><X size={17} /> {t.absent}</> : t.markAbsent}</button>
+          </div>
         </article>
       })}
     </section>
     {!visiblePeople.length ? <div className="presence-panel presence-empty">{t.empty}</div> : null}
-    <p className="presence-rule">{t.sourceRule}</p>
+    <p className="presence-rule">{t.sourceRule}<br />{t.correctionRule}</p>
   </div>
 
   {showSession ? <SessionModal close={() => setShowSession(false)} create={async (eventName, expected, minimum) => {
