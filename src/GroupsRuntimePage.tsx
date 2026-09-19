@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { CalendarCheck, Check, ChevronLeft, House, Play, Plus, Search, Send, ShieldCheck, Square, UserMinus, Users, X } from 'lucide-react'
+import { CalendarCheck, Check, ChevronLeft, House, Play, Plus, Search, Send, ShieldCheck, Square, UserCheck, UserMinus, Users, X } from 'lucide-react'
 import { auth } from './firebase'
 import {
   canCreateJourneyGroupEntryRequest,
