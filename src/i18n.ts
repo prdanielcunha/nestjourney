@@ -30,8 +30,8 @@ export const localeLabels: Record<AppLocale, string> = {
 export const presenceAssistCopy = {
   'pt-BR': {
     product: 'NestJourney',
-    title: 'Presence Assist',
-    subtitle: 'Confirmação humana, cobertura visível e nenhuma ausência presumida.',
+    title: 'Recepção & Mesa Aberta',
+    subtitle: 'Receba bem, registre presença com segurança e acompanhe os vínculos criados no culto.',
     back: 'Voltar ao NestJourney',
     loading: 'Carregando contexto seguro…',
     noAccessTitle: 'Acesso não disponível',
@@ -159,8 +159,8 @@ export const presenceAssistCopy = {
 
 export const careIntegrityCopy = {
   'pt-BR': {
-    product: 'NestJourney', title: 'Care Integrity',
-    subtitle: 'Compromissos de cuidado com responsável, prazo e resultado — sem medir espiritualidade.',
+    product: 'NestJourney', title: 'Cuidado & Conexão',
+    subtitle: 'Organize os contatos autorizados de 24–48h, responsáveis, respostas e próximos passos.',
     back: 'Voltar ao NestJourney', loading: 'Carregando fila de cuidado…', noAccessTitle: 'Acesso não disponível',
     noAccess: 'Seu perfil atual não possui permissão para operar Care Requests neste escopo.', retry: 'Tentar novamente',
     congregation: 'Unidade', search: 'Buscar pessoa', newRequest: 'Novo cuidado',
@@ -300,8 +300,8 @@ export const followupRuntimeCopy = {
 
 export const journeyProfileCopy = {
   'pt-BR': {
-    product: 'NestJourney', title: 'Journey Profile',
-    subtitle: 'Uma visão factual da jornada de cada pessoa, reunindo fontes existentes sem inventar etapas ou diagnósticos.',
+    product: 'NestJourney', title: 'Pessoas',
+    subtitle: 'Cadastro, consentimento e histórico factual da jornada de cada pessoa em um só lugar.',
     back: 'Voltar ao NestJourney', loading: 'Carregando jornada…', noAccessTitle: 'Acesso não disponível',
     noAccess: 'Seu perfil atual não possui uma Lens autorizada para consultar Journey Profiles neste escopo.', retry: 'Tentar novamente',
     congregation: 'Unidade', search: 'Buscar pessoa', people: 'Pessoas', profile: 'Perfil de jornada',
@@ -416,7 +416,7 @@ export const myTodayCopy = {
 
 export const groupsRuntimeCopy = {
   'pt-BR': {
-    product: 'NestJourney', title: 'Grupos', subtitle: 'Estrutura real de comunidade, capacidade e responsáveis — sem transformar presença em julgamento.',
+    product: 'NestJourney', title: 'Casas de Paz', subtitle: 'Organize Casas, líderes, capacidade, participantes e pedidos de entrada.',
     back: 'Voltar ao NestJourney', loading: 'Carregando grupos…', noAccessTitle: 'Acesso não disponível',
     noAccess: 'Seu perfil não possui capacidade para administrar grupos neste escopo.', retry: 'Tentar novamente',
     congregation: 'Unidade', newGroup: 'Novo grupo', empty: 'Nenhum grupo registrado nesta unidade.',
@@ -438,7 +438,7 @@ export const groupsRuntimeCopy = {
     error: 'The operation could not be completed.',
   },
   es: {
-    product: 'NestJourney', title: 'Grupos', subtitle: 'Estructura real de comunidad, capacidad y responsables — sin convertir presencia en juicio.',
+    product: 'NestJourney', title: 'Casas de Paz', subtitle: 'Organiza Casas, líderes, capacidad, participantes y solicitudes de entrada.',
     back: 'Volver al NestJourney', loading: 'Cargando grupos…', noAccessTitle: 'Acceso no disponible',
     noAccess: 'Tu perfil no puede administrar grupos en este alcance.', retry: 'Intentar de nuevo',
     congregation: 'Sede', newGroup: 'Nuevo grupo', empty: 'No hay grupos registrados en esta sede.',
@@ -452,7 +452,7 @@ export const groupsRuntimeCopy = {
 
 export const discipleshipRuntimeCopy = {
   'pt-BR': {
-    product: 'NestJourney', title: 'Discipulado', subtitle: 'Relações reais, encontros registrados e próximo passo explícito. Sem score de maturidade espiritual.',
+    product: 'NestJourney', title: 'Raiz', subtitle: 'Acompanhe o discipulado inicial em sete encontros, com próximo passo claro e sem pontuar maturidade espiritual.',
     back: 'Voltar ao NestJourney', loading: 'Carregando discipulado…', noAccessTitle: 'Acesso não disponível',
     noAccess: 'Seu perfil não possui capacidade para operar discipulado neste escopo.', retry: 'Tentar novamente',
     congregation: 'Unidade', newRelation: 'Iniciar relação', empty: 'Nenhuma relação de discipulado encontrada nesta unidade.',
