@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import {
   ClipboardCheck, HeartHandshake, House, LayoutDashboard, Leaf, Menu, ShieldCheck,
-  Sparkles, UserCheck, Users, X, ListTodo, UserCog
+  Sparkles, UserCheck, Users, X, ListTodo, UserCog, Settings2
 } from 'lucide-react'
 import { auth } from './firebase'
 import { getActiveJourneyOrganizationId, loadJourneyAccess, type JourneyAccessContext } from './journeyRepository'
@@ -21,7 +21,7 @@ const shellCopy: Record<AppLocale, {
   start: string; home: string; homeDesc: string; today: string; todayDesc: string; implementation: string; implementationDesc: string; team: string; teamDesc: string;
   journey: string; people: string; peopleDesc: string; reception: string; receptionDesc: string; care: string; careDesc: string;
   groups: string; groupsDesc: string; root: string; rootDesc: string; management: string; pastoral: string; pastoralDesc: string;
-  privacy: string; privacyDesc: string; helpTitle: string; helpText: string; tagline: string; modules: string; quick: string; more: string; close: string;
+  privacy: string; privacyDesc: string; settings: string; settingsDesc: string; helpTitle: string; helpText: string; tagline: string; modules: string; quick: string; more: string; close: string;
 }> = {
   'pt-BR': {
     start:'Começar', home:'Início', homeDesc:'Visão simples da jornada', today:'Meu Hoje', todayDesc:'O que precisa da sua atenção',
@@ -29,7 +29,7 @@ const shellCopy: Record<AppLocale, {
     people:'Pessoas', peopleDesc:'Cadastro e histórico da jornada', reception:'Recepção & Mesa', receptionDesc:'Chegada, vínculo e presença',
     care:'Cuidado & Conexão', careDesc:'Contato em 24–48h e próximos passos', groups:'Casas de Paz', groupsDesc:'Casas, participantes e entradas',
     root:'Raiz', rootDesc:'Discipulado inicial em 7 encontros', management:'Pastoral & gestão', pastoral:'Visão Pastoral', pastoralDesc:'Casos que pedem atenção pastoral',
-    privacy:'Privacidade & Auditoria', privacyDesc:'LGPD, correções e histórico', helpTitle:'Não sabe por onde começar?',
+    privacy:'Privacidade & Auditoria', privacyDesc:'LGPD, correções e histórico', settings:'Configurações', settingsDesc:'Nomes dos módulos e preferências', helpTitle:'Não sabe por onde começar?',
     helpText:'Abra Implantação. O NestJourney guia a igreja pelas 7 semanas e depois acompanha a jornada no dia a dia.',
     tagline:'cuidado em cada passo', modules:'Módulos do NestJourney', quick:'Navegação rápida', more:'Mais', close:'Fechar',
   },
@@ -39,7 +39,7 @@ const shellCopy: Record<AppLocale, {
     people:'People', peopleDesc:'Profile and journey history', reception:'Welcome & Table', receptionDesc:'Arrival, relationship and presence',
     care:'Care & Connection', careDesc:'24–48h contact and next steps', groups:'Peace Houses', groupsDesc:'Groups, participants and entry',
     root:'Root', rootDesc:'Initial discipleship in 7 meetings', management:'Pastoral & management', pastoral:'Pastoral View', pastoralDesc:'Cases needing pastoral attention',
-    privacy:'Privacy & Audit', privacyDesc:'Privacy, corrections and history', helpTitle:'Not sure where to start?',
+    privacy:'Privacy & Audit', privacyDesc:'Privacy, corrections and history', settings:'Settings', settingsDesc:'Module names and preferences', helpTitle:'Not sure where to start?',
     helpText:'Open Implementation. NestJourney guides the church through the 7 weeks and then supports the daily journey.',
     tagline:'care at every step', modules:'NestJourney modules', quick:'Quick navigation', more:'More', close:'Close',
   },
@@ -49,7 +49,7 @@ const shellCopy: Record<AppLocale, {
     people:'Personas', peopleDesc:'Registro e historial de la jornada', reception:'Recepción & Mesa', receptionDesc:'Llegada, vínculo y presencia',
     care:'Cuidado & Conexión', careDesc:'Contacto en 24–48h y próximos pasos', groups:'Casas de Paz', groupsDesc:'Casas, participantes y entradas',
     root:'Raíz', rootDesc:'Discipulado inicial en 7 encuentros', management:'Pastoral & gestión', pastoral:'Visión Pastoral', pastoralDesc:'Casos que requieren atención pastoral',
-    privacy:'Privacidad & Auditoría', privacyDesc:'Privacidad, correcciones e historial', helpTitle:'¿No sabes por dónde empezar?',
+    privacy:'Privacidad & Auditoría', privacyDesc:'Privacidad, correcciones e historial', settings:'Configuración', settingsDesc:'Nombres de módulos y preferencias', helpTitle:'¿No sabes por dónde empezar?',
     helpText:'Abre Implementación. NestJourney guía a la iglesia durante las 7 semanas y luego acompaña la jornada diaria.',
     tagline:'cuidado en cada paso', modules:'Módulos de NestJourney', quick:'Navegación rápida', more:'Más', close:'Cerrar',
   },
@@ -81,6 +81,7 @@ function buildGroups(copy: typeof shellCopy[AppLocale]): Array<{ label: string; 
       items: [
         { href: '/pastoral-handoff', label: copy.pastoral, description: copy.pastoralDesc, icon: Sparkles, allowed: (a) => a.canManagePastoral },
         { href: '/governance-runtime', label: copy.privacy, description: copy.privacyDesc, icon: ShieldCheck, allowed: (a) => a.canViewGovernance },
+        { href: '/settings-runtime', label: copy.settings, description: copy.settingsDesc, icon: Settings2, allowed: (a) => a.isSystemAdmin || a.isOwner || ['owner','admin','pastor'].includes(a.role) },
       ],
     },
   ]
