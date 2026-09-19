@@ -653,6 +653,35 @@ service cloud.firestore {
         );
     }
 
+    function validCareResolvedFactDocument(orgId, factId) {
+      let payload = request.resource.data.get('payload', {});
+      let careRequestId = payload.get('careRequestId', '');
+      let personId = payload.get('personId', '');
+      let carePath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/careRequests/$(careRequestId);
+      return request.resource.data.get('organizationId', '') == orgId
+        && request.resource.data.get('eventId', '') == factId
+        && request.resource.data.get('eventType', '') == 'CARE_RESOLVED'
+        && request.resource.data.get('actorId', '') == request.auth.uid
+        && request.resource.data.get('sourceApp', '') == 'nestjourney'
+        && request.resource.data.get('version', 0) == 1
+        && request.resource.data.get('recordedAt', null) == request.time
+        && request.resource.data.get('occurredAt', null) == request.time
+        && request.resource.data.get('sensitivity', '') == 'confidential'
+        && careRequestId is string
+        && careRequestId.size() > 0
+        && factId == 'care-resolved-' + careRequestId
+        && existsAfter(carePath)
+        && getAfter(carePath).data.get('status', '') == 'resolved'
+        && getAfter(carePath).data.get('resolvedAt', null) == request.time
+        && getAfter(carePath).data.get('resolvedBy', '') == request.auth.uid
+        && getAfter(carePath).data.get('personId', '') == personId
+        && getAfter(carePath).data.get('careType', '') == payload.get('careType', '')
+        && getAfter(carePath).data.get('resolutionCode', '') == payload.get('resolutionCode', '')
+        && request.resource.data.get('subjectRef', '') == 'person:' + personId
+        && request.resource.data.get('evidenceRef', '') == 'careRequest:' + careRequestId
+        && request.resource.data.get('scope', '') == 'congregation:' + getAfter(carePath).data.get('congregationId', '');
+    }
+
     function validFollowupFactDocument(orgId, factId) {
       let eventType = request.resource.data.get('eventType', '');
       let payload = request.resource.data.get('payload', {});
@@ -697,7 +726,7 @@ service cloud.firestore {
         && request.resource.data.get('sensitivity', '') in ['public', 'internal', 'confidential', 'restricted']
         && eventType in [
           'VISITOR_REGISTERED', 'PRESENCE_SESSION_OPENED', 'PRESENCE_CONFIRMED',
-          'CARE_REQUESTED', 'CARE_ASSIGNED', 'CARE_RESOLVED'
+          'CARE_REQUESTED', 'CARE_ASSIGNED'
         ]
         && (
           (eventType == 'VISITOR_REGISTERED'
@@ -750,21 +779,7 @@ service cloud.firestore {
             && request.resource.data.get('subjectRef', '') == 'person:' + personId
             && request.resource.data.get('evidenceRef', '') == 'careRequest:' + careRequestId
             && request.resource.data.get('scope', '') == 'congregation:' + getAfter(carePath).data.get('congregationId', ''))
-          ||
-          (eventType == 'CARE_RESOLVED'
-            && careRequestId is string
-            && careRequestId.size() > 0
-            && factId == 'care-resolved-' + careRequestId
-            && existsAfter(carePath)
-            && getAfter(carePath).data.get('status', '') == 'resolved'
-            && getAfter(carePath).data.get('resolvedAt', null) == request.time
-            && getAfter(carePath).data.get('resolvedBy', '') == request.auth.uid
-            && getAfter(carePath).data.get('personId', '') == personId
-            && getAfter(carePath).data.get('careType', '') == payload.get('careType', '')
-            && getAfter(carePath).data.get('resolutionCode', '') == payload.get('resolutionCode', '')
-            && request.resource.data.get('subjectRef', '') == 'person:' + personId
-            && request.resource.data.get('evidenceRef', '') == 'careRequest:' + careRequestId
-            && request.resource.data.get('scope', '') == 'congregation:' + getAfter(carePath).data.get('congregationId', ''))
+
         );
     }
 
@@ -851,11 +866,15 @@ service cloud.firestore {
               && validFollowupFactDocument(orgId, factId)
             )
             || (
+              request.resource.data.get('eventType', '') == 'CARE_RESOLVED'
+              && validCareResolvedFactDocument(orgId, factId)
+            )
+            || (
               hasMembership(orgId)
               && (
                 (request.resource.data.get('eventType', '') == 'VISITOR_REGISTERED' && canManagePeople(orgId))
                 || (request.resource.data.get('eventType', '') in ['PRESENCE_SESSION_OPENED', 'PRESENCE_CONFIRMED'] && canManagePresence(orgId))
-                || request.resource.data.get('eventType', '') in ['CARE_REQUESTED', 'CARE_ASSIGNED', 'CARE_RESOLVED']
+                || request.resource.data.get('eventType', '') in ['CARE_REQUESTED', 'CARE_ASSIGNED']
               )
               && validCanonicalFact(orgId, factId)
             );
