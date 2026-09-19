@@ -5,7 +5,7 @@ import {
 } from 'lucide-react'
 import { auth } from './firebase'
 import { getActiveJourneyOrganizationId, loadJourneyAccess, type JourneyAccessContext } from './journeyRepository'
-import { getInitialLocale, type AppLocale } from './i18n'
+import { getInitialLocale, localeLabels, persistLocale, type AppLocale } from './i18n'
 import './JourneyShell.css'
 
 type NavItem = {
@@ -157,9 +157,14 @@ export function JourneyShell({ children }: { children: ReactNode }) {
         </section>)}
       </nav>
 
-      <div className="journey-side-help">
-        <strong>{copy.helpTitle}</strong>
-        <span>{copy.helpText}</span>
+      <div className="journey-side-footer">
+        <div className="journey-side-help">
+          <strong>{copy.helpTitle}</strong>
+          <span>{copy.helpText}</span>
+        </div>
+        <select className="journey-locale" value={locale} aria-label="Language" onChange={(event) => { const next=event.target.value as AppLocale; setLocale(next); persistLocale(next) }}>
+          {(Object.keys(localeLabels) as AppLocale[]).map(id => <option value={id} key={id}>{localeLabels[id]}</option>)}
+        </select>
       </div>
     </aside>
 
