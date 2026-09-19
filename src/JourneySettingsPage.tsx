@@ -53,7 +53,7 @@ export default function JourneySettingsPage(){
   const [message,setMessage]=useState('')
   const [error,setError]=useState('')
 
-  const canEdit=useMemo(()=>Boolean(access&&(access.isSystemAdmin||access.isOwner||['owner','admin','pastor'].includes(access.role))),[access])
+  const canEdit=useMemo(()=>Boolean(access&&(access.isSystemAdmin||access.isOwner||['owner','admin','pastor'].includes(access.organizationRole)||access.role==='pastor')),[access])
 
   const bootstrap=useCallback(async()=>{
     setLoading(true);setError('')
