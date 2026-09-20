@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Check, ChevronLeft, Plus, ShieldCheck, UserCheck, X } from 'lucide-react'
+import { Check, ChevronLeft, HeartHandshake, Plus, ShieldCheck, UserCheck, X } from 'lucide-react'
 import { auth } from './firebase'
 import { calculatePresenceCoverage, type PresenceCheck } from './intelligence'
 import {
+  claimJourneyPersonBond,
   closePresenceSession,
   createMinimalVisitor,
   createPresenceSession,
@@ -27,9 +28,37 @@ function initials(name: string) {
   return name.split(' ').filter(Boolean).map((part) => part[0]).slice(0, 2).join('').toUpperCase()
 }
 
+function bondCopy(locale: AppLocale) {
+  if (locale === 'en') return {
+    mine: 'Relationship with you',
+    assigned: 'Relationship registered',
+    none: 'No relationship host yet',
+    claim: 'I will keep in touch',
+    visitorClaim: 'I will be this visitor’s relationship contact',
+    alreadyAssigned: 'This person already has a relationship contact.',
+  }
+  if (locale === 'es') return {
+    mine: 'Vínculo contigo',
+    assigned: 'Vínculo registrado',
+    none: 'Aún sin anfitrión de vínculo',
+    claim: 'Yo mantendré el vínculo',
+    visitorClaim: 'Yo seré el contacto de vínculo de este visitante',
+    alreadyAssigned: 'Esta persona ya tiene un contacto de vínculo.',
+  }
+  return {
+    mine: 'Vínculo com você',
+    assigned: 'Vínculo registrado',
+    none: 'Ainda sem anfitrião de vínculo',
+    claim: 'Eu vou manter o vínculo',
+    visitorClaim: 'Eu serei o contato de vínculo deste visitante',
+    alreadyAssigned: 'Esta pessoa já possui um contato de vínculo.',
+  }
+}
+
 export default function PresenceAssistPage() {
   const [locale, setLocale] = useState<AppLocale>(getInitialLocale)
   const baseCopy = presenceAssistCopy[locale]
+  const bond = bondCopy(locale)
   const { labels } = useJourneyLabels()
   const defaultTitle = baseCopy.title.split(' & ')[0]
   const t = {
@@ -131,6 +160,21 @@ export default function PresenceAssistPage() {
     finally { setBusy(false) }
   }
 
+  async function claimBond(person: PresencePerson) {
+    if (!access || person.bondHostRef) return
+    setBusy(true)
+    setError('')
+    try {
+      await claimJourneyPersonBond({ access, person })
+      await refreshScope(access.organizationId, congregationId)
+    } catch (cause) {
+      console.error(cause)
+      setError(cause instanceof Error && cause.message === 'bond_already_assigned' ? bond.alreadyAssigned : t.error)
+    } finally {
+      setBusy(false)
+    }
+  }
+
   async function closeSession() {
     if (!access || !displaySession || displaySession.status !== 'open') return
     if (!window.confirm(t.confirmClose)) return
@@ -184,6 +228,10 @@ export default function PresenceAssistPage() {
         return <article className="presence-panel presence-person" key={person.id}>
           <div className="presence-person-top"><span className="presence-avatar">{person.photoUrl ? <img src={person.photoUrl} alt="" /> : initials(person.name)}</span><div className="presence-person-name"><strong>{person.name}</strong><small>{person.visits ? `${person.visits}x` : t.notVerified}</small></div></div>
           <span className={`presence-state ${confirmed ? 'confirmed' : ''}`}>{confirmed ? t.present : t.notVerified}{current?.correctedFromCheckId ? ` · ${t.correcting}` : ''}</span>
+          <div className="presence-bond-row">
+            <span className={`presence-bond-state ${person.bondHostRef ? 'assigned' : ''}`}><HeartHandshake size={14}/>{person.bondHostRef ? (person.bondHostRef === access.userId ? bond.mine : bond.assigned) : bond.none}</span>
+            {!person.bondHostRef && displaySession?.status === 'open' ? <button className="presence-bond-button" disabled={busy} onClick={() => void claimBond(person)}>{bond.claim}</button> : null}
+          </div>
           <button className={`presence-button ${confirmed ? 'success' : 'primary'}`} disabled={busy || confirmed || displaySession?.status !== 'open'} onClick={() => void markPresent(person)}>{confirmed ? <><Check size={17} /> {t.present}</> : t.markPresent}</button>
 
         </article>
@@ -204,11 +252,11 @@ export default function PresenceAssistPage() {
     finally { setBusy(false) }
   }} defaultExpected={people.length} locale={locale} /> : null}
 
-  {showVisitor ? <VisitorModal close={() => setShowVisitor(false)} save={async (name, phone, consent) => {
+  {showVisitor ? <VisitorModal close={() => setShowVisitor(false)} save={async (name, phone, consent, claimBond) => {
     if (!access || !displaySession) return
     setBusy(true); setError('')
     try {
-      const person = await createMinimalVisitor({ organizationId: access.organizationId, congregationId, actorId: access.userId, name, phone, consent })
+      const person = await createMinimalVisitor({ organizationId: access.organizationId, congregationId, actorId: access.userId, name, phone, consent, claimBond })
       await recordPresenceCheck({ organizationId: access.organizationId, congregationId, sessionId: displaySession.id, personId: person.id, actorId: access.userId, state: 'present_confirmed' })
       setShowVisitor(false)
       await refreshScope(access.organizationId, congregationId)
@@ -226,10 +274,12 @@ function SessionModal({ close, create, defaultExpected, locale }: { close: () =>
   return <div className="presence-modal-backdrop" onMouseDown={close}><section className="presence-panel presence-modal" role="dialog" aria-modal="true" aria-labelledby="presence-session-title" onMouseDown={(event) => event.stopPropagation()}><div className="presence-session-head"><h2 id="presence-session-title">{t.newSession}</h2><button className="presence-button" onClick={close} aria-label={t.cancel}><X size={17} /></button></div><div className="presence-modal-grid"><label className="presence-field"><span>{t.sessionName}</span><input value={name} onChange={(event) => setName(event.target.value)} /></label><label className="presence-field"><span>{t.expected}</span><input type="number" min={1} value={expected} onChange={(event) => setExpected(Number(event.target.value))} /></label><label className="presence-field"><span>{t.minimumCoverage}</span><input type="number" min={0} max={100} value={minimum} onChange={(event) => setMinimum(Number(event.target.value))} /></label></div><div className="presence-modal-actions"><button className="presence-button" onClick={close}>{t.cancel}</button><button className="presence-button primary" disabled={!name.trim() || expected < 1} onClick={() => void create(name, expected, minimum)}>{t.open}</button></div></section></div>
 }
 
-function VisitorModal({ close, save, locale }: { close: () => void; save: (name: string, phone: string, consent: boolean) => Promise<void>; locale: AppLocale }) {
+function VisitorModal({ close, save, locale }: { close: () => void; save: (name: string, phone: string, consent: boolean, claimBond: boolean) => Promise<void>; locale: AppLocale }) {
   const t = presenceAssistCopy[locale]
+  const bond = bondCopy(locale)
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
   const [consent, setConsent] = useState(false)
-  return <div className="presence-modal-backdrop" onMouseDown={close}><section className="presence-panel presence-modal visitor-form" role="dialog" aria-modal="true" aria-labelledby="presence-visitor-title" onMouseDown={(event) => event.stopPropagation()}><div className="presence-session-head"><h2 id="presence-visitor-title">{t.newVisitor}</h2><button className="presence-button" onClick={close} aria-label={t.cancel}><X size={17} /></button></div><div className="presence-modal-grid"><label className="presence-field"><span>{t.visitorName}</span><input value={name} onChange={(event) => setName(event.target.value)} autoFocus /></label><label className="presence-field"><span>{t.phone}</span><input value={phone} onChange={(event) => setPhone(event.target.value)} disabled={!consent} /></label><label className="presence-check"><input type="checkbox" checked={consent} onChange={(event) => setConsent(event.target.checked)} /><span>{t.consent}</span></label></div><div className="presence-modal-actions"><button className="presence-button" onClick={close}>{t.cancel}</button><button className="presence-button primary" disabled={!name.trim()} onClick={() => void save(name, phone, consent)}>{t.saveVisitor}</button></div></section></div>
+  const [claimBond, setClaimBond] = useState(true)
+  return <div className="presence-modal-backdrop" onMouseDown={close}><section className="presence-panel presence-modal visitor-form" role="dialog" aria-modal="true" aria-labelledby="presence-visitor-title" onMouseDown={(event) => event.stopPropagation()}><div className="presence-session-head"><h2 id="presence-visitor-title">{t.newVisitor}</h2><button className="presence-button" onClick={close} aria-label={t.cancel}><X size={17} /></button></div><div className="presence-modal-grid"><label className="presence-field"><span>{t.visitorName}</span><input value={name} onChange={(event) => setName(event.target.value)} autoFocus /></label><label className="presence-field"><span>{t.phone}</span><input value={phone} onChange={(event) => setPhone(event.target.value)} disabled={!consent} /></label><label className="presence-check"><input type="checkbox" checked={consent} onChange={(event) => setConsent(event.target.checked)} /><span>{t.consent}</span></label><label className="presence-check"><input type="checkbox" checked={claimBond} onChange={(event) => setClaimBond(event.target.checked)} /><span>{bond.visitorClaim}</span></label></div><div className="presence-modal-actions"><button className="presence-button" onClick={close}>{t.cancel}</button><button className="presence-button primary" disabled={!name.trim()} onClick={() => void save(name, phone, consent, claimBond)}>{t.saveVisitor}</button></div></section></div>
 }
