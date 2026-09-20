@@ -398,10 +398,11 @@ export async function listJourneyOrganizationsForSystemAdmin(access: JourneyAcce
 }
 
 export async function listJourneyOrganizationMembers(access: JourneyAccessContext): Promise<JourneyOrganizationMember[]> {
-  const canManage = access.isSystemAdmin || access.isOwner || ['owner', 'admin'].includes(
-    asString(access.organizationRole),
-  )
-  if (!canManage) return []
+  const canReadTeam = access.isSystemAdmin
+    || access.isOwner
+    || access.broadJourneyAccess
+    || access.permissions.canCoordinateJourney === true
+  if (!canReadTeam) return []
 
   const firestore = requireDb()
   const snapshot = await getDocs(collection(
@@ -490,7 +491,12 @@ export async function loadJourneyAccess(userId: string, organizationId: string):
     canViewGovernance: isSystemAdmin || isOwner || GOVERNANCE_ROLES.has(organizationRole) || GOVERNANCE_ROLES.has(role) || permissions.canViewGovernance === true,
     canManagePrivacy: isSystemAdmin || isOwner || PRIVACY_ROLES.has(organizationRole) || PRIVACY_ROLES.has(role) || permissions.canManagePrivacy === true,
     canManagePastoral: isSystemAdmin || isOwner || PASTORAL_ROLES.has(organizationRole) || PASTORAL_ROLES.has(role) || permissions.canManagePastoral === true,
-    broadJourneyAccess: isSystemAdmin || isOwner || organizationHasBroadAccess || BROAD_JOURNEY_ROLES.has(role),
+    broadJourneyAccess: isSystemAdmin
+      || isOwner
+      || organizationHasBroadAccess
+      || BROAD_JOURNEY_ROLES.has(role)
+      || role === 'coordinator'
+      || permissions.canCoordinateJourney === true,
   }
 }
 
@@ -1074,17 +1080,20 @@ export async function createJourneyDiscipleship(input: {
   congregationId: string
   person: JourneyPersonRecord
   actorId: string
+  disciplerId?: string
   disciplerName?: string
 }) {
   const firestore = requireDb()
   const relationRef = doc(collection(firestore, journeyCollectionPath(input.organizationId, 'discipleships')))
+  const targetDisciplerId = String(input.disciplerId || input.actorId).trim()
+  if (!targetDisciplerId) throw new Error('missing_discipler')
   const batch = writeBatch(firestore)
   batch.set(relationRef, {
     organizationId: input.organizationId,
     congregationId: input.congregationId,
     personId: input.person.id,
     personName: input.person.name,
-    disciplerId: input.actorId,
+    disciplerId: targetDisciplerId,
     disciplerName: String(input.disciplerName ?? '').trim(),
     meeting: 1,
     completedMeetings: [],
