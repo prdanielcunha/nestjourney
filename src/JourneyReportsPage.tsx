@@ -26,6 +26,7 @@ import { canViewJourneyReports } from './journeyExperience'
 import { getInitialLocale, localeLabels, persistLocale, type AppLocale } from './i18n'
 import { GuidedEmptyState } from './GuidedEmptyState'
 import { emptyGuidance } from './emptyGuidance'
+import { AccessDeniedState } from './AccessDeniedState'
 import { useJourneyLabels } from './journeyLabels'
 import './JourneySectionPages.css'
 
@@ -122,7 +123,7 @@ export default function JourneyReportsPage(){
   },[people,care,sessions,groups,discipleships,pastoral])
 
   if(loading)return <main className="journey-section-page"><div className="journey-loading">{t.loading}</div></main>
-  if(!access||!canViewJourneyReports(access))return <main className="journey-section-page"><div className="journey-no-access"><ShieldCheck size={32}/><h1>{t.title}</h1><p>{t.noAccess}</p></div></main>
+  if(!access||!canViewJourneyReports(access))return <main className="journey-section-page"><AccessDeniedState locale={locale} title={t.title} body={t.noAccess} /></main>
 
   const stats=[
     [t.people,metrics.people,Users],
