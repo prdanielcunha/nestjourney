@@ -12,14 +12,14 @@ export function withTimeout<T>(promise: Promise<T>, milliseconds: number, operat
   if (!Number.isFinite(milliseconds) || milliseconds <= 0) return promise
 
   return new Promise<T>((resolve, reject) => {
-    const timer = window.setTimeout(() => reject(new OperationTimeoutError(operation)), milliseconds)
+    const timer = globalThis.setTimeout(() => reject(new OperationTimeoutError(operation)), milliseconds)
     promise.then(
       value => {
-        window.clearTimeout(timer)
+        globalThis.clearTimeout(timer)
         resolve(value)
       },
       error => {
-        window.clearTimeout(timer)
+        globalThis.clearTimeout(timer)
         reject(error)
       },
     )
