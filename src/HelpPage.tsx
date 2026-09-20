@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { ArrowRight, BookOpen, HeartHandshake, House, Leaf, ShieldCheck, UserCheck, UsersRound } from 'lucide-react'
 import { auth } from './firebase'
 import { getActiveJourneyOrganizationId, loadJourneyAccess, type JourneyAccessContext } from './journeyRepository'
-import { canViewJourneyVision, resolveJourneyResponsibility, type JourneyResponsibility } from './journeyExperience'
+import { canViewJourneyPeople, canViewJourneyVision, resolveJourneyResponsibility, type JourneyResponsibility } from './journeyExperience'
 import { getInitialLocale, localeLabels, persistLocale, type AppLocale } from './i18n'
 import { useJourneyLabels } from './journeyLabels'
 import './JourneySectionPages.css'
@@ -73,7 +73,7 @@ export default function HelpPage(){
   const areaNames=[labels.presence||'Presença',labels.table||'Mesa Aberta',labels.care||'Cuidado & Conexão',labels.groups||'Casas de Paz',labels.discipleship||'Raiz'].join(' · ')
   const cards=[
     {title:t.today,desc:t.todayDesc,href:'/my-today',Icon:UserCheck},
-    {title:t.people,desc:t.peopleDesc,href:'/journey-profile',Icon:UsersRound},
+    access&&canViewJourneyPeople(access)?{title:t.people,desc:t.peopleDesc,href:'/journey-profile',Icon:UsersRound}:null,
     {title:t.areas,desc:`${t.areasDesc} ${areaNames}`,href:'/areas',Icon:HeartHandshake},
     access&&canViewJourneyVision(access)?{title:t.vision,desc:t.visionDesc,href:'/vision',Icon:House}:null,
     {title:t.more,desc:t.moreDesc,href:'/more',Icon:Leaf},
