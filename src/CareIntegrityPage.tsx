@@ -68,15 +68,21 @@ export default function CareIntegrityPage() {
   const [resolving, setResolving] = useState<CareRequestRecord | null>(null)
 
   const personById = useMemo(() => new Map(people.map((person) => [person.id, person])), [people])
-  const evaluated = useMemo(() => requests.map((request) => ({
+  const lensRequests = useMemo(() => {
+    if (!access || access.broadJourneyAccess) return requests
+    return requests.filter((request) =>
+      request.ownerRef === access.userId || (request.status === 'open' && !request.ownerRef),
+    )
+  }, [access, requests])
+  const evaluated = useMemo(() => lensRequests.map((request) => ({
     request,
     evaluation: evaluateCarePromise(careRequestToPromise(request)),
-  })), [requests])
+  })), [lensRequests])
 
   const debtCount = evaluated.filter((item) => item.evaluation.state === 'debt').length
   const dueSoonCount = evaluated.filter((item) => item.evaluation.state === 'due_soon').length
-  const unassignedCount = requests.filter((item) => item.status === 'open' && !item.ownerRef).length
-  const myOpenCount = requests.filter((item) => item.status === 'open' && item.ownerRef === access?.userId).length
+  const unassignedCount = lensRequests.filter((item) => item.status === 'open' && !item.ownerRef).length
+  const myOpenCount = lensRequests.filter((item) => item.status === 'open' && item.ownerRef === access?.userId).length
 
   const visible = useMemo(() => {
     const needle = query.trim().toLocaleLowerCase(locale)
