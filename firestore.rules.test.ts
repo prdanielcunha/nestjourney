@@ -227,6 +227,71 @@ describe('Presence Assist and canonical evidence', () => {
     })
     await assertSucceeds(batch.commit())
   })
+
+
+  it('lets a scoped Presence host explicitly claim relationship ownership with canonical evidence', async () => {
+    await seedMembership('presence-host', 'org-a', 'member', ['unit-a'], {
+      canManagePresence: true,
+      canManagePeople: true,
+    })
+    await seedMembership('plain-member', 'org-a', 'member', ['unit-a'])
+    await environment.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), 'organizations/org-a/products/raiz_e_mesa/people/person-bond'), {
+        organizationId: 'org-a', congregationId: 'unit-a', name: 'Visitor Bond',
+        bondHostRef: '', bondAssignedAt: null, bondAssignedBy: '',
+      })
+    })
+
+    const db = environment.authenticatedContext('presence-host').firestore()
+    const personRef = doc(db, 'organizations/org-a/products/raiz_e_mesa/people/person-bond')
+    const factRef = doc(db, 'organizations/org-a/products/raiz_e_mesa/facts/bond-host-person-bond-presence-host')
+    const batch = writeBatch(db)
+    batch.update(personRef, {
+      bondHostRef: 'presence-host',
+      bondAssignedAt: serverTimestamp(),
+      bondAssignedBy: 'presence-host',
+    })
+    batch.set(factRef, {
+      eventId: 'bond-host-person-bond-presence-host',
+      eventType: 'BOND_HOST_ASSIGNED',
+      occurredAt: serverTimestamp(),
+      recordedAt: serverTimestamp(),
+      organizationId: 'org-a',
+      actorId: 'presence-host',
+      subjectRef: 'person:person-bond',
+      sourceApp: 'nestjourney',
+      scope: 'congregation:unit-a',
+      evidenceRef: 'person:person-bond',
+      sensitivity: 'confidential',
+      version: 1,
+      payload: { personId: 'person-bond', bondHostRef: 'presence-host' },
+    })
+    await assertSucceeds(batch.commit())
+
+    const ordinaryDb = environment.authenticatedContext('plain-member').firestore()
+    await assertFails(updateDoc(
+      doc(ordinaryDb, 'organizations/org-a/products/raiz_e_mesa/people/person-bond'),
+      { bondHostRef: 'plain-member', bondAssignedAt: serverTimestamp(), bondAssignedBy: 'plain-member' },
+    ))
+    await assertFails(setDoc(
+      doc(ordinaryDb, 'organizations/org-a/products/raiz_e_mesa/facts/bond-host-forged'),
+      {
+        eventId: 'bond-host-forged',
+        eventType: 'BOND_HOST_ASSIGNED',
+        occurredAt: serverTimestamp(),
+        recordedAt: serverTimestamp(),
+        organizationId: 'org-a',
+        actorId: 'plain-member',
+        subjectRef: 'person:person-bond',
+        sourceApp: 'nestjourney',
+        scope: 'congregation:unit-a',
+        evidenceRef: 'person:person-bond',
+        sensitivity: 'confidential',
+        version: 1,
+        payload: { personId: 'person-bond', bondHostRef: 'plain-member' },
+      },
+    ))
+  })
 })
 
 
