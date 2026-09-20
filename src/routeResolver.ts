@@ -1,5 +1,4 @@
 export type JourneyRoute =
-  | 'overview'
   | 'today'
   | 'areas'
   | 'mesa'
@@ -64,7 +63,7 @@ export function resolveJourneyRoute(pathname: string): JourneyRoute {
     case '/pastoral-handoff':
       return 'pastoral'
     case '/journey-overview':
-      return 'overview'
+      return 'vision'
     case '/':
       return 'today'
     default:

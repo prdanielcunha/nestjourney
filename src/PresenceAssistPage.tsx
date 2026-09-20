@@ -22,6 +22,8 @@ import {
 } from './journeyRepository'
 import { getInitialLocale, localeLabels, persistLocale, presenceAssistCopy, type AppLocale } from './i18n'
 import { useJourneyLabels } from './journeyLabels'
+import { GuidedEmptyState } from './GuidedEmptyState'
+import { emptyGuidance } from './emptyGuidance'
 import './PresenceAssistPage.css'
 
 function initials(name: string) {
@@ -192,6 +194,10 @@ export default function PresenceAssistPage() {
     finally { setBusy(false) }
   }
 
+  const noSessionGuide=emptyGuidance(locale,'presence_no_session')
+  const noPeopleGuide=emptyGuidance(locale,'presence_no_people')
+  const canAddVisitor=Boolean(access?.canManagePeople&&displaySession?.status==='open')
+
   if (loading) return <main className="presence-assist"><div className="presence-loading">{t.loading}</div></main>
 
   if (!access?.canManagePresence) {
@@ -223,7 +229,7 @@ export default function PresenceAssistPage() {
     {displaySession ? <section className="presence-panel presence-session-card">
       <div className="presence-session-head"><div><span className="presence-kicker">{t.session}</span><h2>{displaySession.eventName ?? new Date(displaySession.openedAt).toLocaleString(locale)}</h2><p>{new Date(displaySession.openedAt).toLocaleString(locale)} · {displaySession.status === 'closed' ? t.closed : displaySession.eventRef}</p></div><span className="presence-badge"><UserCheck size={15} /> {displaySession.status === 'open' ? t.session : t.closed}</span></div>
       {coverage ? <><div className="coverage-wrap"><span className="coverage-number">{coverage.percent}%</span><div className="coverage-track" aria-label={`${t.coverage}: ${coverage.percent}%`}><span style={{ width: `${coverage.percent}%` }} /></div><div className="coverage-meta">{coverage.verified} {t.verified}<br />{coverage.unverified} {t.unverified}</div></div><p className="coverage-note">{coverage.meetsMinimum ? t.qualityReady : t.qualityNotReady}</p></> : null}
-    </section> : <div className="presence-panel presence-empty">{t.noSession}</div>}
+    </section> : <div className="presence-panel"><GuidedEmptyState icon={UserCheck} title={noSessionGuide.title} body={noSessionGuide.body} primary={{label:noSessionGuide.primary,onClick:()=>setShowSession(true)}} secondary={{label:noSessionGuide.secondary||t.back,href:'/my-today'}}/></div>}
 
     <div className="presence-list-head"><h2>{t.people} · {visiblePeople.length}</h2><span className="presence-badge"><ShieldCheck size={14} /> {t.sourceRule}</span></div>
     <section className="presence-grid">
@@ -242,7 +248,7 @@ export default function PresenceAssistPage() {
         </article>
       })}
     </section>
-    {!visiblePeople.length ? <div className="presence-panel presence-empty">{t.empty}</div> : null}
+    {!visiblePeople.length ? query.trim()?<div className="presence-panel presence-empty">{t.empty}</div>:<div className="presence-panel"><GuidedEmptyState icon={UserCheck} title={noPeopleGuide.title} body={noPeopleGuide.body} primary={canAddVisitor?{label:noPeopleGuide.primary,onClick:()=>setShowVisitor(true)}:displaySession?.status==='open'?{label:locale==='en'?'Open Help':locale==='es'?'Abrir Ayuda':'Abrir Ajuda',href:'/help'}:{label:t.newSession,onClick:()=>setShowSession(true)}} secondary={{label:noPeopleGuide.secondary||t.back,href:'/help'}}/></div> : null}
     <p className="presence-rule">{t.sourceRule}</p>
   </div>
 

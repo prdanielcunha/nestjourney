@@ -19,6 +19,8 @@ import {
 import type { FollowupOutcomeCode, FollowupNextActionCode } from './followup'
 import { buildConnectFollowupLaunchUrl, resolveRequestedFollowupId } from './connectBridge'
 import { followupRuntimeCopy, getInitialLocale, localeLabels, persistLocale, type AppLocale } from './i18n'
+import { GuidedEmptyState } from './GuidedEmptyState'
+import { emptyGuidance } from './emptyGuidance'
 import './FollowupRuntimePage.css'
 
 function formatDate(value: string, locale: AppLocale) {
@@ -152,6 +154,10 @@ export default function FollowupRuntimePage() {
     } finally { setBusy(false) }
   }
 
+  const readyEmpty=emptyGuidance(locale,'followup_ready_none')
+  const pendingEmpty=emptyGuidance(locale,'followup_pending_none')
+  const completedEmpty=emptyGuidance(locale,'followup_completed_none')
+
   if (loading) return <main className="followup-page"><div className="followup-loading">{t.loading}</div></main>
   if (!access?.canManageCare) return <main className="followup-page"><section className="followup-panel followup-no-access"><ShieldCheck size={34}/><h1>{t.noAccessTitle}</h1><p>{t.noAccess}</p><button className="followup-button" onClick={()=>void bootstrap()}>{t.retry}</button></section></main>
 
@@ -167,7 +173,7 @@ export default function FollowupRuntimePage() {
 
     <section className="followup-panel followup-toolbar"><label><span>{t.congregation}</span><select value={congregationId} disabled={busy} onChange={(event)=>void selectUnit(event.target.value)}>{congregations.map((item)=><option key={item.id} value={item.id}>{item.name}{item.city?` · ${item.city}`:''}</option>)}</select></label></section>
 
-    <section className="followup-section">
+    <section className="followup-section" id="ready-followups">
       <div className="followup-section-head"><div><span>{t.ready}</span><h2>{t.readyTitle}</h2></div><b>{ready.length}</b></div>
       <div className="followup-grid">
         {ready.map((request)=>{
@@ -179,7 +185,7 @@ export default function FollowupRuntimePage() {
             <button className="followup-button primary" disabled={busy||!mine||!person?.consent||!person.phone} onClick={()=>void start(request)}><UserCheck size={16}/>{mine?t.start:t.onlyOwner}</button>
           </article>
         })}
-        {!ready.length?<div className="followup-panel followup-empty">{t.noReady}</div>:null}
+        {!ready.length?<div className="followup-panel"><GuidedEmptyState icon={UserCheck} title={readyEmpty.title} body={readyEmpty.body} primary={{label:readyEmpty.primary,href:'/care-integrity'}} secondary={{label:readyEmpty.secondary||t.back,href:'/my-today'}} compact/></div>:null}
       </div>
     </section>
 
@@ -197,7 +203,7 @@ export default function FollowupRuntimePage() {
             </div>
           </article>
         })}
-        {!pending.length?<div className="followup-panel followup-empty">{t.noPending}</div>:null}
+        {!pending.length?<div className="followup-panel"><GuidedEmptyState icon={MessageCircle} title={pendingEmpty.title} body={pendingEmpty.body} primary={{label:pendingEmpty.primary,href:'#ready-followups'}} secondary={{label:pendingEmpty.secondary||t.back,href:'/care-integrity'}} compact/></div>:null}
       </div>
     </section>
 
@@ -213,7 +219,7 @@ export default function FollowupRuntimePage() {
             <a className="followup-button" href={nextActionHref(item.nextActionCode,item.personId)}>{t.openNext}<ArrowRight size={15}/></a>
           </article>
         })}
-        {!completed.length?<div className="followup-panel followup-empty">{t.noCompleted}</div>:null}
+        {!completed.length?<div className="followup-panel"><GuidedEmptyState icon={CheckCircle2} title={completedEmpty.title} body={completedEmpty.body} primary={{label:completedEmpty.primary,href:'/care-integrity'}} secondary={{label:completedEmpty.secondary||t.back,href:'/my-today'}} compact/></div>:null}
       </div>
     </section>
 

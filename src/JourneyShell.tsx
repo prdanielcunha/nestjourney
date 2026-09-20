@@ -5,7 +5,7 @@ import {
 } from 'lucide-react'
 import { auth } from './firebase'
 import { getActiveJourneyOrganizationId, loadJourneyAccess, type JourneyAccessContext } from './journeyRepository'
-import { canOpenJourneyArea, canViewJourneyVision, resolveJourneyResponsibility } from './journeyExperience'
+import { canOpenJourneyArea, canViewJourneyPeople, canViewJourneyVision, resolveJourneyResponsibility } from './journeyExperience'
 import { getInitialLocale, localeLabels, persistLocale, type AppLocale } from './i18n'
 import { useJourneyLabels } from './journeyLabels'
 import './JourneyShell.css'
@@ -91,7 +91,7 @@ export function JourneyShell({children}:{children:ReactNode}){
 
   const primary:NavItem[]=[
     {href:'/my-today',label:t.today,description:t.todayDesc,icon:ListTodo},
-    {href:'/journey-profile',label:t.people,description:t.peopleDesc,icon:Users},
+    {href:'/journey-profile',label:t.people,description:t.peopleDesc,icon:Users,enabled:a=>canViewJourneyPeople(a)},
     {href:'/vision',label:t.vision,description:t.visionDesc,icon:Eye,enabled:a=>canViewJourneyVision(a)},
   ]
   const areas:NavItem[]=[
@@ -101,6 +101,9 @@ export function JourneyShell({children}:{children:ReactNode}){
     {href:'/groups-runtime',label:names.groups,description:t.groupsDesc,icon:House,enabled:a=>canOpenJourneyArea(a,'groups')},
     {href:'/discipleship-runtime',label:names.root,description:t.rootDesc,icon:Leaf,enabled:a=>canOpenJourneyArea(a,'discipleship')},
   ]
+
+  const visiblePrimary=primary.filter(item=>!item.enabled||Boolean(access&&item.enabled(access)))
+  const visibleAreas=areas.filter(item=>!item.enabled||Boolean(access&&item.enabled(access)))
 
   const navigate=(href:string,enabled=true)=>{
     if(!enabled)return
@@ -130,13 +133,17 @@ export function JourneyShell({children}:{children:ReactNode}){
   const mobileFourth=access&&canViewJourneyVision(access)
     ?{href:'/vision',label:t.vision,icon:BarChart3}
     :roleShortcut
-  const mobile=[
+  const mobileSecond=access&&canViewJourneyPeople(access)
+    ?{href:'/journey-profile',label:t.people,icon:Users}
+    :{href:'/help',label:locale==='en'?'Help':locale==='es'?'Ayuda':'Ajuda',icon:CircleHelp}
+  const mobileCandidates=[
     {href:'/my-today',label:t.today,icon:ListTodo},
-    {href:'/journey-profile',label:t.people,icon:Users},
+    mobileSecond,
     {href:'/areas',label:t.areas,icon:LayoutGrid},
     mobileFourth,
     {href:'/more',label:t.more,icon:MoreHorizontal},
   ]
+  const mobile=mobileCandidates.filter((item,index,items)=>items.findIndex(candidate=>candidate.href===item.href)===index)
 
   return <div className="journey-app-frame">
     <aside className="journey-side-nav">
@@ -148,7 +155,7 @@ export function JourneyShell({children}:{children:ReactNode}){
       <nav aria-label="NestJourney">
         <section className="journey-nav-group">
           <span className="journey-nav-label">{t.primary}</span>
-          {primary.map(renderItem)}
+          {visiblePrimary.map(renderItem)}
         </section>
 
         <section className="journey-nav-group">
@@ -156,7 +163,7 @@ export function JourneyShell({children}:{children:ReactNode}){
             <span className="journey-nav-icon"><LayoutGrid size={17}/></span>
             <span className="journey-nav-copy"><strong>{t.areas}</strong><small>{t.areasDesc}</small></span>
           </button>
-          <div className="journey-nav-children">{areas.map(renderItem)}</div>
+          <div className="journey-nav-children">{visibleAreas.map(renderItem)}</div>
         </section>
 
         <section className="journey-nav-group">
@@ -178,7 +185,9 @@ export function JourneyShell({children}:{children:ReactNode}){
     <nav className="journey-mobile-bar" aria-label="NestJourney">
       {mobile.map(item=>{
         const Icon=item.icon
-        return <button className={sameRoute(item.href,pathname)?'active':''} key={item.href} onClick={()=>navigate(item.href)}><Icon size={19}/><span>{item.label}</span></button>
+        const directHelp=mobile.some(candidate=>candidate.href==='/help')
+        const active=item.href==='/more'&&directHelp&&pathname==='/help'?false:sameRoute(item.href,pathname)
+        return <button className={active?'active':''} key={item.href} onClick={()=>navigate(item.href)}><Icon size={19}/><span>{item.label}</span></button>
       })}
     </nav>
   </div>

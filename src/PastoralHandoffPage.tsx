@@ -14,6 +14,8 @@ import {
   type JourneyPersonRecord,
 } from './journeyRepository'
 import { getInitialLocale, localeLabels, pastoralHandoffCopy, persistLocale, type AppLocale } from './i18n'
+import { GuidedEmptyState } from './GuidedEmptyState'
+import { emptyGuidance } from './emptyGuidance'
 import './PastoralHandoffPage.css'
 
 type Tab = 'open' | 'resolved'
@@ -43,6 +45,7 @@ export default function PastoralHandoffPage() {
   const open=useMemo(()=>handoffs.filter((item)=>item.status==='open'),[handoffs])
   const resolved=useMemo(()=>handoffs.filter((item)=>item.status==='resolved'),[handoffs])
   const visible=tab==='open'?open:resolved
+  const empty=emptyGuidance(locale,tab==='open'?'pastoral_open_clear':'pastoral_resolved_none')
 
   const refresh=useCallback(async(nextAccess:JourneyAccessContext,unitId:string)=>{
     const [nextPeople,nextHandoffs]=await Promise.all([
@@ -92,7 +95,7 @@ export default function PastoralHandoffPage() {
   return <main className="pastoral-runtime"><div className="pastoral-shell">
     <header className="pastoral-topbar">
       <div className="pastoral-brand"><img src="/icon.svg" alt=""/><span><strong>{t.product}</strong><small>Journey & Care Engine</small></span></div>
-      <div className="pastoral-actions"><a href="/journey-overview"><ArrowLeft size={16}/>{t.back}</a><select value={locale} onChange={e=>{const next=e.target.value as AppLocale;setLocale(next);persistLocale(next)}}>{(Object.keys(localeLabels) as AppLocale[]).map(id=><option key={id} value={id}>{localeLabels[id]}</option>)}</select></div>
+      <div className="pastoral-actions"><a href="/vision"><ArrowLeft size={16}/>{t.back}</a><select value={locale} onChange={e=>{const next=e.target.value as AppLocale;setLocale(next);persistLocale(next)}}>{(Object.keys(localeLabels) as AppLocale[]).map(id=><option key={id} value={id}>{localeLabels[id]}</option>)}</select></div>
     </header>
 
     <section className="pastoral-hero"><div><span className="pastoral-kicker">Journey / Pastoral</span><h1>{t.title}</h1><p>{t.subtitle}</p></div><span className="pastoral-badge"><ShieldCheck size={15}/>{t.restricted}</span></section>
@@ -118,7 +121,7 @@ export default function PastoralHandoffPage() {
           {item.status==='open'?<button className="pastoral-button primary" disabled={busy} onClick={()=>void resolve(item)}><UserRoundCheck size={16}/>{t.markContacted}</button>:<span className="pastoral-done"><CheckCircle2 size={15}/>{t.done}</span>}
         </article>
       })}
-      {!visible.length?<div className="pastoral-panel pastoral-empty"><ShieldCheck size={27}/><strong>{tab==='open'?t.emptyOpen:t.emptyResolved}</strong><p>{t.emptyHint}</p></div>:null}
+      {!visible.length?<div className="pastoral-panel"><GuidedEmptyState icon={ShieldCheck} title={empty.title} body={empty.body} primary={tab==='open'?{label:empty.primary,href:'/vision'}:{label:empty.primary,onClick:()=>setTab('open')}} secondary={{label:empty.secondary||t.back,href:tab==='open'?'/my-today':'/vision'}}/></div>:null}
     </section>
 
     <p className="pastoral-rule"><ShieldCheck size={15}/>{t.privacyRule}</p>

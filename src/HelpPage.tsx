@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { ArrowRight, BookOpen, HeartHandshake, House, Leaf, ShieldCheck, UserCheck, UsersRound } from 'lucide-react'
 import { auth } from './firebase'
 import { getActiveJourneyOrganizationId, loadJourneyAccess, type JourneyAccessContext } from './journeyRepository'
-import { resolveJourneyResponsibility, type JourneyResponsibility } from './journeyExperience'
+import { canViewJourneyPeople, canViewJourneyVision, resolveJourneyResponsibility, type JourneyResponsibility } from './journeyExperience'
 import { getInitialLocale, localeLabels, persistLocale, type AppLocale } from './i18n'
 import { useJourneyLabels } from './journeyLabels'
 import './JourneySectionPages.css'
@@ -73,11 +73,11 @@ export default function HelpPage(){
   const areaNames=[labels.presence||'Presença',labels.table||'Mesa Aberta',labels.care||'Cuidado & Conexão',labels.groups||'Casas de Paz',labels.discipleship||'Raiz'].join(' · ')
   const cards=[
     {title:t.today,desc:t.todayDesc,href:'/my-today',Icon:UserCheck},
-    {title:t.people,desc:t.peopleDesc,href:'/journey-profile',Icon:UsersRound},
+    access&&canViewJourneyPeople(access)?{title:t.people,desc:t.peopleDesc,href:'/journey-profile',Icon:UsersRound}:null,
     {title:t.areas,desc:`${t.areasDesc} ${areaNames}`,href:'/areas',Icon:HeartHandshake},
-    {title:t.vision,desc:t.visionDesc,href:'/vision',Icon:House},
+    access&&canViewJourneyVision(access)?{title:t.vision,desc:t.visionDesc,href:'/vision',Icon:House}:null,
     {title:t.more,desc:t.moreDesc,href:'/more',Icon:Leaf},
-  ]
+  ].filter(Boolean) as Array<{title:string;desc:string;href:string;Icon:typeof UserCheck}>
   return <main className="journey-section-page"><div className="journey-section-shell">
     <header className="journey-section-header"><div><span className="journey-section-kicker">NestJourney / Help</span><h1>{t.title}</h1><p>{t.subtitle}</p></div><select value={locale} onChange={e=>{const next=e.target.value as AppLocale;setLocale(next);persistLocale(next)}}>{(Object.keys(localeLabels) as AppLocale[]).map(id=><option key={id} value={id}>{localeLabels[id]}</option>)}</select></header>
     <section className="journey-section-note"><BookOpen size={18}/><p><strong>{t.yourRole}: {role.title}.</strong> {role.focus}</p></section>

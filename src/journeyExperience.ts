@@ -43,6 +43,10 @@ export function resolveJourneyResponsibility(access: JourneyAccessContext): Jour
   return 'member'
 }
 
+export function canViewJourneyPeople(access: JourneyAccessContext) {
+  return access.broadJourneyAccess || access.canManagePeople
+}
+
 export function canViewJourneyVision(access: JourneyAccessContext) {
   return access.isSystemAdmin
     || access.isOwner

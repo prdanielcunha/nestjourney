@@ -1,44 +1,118 @@
-# Auditoria do roadmap — Raiz e Mesa
+# Auditoria de produto e roadmap — NestJourney
 
-Data da revisão: 2 de setembro de 2026.
+Data da revisão: **20 de setembro de 2026**  
+Estado: **núcleo em produção; refinamento premium consolidado**.
 
 ## Escopo revisado
 
-Esta matriz compara o produto com o Blueprint do Aplicativo, Manual Mestre, Manual de Implantação em 7 Semanas e os manuais de Presença, Mesa Aberta, Cuidado e Conexão, Casa de Paz e Raiz. Também incorpora as decisões da conversa: SaaS vendável, repositório público, multi-tenant, integração com o ecossistema MillionsNest/Firebase e identidade dark baseada na marca Raiz e Mesa.
+A auditoria cruza o produto com os oito documentos Raiz e Mesa 2026 e com as decisões posteriores de produto: NestJourney como SaaS independente, multi-tenant, mobile-first, integrado ao MillionsNest e configurável para outras igrejas.
 
-## Matriz de cobertura
+O princípio permanece: tecnologia deve desaparecer atrás do cuidado. O software organiza fatos e responsabilidades; não cria ranking espiritual, diagnóstico, julgamento de interesse ou prontuário íntimo.
+
+## Cobertura funcional atual
 
 | Área | Requisito consolidado | Evidência no produto | Situação |
-|---|---|---|---|
-| SaaS | Qualquer igreja, unidades e nomes próprios | Organização, congregações, cores e nomenclaturas configuráveis | Implementado |
-| Ecossistema | Conta e organização compartilhadas no MillionsNest | Namespace `organizations/{orgId}/products/raiz_e_mesa`, associações canônicas e entitlement do app | Preparado; ativação depende do Firebase compartilhado |
-| Implantação | Ciclo completo de 7 semanas | 7 semanas, tarefas, prática real, ritmo de 40–45 min e progresso persistido | Implementado |
-| Presença | Primeira visita, retorno e anfitrião de vínculo | Registro rápido e histórico por pessoa, data, tipo, unidade, anfitrião e Mesa | Implementado |
-| Mesa Aberta | Convite sem pressão e participação simples | Indicadores de convite/participação, linguagem de hospitalidade e ausência de avaliação subjetiva | Implementado |
-| Pessoas | Cadastro mínimo, unidade, primeira visita, responsável e próximo passo | Cadastro com consentimento opcional, jornada, filtros, busca e painel individual | Implementado |
-| Cuidado | Contato em aproximadamente 24h, máximo 48h | Pendências, prazo, responsável, conclusão e próxima ação | Implementado |
-| Cuidado | Scripts e revisão semanal de 20 min | Quatro scripts oficiais, agenda 0–20 min e alerta de encaminhamento imediato | Implementado |
-| Segurança humana | Encaminhar risco, violência, abuso e emergência | Alerta explícito sem campo para detalhes íntimos | Implementado |
-| Casas | Líder, anfitrião, aprendiz, bairro, dia, hora e capacidade | Cartões de Casa com composição completa e alerta de capacidade | Implementado |
-| Casas | Ideal 6–10, máximo 12 | Políticas de capacidade, alertas e testes automatizados | Implementado |
-| Casas | Pedidos de entrada | Fila, situação e conexão à Casa | Implementado |
-| Casas | Relatório mínimo de encontro | Data, presentes, novos, autorizações, marcador pastoral e nota operacional | Implementado |
-| Raiz | Relação 1:1, sete encontros e próximo encontro | Acompanhamentos, mapa dos 7 temas, progresso e conclusão | Implementado |
-| Raiz | Ideal 2, máximo inicial 3 por discipulador | Painel de carga e teste de política | Implementado |
-| Pastoral | Saúde sem ranking ou “nível espiritual” | Indicadores agregados, atenção, encaminhamentos restritos e carga de cuidado | Implementado |
-| Perfis | Pastor, coordenação, cuidado, Casa, discipulador e dados | Navegação por papel, escopo por congregação e regras RBAC | Implementado |
-| LGPD | Minimização e consentimento revogável | Contato omitido sem consentimento, revogação com limpeza do telefone e trilha de ação | Implementado |
-| LGPD | Correção, exclusão e retenção | Solicitações administrativas com estados e auditoria | Implementado |
-| Auditoria | Histórico imutável e marcador pastoral restrito | Eventos na interface; regras Firestore impedem alteração/remoção e restringem pastoral | Implementado |
-| Alertas | Prazos, capacidade e sobrecarga | Notificações discretas, cartões de atenção e painéis de carga | Implementado |
-| PWA | Mobile-first e instalável | Manifesto, service worker, ícones de marca e layouts responsivos | Implementado |
-| Marca | Interface dark com ouro/oliva da logo | Tokens dark, marca nas áreas principais, favicon e ícone PWA | Implementado |
-| Qualidade | Proteção contra regressões | Lint, TypeScript, build, testes de domínio e testes de Firestore Rules | Implementado |
+| --- | --- | --- | --- |
+| SaaS | múltiplas igrejas, unidades e nomes próprios | tenant por organização, escopo por unidade e nomenclaturas configuráveis | Implementado |
+| Ecossistema | identidade e organização compartilhadas | Firebase `millionsnest`, membership canônica, entitlement e entrada direta/Hub | Em produção |
+| Hoje | “quem precisa de cuidado hoje?” | Action Center por papel, urgência factual e CTA direto | Implementado |
+| UX por papel | cada líder vê o que precisa | navegação e atalhos filtrados por capability; Vision só para gestão | Implementado |
+| Estados vazios | nunca deixar “e agora?” | estados guiados em Pessoas, Presença, Mesa, Cuidado, Follow-up, Casas, Raiz, Relatórios, Pastoral e Equipe | Implementado |
+| Implantação | ciclo de sete semanas | playbook persistido por unidade, prática e progresso | Implementado |
+| Presença | visita, retorno e vínculo | sessão, presença confirmada, visitante mínimo, vínculo governado e correção auditável | Implementado |
+| Mesa | preparação, convite e participação | checklist, convidados e registro factual de participação | Implementado |
+| Pessoas | cadastro mínimo e jornada factual | consentimento, visitas, vínculos, cuidado, grupos e discipulado conforme Lens | Implementado |
+| Cuidado | contato em ~24h, máximo 48h | Care Promise, responsável, prazo, resultado e Care Debt | Implementado |
+| Follow-up | contato humano com resultado | Resolve Loop, integração segura com Connect e próximo passo estruturado | Implementado |
+| Segurança humana | risco exige encaminhamento | marcador pastoral, aviso explícito e ausência de notas íntimas | Implementado |
+| Casas | líder, anfitrião, aprendiz, bairro, horário e capacidade | gestão da Casa, roster explícito, pedidos de entrada e encontros | Implementado |
+| Casas | ideal 6–10, máximo 12 | política de capacidade e atenção operacional | Implementado |
+| Raiz | relação pessoal, sete encontros | discipulador, encontro 1–7, próxima data, pausa/conclusão | Implementado |
+| Pastoral | decisão sem prontuário | fila restrita com marcador factual | Implementado |
+| Gestão | leitura rápida da operação | Vision com métricas objetivas, comparação entre unidades e Care Debt | Implementado |
+| CEO | leitura entre organizações | seletor de organizações habilitadas e inspeção das unidades sem trocar de login | Implementado |
+| Simulação | entender experiências por papel | preview somente leitura das responsabilidades na Vision | Implementado |
+| Equipe | responsabilidade e escopo | papéis NestJourney sobre membership canônica; membros/convites ficam no Hub | Implementado |
+| LGPD | minimização e consentimento | contato opcional, revogação/correção, governança e limites explícitos | Implementado |
+| Auditoria | mudanças operacionais rastreáveis | eventos append-only e regras testadas | Implementado |
+| Relatórios | indicadores objetivos | pessoas, cuidado, sessões, grupos, Raiz e pastoral sem score espiritual | Implementado |
+| Customização | nomes locais | nomes de Recepção, Mesa, Cuidado, Casas e Raiz configuráveis | Implementado |
+| PWA | mobile-first | manifest, service worker, Firebase Hosting e navegação com safe area | Em produção |
+| Idiomas | PT/EN/ES | interface e orientação contextual nos três idiomas | Implementado |
+| Qualidade | gates antes de produção | lint, testes, TypeScript, build, Rules e smoke de Hosting | Automatizado |
 
-## Deliberações de produto preservadas
+## UX final consolidada
 
-O MVP não inclui finanças, streaming, chat interno, rede social, gamificação, pontuação de espiritualidade, aconselhamento por IA nem prontuário com confissão, trauma ou saúde. Essas exclusões são intencionais e seguem o blueprint.
+### Hoje
 
-## Única dependência externa pendente
+A tela não é um dashboard genérico. Ela responde primeiro **o que fazer agora**.
 
-O app funciona publicamente em modo de demonstração com dados fictícios e persistência local. Para operar com igrejas e pessoas reais é necessário autorizar e configurar o projeto Firebase compartilhado do MillionsNest, suas variáveis na Vercel e as associações/entitlements das organizações. As regras e a arquitetura para isso já estão prontas; nenhuma credencial deve entrar no repositório público.
+Exemplos:
+
+- cuidado vencido → resolver;
+- Care Promise próximo do prazo → contatar;
+- sessão aberta → continuar Presença;
+- Mesa não preparada → preparar;
+- Casa próxima da capacidade → revisar;
+- encontro do Raiz registrado → abrir relação;
+- encaminhamento pastoral → abrir fila restrita.
+
+Quando a fila está limpa, a tela não inventa pendência: recomenda o próximo movimento normal daquele papel.
+
+### Mobile
+
+A navegação principal foi reduzida ao essencial. Itens sem autorização não são usados como atalhos. Perfis operacionais recebem acesso direto à própria frente; liderança recebe Visão.
+
+A barra respeita safe area, os formulários evitam zoom involuntário no iOS e os alvos de toque foram ampliados.
+
+### Visão de liderança
+
+Admin, pastor e CEO conseguem mudar de unidade e ler rapidamente:
+
+- pessoas;
+- cuidados abertos;
+- Care Debt;
+- cuidados sem responsável;
+- maior carga;
+- jornadas sem próximo passo factual;
+- sessões abertas;
+- grupos;
+- relações ativas do Raiz;
+- encaminhamentos pastorais;
+- auditoria disponível.
+
+CEO pode trocar de organização habilitada e inspecionar suas unidades sem simular membership local.
+
+## Deliberações preservadas
+
+Continuam deliberadamente fora do escopo do NestJourney:
+
+- financeiro, dízimos e ofertas;
+- streaming;
+- escala de louvor;
+- rede social;
+- chat irrestrito;
+- gamificação;
+- ranking de líderes;
+- “nível espiritual”;
+- IA aconselhando pastoralmente de forma autônoma;
+- prontuário de trauma, confissão, saúde ou vida íntima.
+
+Esses itens não são “pendências”; são limites do produto.
+
+## Definition of Done do núcleo 2026
+
+O núcleo é considerado pronto quando:
+
+1. cada responsabilidade sabe onde começar;
+2. nenhuma ação principal exige navegar por tentativa e erro;
+3. estado vazio explica o próximo passo;
+4. CEO/Admin/Pastor têm leitura de gestão;
+5. escopo e RBAC impedem acesso indevido;
+6. dados sensíveis permanecem minimizados;
+7. PT/EN/ES continuam funcionais;
+8. desktop e mobile usam a mesma verdade de produto;
+9. `npm run check` e `npm run test:rules` passam;
+10. produção é promovida por CI e o domínio oficial passa no smoke test.
+
+Depois desse ponto, novas entregas são evolução de produto orientada por uso real — não correção de uma arquitetura incompleta.

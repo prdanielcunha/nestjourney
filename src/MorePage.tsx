@@ -70,8 +70,10 @@ export default function MorePage(){
     {title:t.help,desc:t.helpDesc,href:'/help',Icon:BookOpen,allowed:true},
   ]
 
+  const visibleCards=cards.filter(item=>item.allowed)
+
   return <main className="journey-section-page"><div className="journey-section-shell">
     <header className="journey-section-header"><div><span className="journey-section-kicker">NestJourney / More</span><h1>{t.title}</h1><p>{t.subtitle}</p></div><select value={locale} onChange={e=>{const next=e.target.value as AppLocale;setLocale(next);persistLocale(next)}}>{(Object.keys(localeLabels) as AppLocale[]).map(id=><option key={id} value={id}>{localeLabels[id]}</option>)}</select></header>
-    <section className="journey-card-grid">{cards.map(item=>{const Icon=item.Icon;return <a key={item.title} className={`journey-card ${item.allowed?'':'disabled'}`} href={item.allowed?item.href:'#'} onClick={item.allowed?undefined:e=>e.preventDefault()}><span className="journey-card-icon"><Icon size={20}/></span><span className="journey-card-copy"><small>{item.allowed?t.available:t.restricted}</small><strong>{item.title}</strong><p>{item.desc}</p></span><ArrowRight size={16}/></a>})}</section>
+    <section className="journey-card-grid">{visibleCards.map(item=>{const Icon=item.Icon;return <a key={item.title} className="journey-card" href={item.href}><span className="journey-card-icon"><Icon size={20}/></span><span className="journey-card-copy"><small>{t.available}</small><strong>{item.title}</strong><p>{item.desc}</p></span><ArrowRight size={16}/></a>})}</section>
   </div></main>
 }

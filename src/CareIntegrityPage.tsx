@@ -21,6 +21,8 @@ import {
 } from './journeyRepository'
 import { careIntegrityCopy, getInitialLocale, localeLabels, persistLocale, type AppLocale } from './i18n'
 import { useJourneyLabels } from './journeyLabels'
+import { GuidedEmptyState } from './GuidedEmptyState'
+import { emptyGuidance } from './emptyGuidance'
 import './CareIntegrityPage.css'
 
 type CareTab = 'attention' | 'open' | 'resolved'
@@ -66,15 +68,21 @@ export default function CareIntegrityPage() {
   const [resolving, setResolving] = useState<CareRequestRecord | null>(null)
 
   const personById = useMemo(() => new Map(people.map((person) => [person.id, person])), [people])
-  const evaluated = useMemo(() => requests.map((request) => ({
+  const lensRequests = useMemo(() => {
+    if (!access || access.broadJourneyAccess) return requests
+    return requests.filter((request) =>
+      request.ownerRef === access.userId || (request.status === 'open' && !request.ownerRef),
+    )
+  }, [access, requests])
+  const evaluated = useMemo(() => lensRequests.map((request) => ({
     request,
     evaluation: evaluateCarePromise(careRequestToPromise(request)),
-  })), [requests])
+  })), [lensRequests])
 
   const debtCount = evaluated.filter((item) => item.evaluation.state === 'debt').length
   const dueSoonCount = evaluated.filter((item) => item.evaluation.state === 'due_soon').length
-  const unassignedCount = requests.filter((item) => item.status === 'open' && !item.ownerRef).length
-  const myOpenCount = requests.filter((item) => item.status === 'open' && item.ownerRef === access?.userId).length
+  const unassignedCount = lensRequests.filter((item) => item.status === 'open' && !item.ownerRef).length
+  const myOpenCount = lensRequests.filter((item) => item.status === 'open' && item.ownerRef === access?.userId).length
 
   const visible = useMemo(() => {
     const needle = query.trim().toLocaleLowerCase(locale)
@@ -148,6 +156,9 @@ export default function CareIntegrityPage() {
     finally { setBusy(false) }
   }
 
+  const emptyKey = tab==='attention'?'care_attention_clear':tab==='open'?'care_open_none':'care_resolved_none'
+  const empty = emptyGuidance(locale,emptyKey)
+
   if (loading) return <main className="care-integrity"><div className="care-loading">{t.loading}</div></main>
 
   if (!access?.canManageCare) {
@@ -217,7 +228,7 @@ export default function CareIntegrityPage() {
       })}
     </section>
 
-    {!visible.length ? <div className="care-panel care-empty">{t.empty}</div> : null}
+    {!visible.length ? query.trim()?<div className="care-panel care-empty">{t.empty}</div>:<div className="care-panel"><GuidedEmptyState icon={HeartHandshake} title={empty.title} body={empty.body} primary={tab==='attention'?{label:empty.primary,onClick:()=>setTab('open')}:tab==='open'?(people.length?{label:empty.primary,onClick:()=>setShowNew(true)}:{label:locale==='en'?'Open Presence':locale==='es'?'Abrir Presencia':'Abrir Presença',href:'/presence-assist'}):{label:empty.primary,onClick:()=>setTab('open')}} secondary={{label:empty.secondary||t.back,href:'/my-today'}}/></div> : null}
     <p className="care-rule"><ShieldCheck size={15} /> {t.privacyRule}</p>
   </div>
 

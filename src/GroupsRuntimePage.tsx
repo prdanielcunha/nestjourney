@@ -30,6 +30,8 @@ import {
   type JourneyPersonRecord,
 } from './journeyRepository'
 import { getInitialLocale, groupsRuntimeCopy, localeLabels, persistLocale, type AppLocale } from './i18n'
+import { GuidedEmptyState } from './GuidedEmptyState'
+import { emptyGuidance } from './emptyGuidance'
 import { useJourneyLabels } from './journeyLabels'
 import './JourneyRuntimePages.css'
 
@@ -197,6 +199,9 @@ export default function GroupsRuntimePage() {
   if (loading) return <main className="journey-runtime"><div className="runtime-loading">{t.loading}</div></main>
   if (!(access?.canManageGroups || access?.broadJourneyAccess)) return <main className="journey-runtime"><section className="runtime-panel runtime-no-access"><ShieldCheck size={34}/><h1>{t.noAccessTitle}</h1><p>{t.noAccess}</p><button className="runtime-button" onClick={() => void bootstrap()}>{t.retry}</button></section></main>
 
+  const canCreateGroup=Boolean(access&&canCreateJourneyGroupEntryRequest(access))
+  const empty=emptyGuidance(locale,canCreateGroup?'groups_none':'groups_unassigned')
+
   return <main className="journey-runtime"><div className="runtime-shell">
     <header className="runtime-topbar"><div className="runtime-brand"><img src="/icon.svg" alt=""/><span><strong>{t.product}</strong><small>Journey & Care Engine</small></span></div><div className="runtime-actions"><a href="/my-today"><ChevronLeft size={16}/>{t.back}</a><select value={locale} onChange={(e)=>{const next=e.target.value as AppLocale;setLocale(next);persistLocale(next)}}>{(Object.keys(localeLabels) as AppLocale[]).map(id=><option key={id} value={id}>{localeLabels[id]}</option>)}</select></div></header>
     <section className="runtime-hero"><div><span className="runtime-kicker">Journey / Community</span><h1>{t.title}</h1><p>{t.subtitle}</p></div>{access&&canCreateJourneyGroupEntryRequest(access)?<button className="runtime-button primary" onClick={()=>setShowNew(true)}><Plus size={17}/>{t.newGroup}</button>:null}</section>
@@ -212,7 +217,7 @@ export default function GroupsRuntimePage() {
           <div className="runtime-count"><Users size={17}/><span><small>{t.participants}</small><strong>{participants} / {capacity}</strong></span>{canRoster?<button className="runtime-button compact" disabled={busy} onClick={()=>void openRoster(group)}>{t.manageRoster}</button>:<small className="runtime-count-note">{t.rosterRestricted}</small>}</div>
         </article>
       })}
-      {!groups.length ? <div className="runtime-panel runtime-empty">{t.empty}</div> : null}
+      {!groups.length ? <div className="runtime-panel"><GuidedEmptyState icon={House} title={empty.title} body={empty.body} primary={canCreateGroup?{label:empty.primary,onClick:()=>setShowNew(true)}:{label:empty.primary,href:'/my-today'}} secondary={{label:empty.secondary||t.empty,href:canCreateGroup?'/implementation-runtime':'/help'}}/></div> : null}
     </section>
     <p className="runtime-rule"><ShieldCheck size={15}/>{t.sourceRule}</p>
   </div>
