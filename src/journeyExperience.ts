@@ -44,13 +44,7 @@ export function resolveJourneyResponsibility(access: JourneyAccessContext): Jour
 }
 
 export function canViewJourneyPeople(access: JourneyAccessContext) {
-  return access.broadJourneyAccess
-    || access.canManagePeople
-    || access.canManagePresence
-    || access.canManageMesa
-    || access.canManageCare
-    || access.canManageGroups
-    || access.canManageDiscipleship
+  return access.broadJourneyAccess || access.canManagePeople
 }
 
 export function canViewJourneyVision(access: JourneyAccessContext) {
