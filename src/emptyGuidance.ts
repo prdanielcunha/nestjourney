@@ -17,6 +17,9 @@ export type EmptyGuidanceKey =
   | 'pastoral_open_clear'
   | 'pastoral_resolved_none'
   | 'team_no_members'
+  | 'followup_ready_none'
+  | 'followup_pending_none'
+  | 'followup_completed_none'
 
 export interface EmptyGuidanceText {
   title: string
@@ -43,6 +46,9 @@ const copy: Record<AppLocale, Record<EmptyGuidanceKey, EmptyGuidanceText>> = {
     pastoral_open_clear:{title:'Nenhum encaminhamento pastoral aberto',body:'Isto é uma boa notícia operacional: não há marcador explícito aguardando contato pastoral nesta unidade. Continue pela Visão ou pelo Hoje.',primary:'Abrir Visão',secondary:'Voltar ao Hoje'},
     pastoral_resolved_none:{title:'Ainda não há encaminhamentos concluídos',body:'Quando um marcador pastoral for atendido, o histórico factual aparecerá aqui sem armazenar conteúdo íntimo da conversa.',primary:'Ver pendentes',secondary:'Abrir Visão'},
     team_no_members:{title:'Nenhum membro ativo foi encontrado',body:'Convites, membros e cargos continuam no MillionsNest Hub. Adicione ou ative a pessoa lá e volte para atribuir a responsabilidade operacional do NestJourney.',primary:'Abrir membros no Hub',secondary:'Voltar ao Hoje'},
+    followup_ready_none:{title:'Nenhum primeiro contato aguardando início',body:'Quando um Care Request de primeiro contato estiver atribuído a você, ele aparece aqui com prazo e canal autorizado. Não crie contato fora da fila só para preencher a tela.',primary:'Abrir Cuidado',secondary:'Voltar ao Hoje'},
+    followup_pending_none:{title:'Nenhum contato está em andamento',body:'Depois que um primeiro contato for iniciado, ele permanece aqui até que o resultado humano seja registrado.',primary:'Ver contatos prontos',secondary:'Abrir Cuidado'},
+    followup_completed_none:{title:'Nenhum resultado recente registrado',body:'Resultados aparecem somente após o contato real. Abrir um canal ou copiar uma mensagem não conta como cuidado concluído.',primary:'Abrir Cuidado',secondary:'Voltar ao Hoje'},
   },
   en: {
     areas_none:{title:'No operational area is assigned to you yet',body:'Your access is valid, but no operational responsibility is assigned. Open Help to understand the flow or ask an administrator to define your responsibility.',primary:'Open Help',secondary:'Back to Today'},
@@ -61,6 +67,9 @@ const copy: Record<AppLocale, Record<EmptyGuidanceKey, EmptyGuidanceText>> = {
     pastoral_open_clear:{title:'No open pastoral handoff',body:'This is operationally healthy: no explicit marker is waiting for pastoral contact in this campus. Continue through Vision or Today.',primary:'Open Vision',secondary:'Back to Today'},
     pastoral_resolved_none:{title:'No completed handoff yet',body:'When a pastoral marker is handled, the factual history will appear here without storing intimate conversation content.',primary:'View pending',secondary:'Open Vision'},
     team_no_members:{title:'No active members were found',body:'Invites, members, and organization roles remain in MillionsNest Hub. Add or activate the person there, then return to assign a NestJourney responsibility.',primary:'Open Hub members',secondary:'Back to Today'},
+    followup_ready_none:{title:'No first contact is waiting to start',body:'When a first-contact Care Request is assigned to you, it appears here with its deadline and authorized channel. Do not create contact outside the queue just to fill the screen.',primary:'Open Care',secondary:'Back to Today'},
+    followup_pending_none:{title:'No contact is in progress',body:'After a first contact starts, it remains here until the human outcome is recorded.',primary:'View ready contacts',secondary:'Open Care'},
+    followup_completed_none:{title:'No recent outcome has been recorded',body:'Outcomes appear only after real contact. Opening a channel or copying a message does not count as completed care.',primary:'Open Care',secondary:'Back to Today'},
   },
   es: {
     areas_none:{title:'Todavía no tienes un área operativa asignada',body:'Tu acceso es válido, pero no existe una responsabilidad operativa asignada. Abre Ayuda para entender el flujo o pide a un administrador que defina tu función.',primary:'Abrir Ayuda',secondary:'Volver a Hoy'},
@@ -79,6 +88,9 @@ const copy: Record<AppLocale, Record<EmptyGuidanceKey, EmptyGuidanceText>> = {
     pastoral_open_clear:{title:'No hay derivaciones pastorales abiertas',body:'Es una buena señal operativa: no hay marcador explícito esperando contacto pastoral en esta sede. Continúa por Visión o Hoy.',primary:'Abrir Visión',secondary:'Volver a Hoy'},
     pastoral_resolved_none:{title:'Todavía no hay derivaciones concluidas',body:'Cuando un marcador pastoral sea atendido, el historial factual aparecerá aquí sin almacenar contenido íntimo de la conversación.',primary:'Ver pendientes',secondary:'Abrir Visión'},
     team_no_members:{title:'No se encontraron miembros activos',body:'Invitaciones, miembros y cargos siguen en MillionsNest Hub. Agrega o activa a la persona allí y vuelve para asignar su responsabilidad en NestJourney.',primary:'Abrir miembros en Hub',secondary:'Volver a Hoy'},
+    followup_ready_none:{title:'No hay primeros contactos esperando inicio',body:'Cuando un Care Request de primer contacto esté asignado a ti, aparecerá aquí con plazo y canal autorizado. No crees contacto fuera de la fila solo para llenar la pantalla.',primary:'Abrir Cuidado',secondary:'Volver a Hoy'},
+    followup_pending_none:{title:'No hay contactos en curso',body:'Después de iniciar un primer contacto, permanece aquí hasta que se registre el resultado humano.',primary:'Ver contactos listos',secondary:'Abrir Cuidado'},
+    followup_completed_none:{title:'No hay resultados recientes registrados',body:'Los resultados aparecen solo después del contacto real. Abrir un canal o copiar un mensaje no cuenta como cuidado concluido.',primary:'Abrir Cuidado',secondary:'Volver a Hoy'},
   },
 }
 
