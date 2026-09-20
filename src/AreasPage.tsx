@@ -5,6 +5,8 @@ import { getActiveJourneyOrganizationId, loadJourneyAccess, type JourneyAccessCo
 import { canOpenJourneyArea } from './journeyExperience'
 import { getInitialLocale, localeLabels, persistLocale, type AppLocale } from './i18n'
 import { useJourneyLabels } from './journeyLabels'
+import { GuidedEmptyState } from './GuidedEmptyState'
+import { emptyGuidance } from './emptyGuidance'
 import './JourneySectionPages.css'
 
 const copy={
@@ -79,8 +81,12 @@ export default function AreasPage(){
     {id:'discipleship' as const,title:names.discipleship,description:base.rootDesc,href:'/discipleship-runtime',Icon:Leaf},
   ]
 
+  const hasOperationalArea=modules.some(item=>canOpenJourneyArea(access,item.id))
+  const empty=emptyGuidance(locale,'areas_none')
+
   return <main className="journey-section-page"><div className="journey-section-shell">
     <header className="journey-section-header"><div><span className="journey-section-kicker">NestJourney / Areas</span><h1>{base.title}</h1><p>{base.subtitle}</p></div><select value={locale} onChange={e=>{const next=e.target.value as AppLocale;setLocale(next);persistLocale(next)}}>{(Object.keys(localeLabels) as AppLocale[]).map(id=><option key={id} value={id}>{localeLabels[id]}</option>)}</select></header>
+    {!hasOperationalArea?<section className="journey-section-block"><GuidedEmptyState icon={ShieldCheck} title={empty.title} body={empty.body} primary={{label:empty.primary,href:'/help'}} secondary={{label:empty.secondary||base.title,href:'/my-today'}}/></section>:null}
     <section className="journey-card-grid">
       {modules.map(item=>{
         const allowed=canOpenJourneyArea(access,item.id)
