@@ -19,7 +19,6 @@ const JourneyProfilePage = lazy(() => import('./JourneyProfilePage.tsx'))
 const MyTodayPage = lazy(() => import('./MyTodayPage.tsx'))
 const GroupsRuntimePage = lazy(() => import('./GroupsRuntimePage.tsx'))
 const DiscipleshipRuntimePage = lazy(() => import('./DiscipleshipRuntimePage.tsx'))
-const JourneyOverviewPage = lazy(() => import('./JourneyOverviewPage.tsx'))
 const ImplementationRuntimePage = lazy(() => import('./ImplementationRuntimePage.tsx'))
 const TeamSetupPage = lazy(() => import('./TeamSetupPage.tsx'))
 const JourneySettingsPage = lazy(() => import('./JourneySettingsPage.tsx'))
@@ -106,9 +105,8 @@ function JourneyRoute() {
       return <GovernanceRuntimePage />
     case 'pastoral':
       return <PastoralHandoffPage />
-    case 'overview':
     default:
-      return <JourneyOverviewPage />
+      return <MyTodayPage />
   }
 }
 
