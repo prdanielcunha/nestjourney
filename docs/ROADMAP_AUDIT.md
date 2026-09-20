@@ -42,6 +42,7 @@ O princípio permanece: tecnologia deve desaparecer atrás do cuidado. O softwar
 | Qualidade | gates antes de produção | lint, testes, TypeScript, build, Rules e smoke de Hosting | Automatizado |
 | Resiliência de acesso | evitar login/carregamento infinito | timeout explícito para autenticação e resolução de acesso, retry guiado e fallback para o Hub | Implementado |
 | Conectividade | deixar claro quando a rede caiu | aviso global offline sem transformar falha de rede em erro de permissão ou dado | Implementado |
+| Recuperação de interface | evitar tela em branco em falha de render | error boundary global com reload e retorno ao Hoje | Implementado |
 
 ## UX final consolidada
 
@@ -117,6 +118,7 @@ O núcleo é considerado pronto quando:
 9. `npm run check` e `npm run test:rules` passam;
 10. produção é promovida por CI e o domínio oficial passa no smoke test;
 11. autenticação e resolução de acesso não podem deixar o usuário indefinidamente em loading;
-12. perda de conexão precisa ser comunicada sem inventar estado operacional.
+12. perda de conexão precisa ser comunicada sem inventar estado operacional;
+13. uma falha de render precisa oferecer recuperação explícita em vez de tela em branco.
 
 Depois desse ponto, novas entregas são evolução de produto orientada por uso real — não correção de uma arquitetura incompleta.
