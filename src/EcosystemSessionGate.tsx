@@ -224,7 +224,7 @@ export function EcosystemSessionGate({ children }: { children: ReactNode }) {
   }
 
   const switchAccount = async () => {
-    if (auth) await auth.signOut().catch(() => undefined)
+    if (auth) await activeAuth.signOut().catch(() => undefined)
     try {
       sessionStorage.removeItem(ACTIVE_ORG_KEY)
       localStorage.removeItem('mn_nestjourney_last_org_id')
@@ -269,6 +269,7 @@ export function EcosystemSessionGate({ children }: { children: ReactNode }) {
       return
     }
 
+    const activeAuth = auth
     let cancelled = false
     let unsubscribe = () => {}
     const params = new URLSearchParams(window.location.search)
@@ -282,9 +283,9 @@ export function EcosystemSessionGate({ children }: { children: ReactNode }) {
       void (async () => {
         try {
           const payload = decodeHandoff(encodedContext)
-          const credential = await withTimeout(signInWithCustomToken(auth, payload.customToken), 15000, 'handoff_signin')
+          const credential = await withTimeout(signInWithCustomToken(activeAuth, payload.customToken), 15000, 'handoff_signin')
           if (credential.user.uid !== payload.userId) {
-            await auth.signOut()
+            await activeAuth.signOut()
             throw new Error('identity_mismatch')
           }
 
@@ -304,14 +305,14 @@ export function EcosystemSessionGate({ children }: { children: ReactNode }) {
       return () => { cancelled = true }
     }
 
-    void withTimeout(getRedirectResult(auth), 15000, 'redirect_signin').catch((error) => {
-      if (!cancelled && !auth.currentUser) {
+    void withTimeout(getRedirectResult(activeAuth), 15000, 'redirect_signin').catch((error) => {
+      if (!cancelled && !activeAuth.currentUser) {
         setMessage(accessErrorMessage(error, c))
         setState('error')
       }
     })
 
-    unsubscribe = onAuthStateChanged(auth, (user: User | null) => {
+    unsubscribe = onAuthStateChanged(activeAuth, (user: User | null) => {
       if (cancelled) return
       setIdentity(user)
 
