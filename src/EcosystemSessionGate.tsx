@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import {
   browserLocalPersistence,
   getRedirectResult,
@@ -145,13 +145,13 @@ export function EcosystemSessionGate({ children }: { children: ReactNode }) {
   const lang = useMemo(language, [])
   const c = COPY[lang]
   const [state, setState] = useState<GateState>('checking')
-  const [message, setMessage] = useState(c.checking)
+  const [message, setMessage] = useState(() => c.checking)
   const [organizations, setOrganizations] = useState<JourneyEntryOrganization[]>([])
   const [identity, setIdentity] = useState<User | null>(null)
   const [online, setOnline] = useState(() => navigator.onLine)
   const [slow, setSlow] = useState(false)
 
-  const resolveUser = async (user: User) => {
+  const resolveUser = useCallback(async (user: User) => {
     if (!db) throw new Error('firebase_unavailable')
     setState('checking')
     setMessage(c.checking)
@@ -175,10 +175,11 @@ export function EcosystemSessionGate({ children }: { children: ReactNode }) {
 
     setOrganizations(eligible)
     setState('choose')
-  }
+  }, [c.checking])
 
   const signInGoogle = async () => {
     if (!auth) return
+    setSlow(false)
     setState('checking')
     setMessage(c.checking)
     const provider = new GoogleAuthProvider()
@@ -220,7 +221,7 @@ export function EcosystemSessionGate({ children }: { children: ReactNode }) {
       }
       return
     }
-    window.location.reload()
+    await signInGoogle()
   }
 
   const switchAccount = async () => {
@@ -251,10 +252,7 @@ export function EcosystemSessionGate({ children }: { children: ReactNode }) {
   }, [c.checking, c.offline])
 
   useEffect(() => {
-    if (state !== 'checking') {
-      setSlow(false)
-      return
-    }
+    if (state !== 'checking') return
     const timer = window.setTimeout(() => {
       setSlow(true)
       setMessage(navigator.onLine ? c.slow : c.offline)
@@ -339,7 +337,7 @@ export function EcosystemSessionGate({ children }: { children: ReactNode }) {
       cancelled = true
       unsubscribe()
     }
-  }, [])
+  }, [c, resolveUser])
 
   if (state === 'ready') return <>{children}</>
 
