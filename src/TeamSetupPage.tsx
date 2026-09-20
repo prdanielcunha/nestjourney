@@ -15,6 +15,8 @@ import {
 } from './journeyRepository'
 import { getInitialLocale, localeLabels, persistLocale, type AppLocale } from './i18n'
 import { useJourneyLabels } from './journeyLabels'
+import { GuidedEmptyState } from './GuidedEmptyState'
+import { emptyGuidance } from './emptyGuidance'
 import './TeamSetupPage.css'
 
 const HUB_MEMBERS_URL='https://www.millionsnest.com/dashboard/organization/members'
@@ -227,6 +229,8 @@ export default function TeamSetupPage(){
     finally{setSavingId('')}
   }
 
+  const empty=emptyGuidance(locale,'team_no_members')
+
   if(loading)return <main className="team-setup"><div className="team-loading">{t.loading}</div></main>
 
   return <main className="team-setup"><div className="team-shell">
@@ -260,7 +264,7 @@ export default function TeamSetupPage(){
             </>}
           </article>
         })}
-        {!members.length?<div className="team-empty">{t.emptyMembers}</div>:null}
+        {!members.length?<div className="team-empty"><GuidedEmptyState icon={Users} title={empty.title} body={empty.body} primary={{label:empty.primary,href:HUB_MEMBERS_URL}} secondary={{label:empty.secondary||t.back,href:'/my-today'}}/></div>:null}
       </div>
     </section>:null}
 
