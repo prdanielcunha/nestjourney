@@ -18,3 +18,6 @@
 .journey-app-content .implementation-topbar,
 .journey-app-content .governance-topbar,
 .journey-app-content .pastoral-topbar{display:none}
+
+@media(max-width:980px){body{overflow-x:hidden}button,a{touch-action:manipulation;-webkit-tap-highlight-color:transparent}input:not([type="checkbox"]):not([type="radio"]),select,textarea{min-height:44px;font-size:16px!important}}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;transition-duration:.01ms!important;animation-duration:.01ms!important;animation-iteration-count:1!important}}
