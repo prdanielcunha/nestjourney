@@ -222,7 +222,7 @@ export default function CareIntegrityPage() {
       })}
     </section>
 
-    {!visible.length ? <div className="care-panel care-empty">{t.empty}</div> : null}
+    {!visible.length ? query.trim()?<div className="care-panel care-empty">{t.empty}</div>:<div className="care-panel"><GuidedEmptyState icon={HeartHandshake} title={empty.title} body={empty.body} primary={tab==='attention'?{label:empty.primary,onClick:()=>setTab('open')}:tab==='open'?(people.length?{label:empty.primary,onClick:()=>setShowNew(true)}:{label:locale==='en'?'Open Presence':locale==='es'?'Abrir Presencia':'Abrir Presença',href:'/presence-assist'}):{label:empty.primary,onClick:()=>setTab('open')}} secondary={{label:empty.secondary||t.back,href:'/my-today'}}/></div> : null}
     <p className="care-rule"><ShieldCheck size={15} /> {t.privacyRule}</p>
   </div>
 
