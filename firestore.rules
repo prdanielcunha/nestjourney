@@ -1017,6 +1017,8 @@ service cloud.firestore {
           ||
           (eventType in ['PRESENCE_CONFIRMED', 'PRESENCE_CORRECTED']
             && checkId is string
+            && checkId.size() > 0
+            && factId == 'presence-' + checkId
             && request.resource.data.get('evidenceRef', '') == 'presenceCheck:' + checkId
             && existsAfter(checkPath)
             && getAfter(checkPath).data.get('state', '') != 'unverified'
