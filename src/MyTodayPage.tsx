@@ -5,6 +5,7 @@ import {
 } from 'lucide-react'
 import { auth } from './firebase'
 import { buildMyTodayItems, type MyTodayKind } from './myToday'
+import { buildTodayPrimaryAction, todayActionKicker } from './todayActionCenter'
 import {
   getActiveJourneyOrganizationId,
   listCareRequests,
@@ -190,12 +191,29 @@ export default function MyTodayPage(){
 
   const showMesa=filter==='all'||filter==='mesa'
   const hasAnything=visible.length>0||(showMesa&&(mesaPending.length>0||mesaPreparationPending))
+  const primaryAction=buildTodayPrimaryAction({
+    locale,
+    responsibility,
+    items,
+    mesaPreparationPending,
+    mesaPendingCount:mesaPending.length,
+  })
+  const activeUnit=congregations.find(item=>item.id===congregationId)
 
   return <main className="today-page"><div className="today-shell">
     <header className="today-topbar"><div className="today-brand"><img src="/icon.svg" alt=""/><span><strong>{t.product}</strong><small>{focus.title}</small></span></div><div className="today-actions"><a href="/journey-profile"><UserRound size={16}/>{t.profile}</a><select value={locale} aria-label="Language" onChange={event=>{const next=event.target.value as AppLocale;setLocale(next);persistLocale(next)}}>{(Object.keys(localeLabels) as AppLocale[]).map(id=><option value={id} key={id}>{localeLabels[id]}</option>)}</select></div></header>
 
     <section className="today-hero"><div><span className="today-kicker">NestJourney / Today</span><h1>{t.title}</h1><p>{t.subtitle}</p></div></section>
     {error?<div className="today-error" role="alert">{error}</div>:null}
+
+    <section className={'today-primary-action '+(primaryAction.urgent?'urgent':'calm')}>
+      <div className="today-primary-copy">
+        <span className="today-action-kicker">{todayActionKicker(locale)}{activeUnit?' · '+activeUnit.name:''}</span>
+        <h2>{primaryAction.title}</h2>
+        <p>{primaryAction.body}</p>
+      </div>
+      <a href={primaryAction.href}>{primaryAction.cta}<ArrowRight size={15}/></a>
+    </section>
 
     <section className="today-focus"><div><strong>{focus.title}</strong><p>{focus.body}</p></div><div className="today-quick-actions">{quickActions.map(item=>{const Icon=item.Icon;return <a href={item.href} key={item.href}><Icon size={15}/>{item.label}<ArrowRight size={13}/></a>})}</div></section>
 
@@ -245,7 +263,7 @@ export default function MyTodayPage(){
           :t.meeting+': '+String(item.meeting??'—')+' · '+item.titleRef
         return <article className="today-panel today-item" key={item.id}><span className={'today-icon '+tone}><Icon size={18}/></span><div className="today-item-body"><span className="today-item-kind">{label}</span><h2>{item.personName||item.titleRef}</h2><p>{detail}</p></div><a className="today-button" href={actionHref}>{item.kind.startsWith('care_')?t.goCare:item.kind==='presence_open'?t.goPresence:item.kind==='group_attention'?(labels.groups||t.groups):item.kind==='pastoral_handoff'?t.goPastoral:item.kind==='discipleship_next'?(labels.discipleship||t.discipleship):item.personId?t.openPerson:t.profile}</a></article>
       })}
-      {!hasAnything?<div className="today-panel today-empty"><ShieldCheck size={20}/><strong>{t.noAccessTitle}</strong><span>{t.noAccess}</span><div className="today-empty-actions"><a href="/areas">{locale==='en'?'View Areas':locale==='es'?'Ver Áreas':'Ver Áreas'}</a><a href="/help">{locale==='en'?'Open Help':locale==='es'?'Abrir Ayuda':'Abrir Ajuda'}</a></div></div>:null}
+      {!hasAnything?<div className="today-panel today-empty"><ShieldCheck size={20}/><strong>{locale==='en'?'Nothing urgent right now':locale==='es'?'Nada urgente ahora':'Nada urgente agora'}</strong><span>{locale==='en'?'Your factual queue is clear. Use the suggested action above to keep your responsibility moving without hunting through menus.':locale==='es'?'Tu fila factual está al día. Usa la acción sugerida arriba para mantener tu responsabilidad avanzando sin buscar por menús.':'Sua fila factual está em dia. Use a ação sugerida acima para manter sua responsabilidade andando sem precisar procurar pelos menus.'}</span><div className="today-empty-actions"><a href={primaryAction.href}>{primaryAction.cta}</a><a href="/areas">{locale==='en'?'View Areas':locale==='es'?'Ver Áreas':'Ver Áreas'}</a><a href="/help">{locale==='en'?'Open Help':locale==='es'?'Abrir Ayuda':'Abrir Ajuda'}</a></div></div>:null}
     </section>
 
     <p className="today-rule"><ShieldCheck size={15}/>{t.sourceRule}</p>
