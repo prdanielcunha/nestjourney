@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import {
-  BarChart3, Eye, HeartHandshake, House, Leaf, LayoutGrid, ListTodo,
+  BarChart3, CircleHelp, Eye, HeartHandshake, House, Leaf, LayoutGrid, ListTodo,
   MoreHorizontal, Settings2, UserCheck, Users, UsersRound,
 } from 'lucide-react'
 import { auth } from './firebase'
 import { getActiveJourneyOrganizationId, loadJourneyAccess, type JourneyAccessContext } from './journeyRepository'
-import { canOpenJourneyArea } from './journeyExperience'
+import { canOpenJourneyArea, canViewJourneyVision, resolveJourneyResponsibility } from './journeyExperience'
 import { getInitialLocale, localeLabels, persistLocale, type AppLocale } from './i18n'
 import { useJourneyLabels } from './journeyLabels'
 import './JourneyShell.css'
@@ -92,7 +92,7 @@ export function JourneyShell({children}:{children:ReactNode}){
   const primary:NavItem[]=[
     {href:'/my-today',label:t.today,description:t.todayDesc,icon:ListTodo},
     {href:'/journey-profile',label:t.people,description:t.peopleDesc,icon:Users},
-    {href:'/vision',label:t.vision,description:t.visionDesc,icon:Eye},
+    {href:'/vision',label:t.vision,description:t.visionDesc,icon:Eye,enabled:a=>canViewJourneyVision(a)},
   ]
   const areas:NavItem[]=[
     {href:'/presence-assist',label:names.presence,description:t.presenceDesc,icon:UserCheck,enabled:a=>canOpenJourneyArea(a,'presence')},
@@ -119,11 +119,22 @@ export function JourneyShell({children}:{children:ReactNode}){
     </button>
   }
 
+  const responsibility=access?resolveJourneyResponsibility(access):'member'
+  const roleShortcut=
+    responsibility==='presence_host'?{href:'/presence-assist',label:names.presence,icon:UserCheck}
+    :responsibility==='mesa_team'?{href:'/mesa-runtime',label:names.mesa,icon:UsersRound}
+    :responsibility==='caregiver'?{href:'/care-integrity',label:names.care,icon:HeartHandshake}
+    :responsibility==='group_leader'?{href:'/groups-runtime',label:names.groups,icon:House}
+    :responsibility==='discipler'?{href:'/discipleship-runtime',label:names.root,icon:Leaf}
+    :{href:'/help',label:locale==='en'?'Help':locale==='es'?'Ayuda':'Ajuda',icon:CircleHelp}
+  const mobileFourth=access&&canViewJourneyVision(access)
+    ?{href:'/vision',label:t.vision,icon:BarChart3}
+    :roleShortcut
   const mobile=[
     {href:'/my-today',label:t.today,icon:ListTodo},
     {href:'/journey-profile',label:t.people,icon:Users},
     {href:'/areas',label:t.areas,icon:LayoutGrid},
-    {href:'/vision',label:t.vision,icon:BarChart3},
+    mobileFourth,
     {href:'/more',label:t.more,icon:MoreHorizontal},
   ]
 
