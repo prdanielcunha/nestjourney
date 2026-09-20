@@ -4,6 +4,7 @@ export type EmptyGuidanceKey =
   | 'areas_none'
   | 'people_none'
   | 'groups_none'
+  | 'groups_unassigned'
   | 'discipleship_none'
   | 'care_attention_clear'
   | 'care_open_none'
@@ -29,6 +30,7 @@ const copy: Record<AppLocale, Record<EmptyGuidanceKey, EmptyGuidanceText>> = {
     areas_none:{title:'Nenhuma área operacional foi atribuída a você',body:'Seu acesso está válido, mas ainda não existe uma responsabilidade operacional. Abra a Ajuda para entender o fluxo ou peça a um administrador para definir sua função.',primary:'Abrir Ajuda',secondary:'Voltar ao Hoje'},
     people_none:{title:'Ainda não há pessoas nesta unidade',body:'O fluxo começa na Presença: registre quem chegou e somente os dados necessários. Depois o histórico permitido aparece aqui automaticamente.',primary:'Abrir Presença',secondary:'Ver Áreas'},
     groups_none:{title:'Nenhuma Casa foi criada nesta unidade',body:'Comece com uma Casa simples: líder, anfitrião, horário e capacidade. Depois vincule pessoas e registre os encontros reais.',primary:'Criar primeira Casa',secondary:'Ver implantação'},
+    groups_unassigned:{title:'Nenhuma Casa está atribuída a você',body:'Seu papel é de líder de Casa, mas nenhuma Casa desta unidade está vinculada ao seu usuário. Um coordenador ou administrador precisa fazer essa atribuição.',primary:'Voltar ao Hoje',secondary:'Abrir Ajuda'},
     discipleship_none:{title:'Nenhum acompanhamento do Raiz está ativo',body:'Quando houver vínculo e desejo de caminhar, inicie uma relação e conduza os sete encontros sem transformar discipulado em checklist de maturidade.',primary:'Iniciar primeiro Raiz',secondary:'Ver Pessoas'},
     care_attention_clear:{title:'Nenhuma pendência de cuidado agora',body:'Não há Care Debt, prazo próximo ou cuidado sem responsável neste filtro. Continue acompanhando sua fila sem inventar urgências.',primary:'Ver cuidados abertos',secondary:'Voltar ao Hoje'},
     care_open_none:{title:'Nenhum cuidado aberto nesta unidade',body:'Se alguém autorizou contato ou pediu acompanhamento, registre um compromisso com prazo, responsável e próximo passo. Caso contrário, não há nada a criar.',primary:'Novo cuidado',secondary:'Voltar ao Hoje'},
@@ -46,6 +48,7 @@ const copy: Record<AppLocale, Record<EmptyGuidanceKey, EmptyGuidanceText>> = {
     areas_none:{title:'No operational area is assigned to you yet',body:'Your access is valid, but no operational responsibility is assigned. Open Help to understand the flow or ask an administrator to define your responsibility.',primary:'Open Help',secondary:'Back to Today'},
     people_none:{title:'There are no people in this campus yet',body:'The journey starts in Presence: record who arrived and only the data that is necessary. Permitted history will then appear here automatically.',primary:'Open Presence',secondary:'View Areas'},
     groups_none:{title:'No House has been created in this campus',body:'Start with one simple House: leader, host, schedule, and capacity. Then link people and record real meetings.',primary:'Create first House',secondary:'View implementation'},
+    groups_unassigned:{title:'No House is assigned to you',body:'Your role is House Leader, but no House in this campus is linked to your user. A coordinator or administrator needs to make that assignment.',primary:'Back to Today',secondary:'Open Help'},
     discipleship_none:{title:'No active Root relationship yet',body:'When there is relationship and willingness to walk together, start a relation and guide the seven meetings without turning discipleship into a maturity score.',primary:'Start first Root',secondary:'View People'},
     care_attention_clear:{title:'No care attention is needed right now',body:'There is no Care Debt, near deadline, or unassigned care in this filter. Keep following the queue without inventing urgency.',primary:'View open care',secondary:'Back to Today'},
     care_open_none:{title:'No open care in this campus',body:'If someone authorized contact or asked for follow-up, create a commitment with deadline, owner, and next step. Otherwise there is nothing to create.',primary:'New care',secondary:'Back to Today'},
@@ -63,6 +66,7 @@ const copy: Record<AppLocale, Record<EmptyGuidanceKey, EmptyGuidanceText>> = {
     areas_none:{title:'Todavía no tienes un área operativa asignada',body:'Tu acceso es válido, pero no existe una responsabilidad operativa asignada. Abre Ayuda para entender el flujo o pide a un administrador que defina tu función.',primary:'Abrir Ayuda',secondary:'Volver a Hoy'},
     people_none:{title:'Todavía no hay personas en esta sede',body:'La jornada comienza en Presencia: registra quién llegó y solo los datos necesarios. Después el historial permitido aparece aquí automáticamente.',primary:'Abrir Presencia',secondary:'Ver Áreas'},
     groups_none:{title:'No se creó ninguna Casa en esta sede',body:'Empieza con una Casa simple: líder, anfitrión, horario y capacidad. Después vincula personas y registra encuentros reales.',primary:'Crear primera Casa',secondary:'Ver implementación'},
+    groups_unassigned:{title:'No tienes ninguna Casa asignada',body:'Tu papel es Líder de Casa, pero ninguna Casa de esta sede está vinculada a tu usuario. Un coordinador o administrador debe hacer esa asignación.',primary:'Volver a Hoy',secondary:'Abrir Ayuda'},
     discipleship_none:{title:'No hay acompañamientos de Raíz activos',body:'Cuando exista vínculo y deseo de caminar, inicia una relación y conduce los siete encuentros sin convertir el discipulado en una puntuación de madurez.',primary:'Iniciar primer Raíz',secondary:'Ver Personas'},
     care_attention_clear:{title:'No hay pendientes de cuidado ahora',body:'No hay Care Debt, plazo próximo ni cuidado sin responsable en este filtro. Continúa acompañando tu fila sin inventar urgencias.',primary:'Ver cuidados abiertos',secondary:'Volver a Hoy'},
     care_open_none:{title:'No hay cuidados abiertos en esta sede',body:'Si alguien autorizó contacto o pidió acompañamiento, registra un compromiso con plazo, responsable y próximo paso. Si no, no hay nada que crear.',primary:'Nuevo cuidado',secondary:'Volver a Hoy'},
