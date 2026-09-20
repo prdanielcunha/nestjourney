@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import {
-  BarChart3, CircleHelp, Eye, HeartHandshake, House, Leaf, LayoutGrid, ListTodo,
+  BarChart3, CircleHelp, CloudOff, Eye, HeartHandshake, House, Leaf, LayoutGrid, ListTodo,
   MoreHorizontal, Settings2, UserCheck, Users, UsersRound,
 } from 'lucide-react'
 import { auth } from './firebase'
@@ -26,7 +26,7 @@ const copy={
     presence:'Presença',presenceDesc:'Cultos, visitantes e vínculo',table:'Mesa Aberta',tableDesc:'Convidados e participação',
     care:'Cuidado & Conexão',careDesc:'Contato em 24–48h e próximos passos',groups:'Casas de Paz',groupsDesc:'Casas, participantes e operação',
     root:'Raiz',rootDesc:'Discipulado inicial 1–7',available:'Disponível',restricted:'Sem acesso neste papel',
-    language:'Idioma',role:'Seu acesso',
+    language:'Idioma',role:'Seu acesso',offline:'Sem conexão. As ações serão retomadas quando a internet voltar.',
   },
   en:{
     tagline:'care at every step',primary:'Main',today:'Today',todayDesc:'What depends on you now',
@@ -35,7 +35,7 @@ const copy={
     presence:'Presence',presenceDesc:'Services, visitors, and relationship',table:'Open Table',tableDesc:'Guests and participation',
     care:'Care & Connection',careDesc:'24–48h contact and next steps',groups:'Peace Houses',groupsDesc:'Houses, participants, and operations',
     root:'Root',rootDesc:'Initial discipleship 1–7',available:'Available',restricted:'Not available for this role',
-    language:'Language',role:'Your access',
+    language:'Language',role:'Your access',offline:'You are offline. Actions will resume when your internet connection returns.',
   },
   es:{
     tagline:'cuidado en cada paso',primary:'Principal',today:'Hoy',todayDesc:'Lo que depende de ti ahora',
@@ -44,7 +44,7 @@ const copy={
     presence:'Presencia',presenceDesc:'Cultos, visitantes y vínculo',table:'Mesa Abierta',tableDesc:'Invitados y participación',
     care:'Cuidado & Conexión',careDesc:'Contacto en 24–48h y próximos pasos',groups:'Casas de Paz',groupsDesc:'Casas, participantes y operación',
     root:'Raíz',rootDesc:'Discipulado inicial 1–7',available:'Disponible',restricted:'Sin acceso en este papel',
-    language:'Idioma',role:'Tu acceso',
+    language:'Idioma',role:'Tu acceso',offline:'Sin conexión. Las acciones se reanudarán cuando vuelva internet.',
   },
 } as const
 
@@ -59,6 +59,7 @@ export function JourneyShell({children}:{children:ReactNode}){
   const [access,setAccess]=useState<JourneyAccessContext|null>(null)
   const [locale,setLocale]=useState<AppLocale>(getInitialLocale)
   const [pathname,setPathname]=useState(()=>window.location.pathname)
+  const [online,setOnline]=useState(()=>navigator.onLine)
   const {labels}=useJourneyLabels()
   const t=copy[locale]
 
@@ -66,6 +67,16 @@ export function JourneyShell({children}:{children:ReactNode}){
     const syncPath=()=>setPathname(window.location.pathname)
     window.addEventListener('popstate',syncPath)
     return()=>window.removeEventListener('popstate',syncPath)
+  },[])
+  useEffect(()=>{
+    const handleOnline=()=>setOnline(true)
+    const handleOffline=()=>setOnline(false)
+    window.addEventListener('online',handleOnline)
+    window.addEventListener('offline',handleOffline)
+    return()=>{
+      window.removeEventListener('online',handleOnline)
+      window.removeEventListener('offline',handleOffline)
+    }
   },[])
   useEffect(()=>{
     const syncLocale=(event:Event)=>{
@@ -146,6 +157,7 @@ export function JourneyShell({children}:{children:ReactNode}){
   const mobile=mobileCandidates.filter((item,index,items)=>items.findIndex(candidate=>candidate.href===item.href)===index)
 
   return <div className="journey-app-frame">
+    {!online?<div className="journey-network-banner" role="status"><CloudOff size={15}/><span>{t.offline}</span></div>:null}
     <aside className="journey-side-nav">
       <button className="journey-side-brand" onClick={()=>navigate('/my-today')}>
         <img src="/icon.svg" alt=""/>
