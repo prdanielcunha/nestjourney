@@ -95,7 +95,7 @@ export default function PastoralHandoffPage() {
   return <main className="pastoral-runtime"><div className="pastoral-shell">
     <header className="pastoral-topbar">
       <div className="pastoral-brand"><img src="/icon.svg" alt=""/><span><strong>{t.product}</strong><small>Journey & Care Engine</small></span></div>
-      <div className="pastoral-actions"><a href="/journey-overview"><ArrowLeft size={16}/>{t.back}</a><select value={locale} onChange={e=>{const next=e.target.value as AppLocale;setLocale(next);persistLocale(next)}}>{(Object.keys(localeLabels) as AppLocale[]).map(id=><option key={id} value={id}>{localeLabels[id]}</option>)}</select></div>
+      <div className="pastoral-actions"><a href="/vision"><ArrowLeft size={16}/>{t.back}</a><select value={locale} onChange={e=>{const next=e.target.value as AppLocale;setLocale(next);persistLocale(next)}}>{(Object.keys(localeLabels) as AppLocale[]).map(id=><option key={id} value={id}>{localeLabels[id]}</option>)}</select></div>
     </header>
 
     <section className="pastoral-hero"><div><span className="pastoral-kicker">Journey / Pastoral</span><h1>{t.title}</h1><p>{t.subtitle}</p></div><span className="pastoral-badge"><ShieldCheck size={15}/>{t.restricted}</span></section>
