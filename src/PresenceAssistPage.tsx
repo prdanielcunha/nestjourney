@@ -36,6 +36,7 @@ function bondCopy(locale: AppLocale) {
     claim: 'I will keep in touch',
     visitorClaim: 'I will be this visitor’s relationship contact',
     alreadyAssigned: 'This person already has a relationship contact.',
+    claimError: 'The visitor was registered, but relationship ownership could not be saved. You can try again from the person card.',
   }
   if (locale === 'es') return {
     mine: 'Vínculo contigo',
@@ -44,6 +45,7 @@ function bondCopy(locale: AppLocale) {
     claim: 'Yo mantendré el vínculo',
     visitorClaim: 'Yo seré el contacto de vínculo de este visitante',
     alreadyAssigned: 'Esta persona ya tiene un contacto de vínculo.',
+    claimError: 'El visitante fue registrado, pero no se pudo guardar el responsable del vínculo. Puedes intentarlo de nuevo desde la tarjeta de la persona.',
   }
   return {
     mine: 'Vínculo com você',
@@ -52,6 +54,7 @@ function bondCopy(locale: AppLocale) {
     claim: 'Eu vou manter o vínculo',
     visitorClaim: 'Eu serei o contato de vínculo deste visitante',
     alreadyAssigned: 'Esta pessoa já possui um contato de vínculo.',
+    claimError: 'O visitante foi registrado, mas não foi possível salvar o responsável pelo vínculo. Você pode tentar novamente no cartão da pessoa.',
   }
 }
 
@@ -258,10 +261,22 @@ export default function PresenceAssistPage() {
     if (!access || !displaySession) return
     setBusy(true); setError('')
     try {
-      const person = await createMinimalVisitor({ organizationId: access.organizationId, congregationId, actorId: access.userId, name, phone, consent, claimBond })
+      const person = await createMinimalVisitor({ organizationId: access.organizationId, congregationId, actorId: access.userId, name, phone, consent })
       await recordPresenceCheck({ organizationId: access.organizationId, congregationId, sessionId: displaySession.id, personId: person.id, actorId: access.userId, state: 'present_confirmed' })
+      let bondFailed = false
+      if (claimBond) {
+        try {
+          const user = auth?.currentUser
+          if (!user) throw new Error('missing_auth')
+          await claimJourneyPersonBond({ access, person, idToken: await user.getIdToken() })
+        } catch (bondCause) {
+          console.error('Relationship ownership failed after visitor registration', bondCause)
+          bondFailed = true
+        }
+      }
       setShowVisitor(false)
       await refreshScope(access.organizationId, congregationId)
+      if (bondFailed) setError(bond.claimError)
     } catch (cause) { console.error(cause); setError(t.error) }
     finally { setBusy(false) }
   }} locale={locale} /> : null}
