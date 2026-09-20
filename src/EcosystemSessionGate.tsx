@@ -192,7 +192,7 @@ export function EcosystemSessionGate({ children }: { children: ReactNode }) {
         await signInWithRedirect(auth, provider)
         return
       }
-      setMessage(c.error)
+      setMessage(accessError(error))
       setState('error')
     }
   }
