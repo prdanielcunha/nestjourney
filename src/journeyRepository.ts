@@ -76,6 +76,8 @@ export interface PresencePerson {
   phone?: string
   consent?: boolean
   visits?: number
+  bondHostRef?: string
+  bondAssignedAt?: string
 }
 
 export interface JourneyPersonRecord extends PresencePerson {
@@ -232,6 +234,7 @@ export interface MinimalVisitorInput {
   name: string
   phone?: string
   consent: boolean
+  claimBond?: boolean
 }
 
 export type CareType =
@@ -569,6 +572,8 @@ export async function listPresencePeople(organizationId: string, congregationId:
       phone: asString(data.phone) || undefined,
       consent: Boolean(data.consent),
       visits: typeof data.visits === 'number' ? data.visits : undefined,
+      bondHostRef: asString(data.bondHostRef) || undefined,
+      bondAssignedAt: data.bondAssignedAt ? toIso(data.bondAssignedAt) : undefined,
     }
   }).sort((a, b) => a.name.localeCompare(b.name))
 }
@@ -591,6 +596,8 @@ export async function listJourneyPeople(organizationId: string, congregationId: 
       phone: asString(data.phone) || undefined,
       consent: Boolean(data.consent),
       visits: typeof data.visits === 'number' ? data.visits : undefined,
+      bondHostRef: asString(data.bondHostRef) || undefined,
+      bondAssignedAt: data.bondAssignedAt ? toIso(data.bondAssignedAt) : undefined,
       firstVisit: asString(data.firstVisit) || undefined,
       stage: asString(data.stage) || undefined,
       groupId: asString(data.groupId) || undefined,
@@ -1538,6 +1545,58 @@ export async function setMesaParticipation(input: {
   return id
 }
 
+export async function claimJourneyPersonBond(input: {
+  access: JourneyAccessContext
+  person: PresencePerson
+}) {
+  if (!input.access.canManagePresence && !input.access.canManagePeople) throw new Error('bond_forbidden')
+  if (input.person.organizationId !== input.access.organizationId) throw new Error('bond_tenant_mismatch')
+  if (
+    !input.access.broadJourneyAccess &&
+    input.access.congregationIds.length > 0 &&
+    !input.access.congregationIds.includes(input.person.congregationId)
+  ) throw new Error('bond_scope_mismatch')
+
+  const firestore = requireDb()
+  const personRef = doc(
+    firestore,
+    `${journeyCollectionPath(input.access.organizationId, 'people')}/${input.person.id}`,
+  )
+  const personSnapshot = await getDoc(personRef)
+  if (!personSnapshot.exists()) throw new Error('person_not_found')
+  const currentHost = asString(personSnapshot.data().bondHostRef)
+  if (currentHost === input.access.userId) return input.access.userId
+  if (currentHost) throw new Error('bond_already_assigned')
+
+  const factRef = doc(
+    firestore,
+    `${journeyCollectionPath(input.access.organizationId, 'facts')}/bond-host-${input.person.id}-${input.access.userId}`,
+  )
+  const batch = writeBatch(firestore)
+  batch.update(personRef, {
+    bondHostRef: input.access.userId,
+    bondAssignedAt: serverTimestamp(),
+    bondAssignedBy: input.access.userId,
+  })
+  batch.set(factRef, {
+    eventId: factRef.id,
+    eventType: 'BOND_HOST_ASSIGNED',
+    occurredAt: serverTimestamp(),
+    recordedAt: serverTimestamp(),
+    organizationId: input.access.organizationId,
+    actorId: input.access.userId,
+    subjectRef: `person:${input.person.id}`,
+    sourceApp: 'nestjourney',
+    scope: `congregation:${input.person.congregationId}`,
+    evidenceRef: `person:${input.person.id}`,
+    sensitivity: 'confidential',
+    version: 1,
+    payload: { personId: input.person.id, bondHostRef: input.access.userId },
+  })
+  await batch.commit()
+  return input.access.userId
+}
+
 export async function createPresenceSession(input: {
   organizationId: string
   congregationId: string
@@ -1664,6 +1723,9 @@ export async function createMinimalVisitor(input: MinimalVisitorInput) {
     visits: 1,
     contactStatus: consent ? 'pending' : 'closed',
     consentGrantedAt: consent ? serverTimestamp() : null,
+    bondHostRef: input.claimBond ? input.actorId : '',
+    bondAssignedAt: input.claimBond ? serverTimestamp() : null,
+    bondAssignedBy: input.claimBond ? input.actorId : '',
     createdAt: serverTimestamp(),
     createdBy: input.actorId,
   })
@@ -1671,7 +1733,7 @@ export async function createMinimalVisitor(input: MinimalVisitorInput) {
     eventId: factRef.id, eventType: 'VISITOR_REGISTERED', occurredAt: serverTimestamp(), recordedAt: serverTimestamp(),
     organizationId: input.organizationId, actorId: input.actorId, subjectRef: `person:${personRef.id}`, sourceApp: 'nestjourney',
     scope: `congregation:${input.congregationId}`, evidenceRef: `person:${personRef.id}`, sensitivity: 'confidential', version: 1,
-    payload: { personId: personRef.id, consent },
+    payload: { personId: personRef.id, consent, bondClaimed: Boolean(input.claimBond) },
   })
 
   if (careRef && careRequestedFactRef) {
