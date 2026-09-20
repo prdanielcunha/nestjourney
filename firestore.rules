@@ -323,8 +323,11 @@ service cloud.firestore {
       let sessionId = request.resource.data.get('sessionId', '');
       let congregationId = request.resource.data.get('congregationId', '');
       let personId = request.resource.data.get('personId', '');
+      let source = request.resource.data.get('source', '');
+      let correctedFromCheckId = request.resource.data.get('correctedFromCheckId', '');
       let sessionPath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/presenceSessions/$(sessionId);
       let personPath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/people/$(personId);
+      let correctionPath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/presenceChecks/$(correctedFromCheckId);
       return tenantCreate(orgId)
         && sessionId is string
         && congregationId is string
@@ -332,13 +335,28 @@ service cloud.firestore {
         && request.resource.data.get('actorId', '') == request.auth.uid
         && request.resource.data.get('recordedAt', null) == request.time
         && request.resource.data.get('state', '') in ['present_confirmed', 'absent_confirmed', 'unverified']
-        && request.resource.data.get('source', '') == 'human_check'
-        && request.resource.data.get('correctedFromCheckId', '') == ''
         && exists(sessionPath)
         && get(sessionPath).data.get('congregationId', '') == congregationId
         && get(sessionPath).data.get('status', '') == 'open'
         && exists(personPath)
-        && get(personPath).data.get('congregationId', '') == congregationId;
+        && get(personPath).data.get('congregationId', '') == congregationId
+        && (
+          (
+            source == 'human_check'
+            && correctedFromCheckId == ''
+          )
+          ||
+          (
+            source == 'retroactive_human_correction'
+            && correctedFromCheckId != ''
+            && request.resource.data.get('state', '') != 'unverified'
+            && exists(correctionPath)
+            && get(correctionPath).data.get('congregationId', '') == congregationId
+            && get(correctionPath).data.get('sessionId', '') == sessionId
+            && get(correctionPath).data.get('personId', '') == personId
+            && get(correctionPath).data.get('state', '') != request.resource.data.get('state', '')
+          )
+        );
     }
     function personBondEmptyOnCreate() {
       return request.resource.data.get('bondHostRef', '') == ''
@@ -979,7 +997,7 @@ service cloud.firestore {
         && request.resource.data.get('evidenceRef', '').size() > 0
         && request.resource.data.get('sensitivity', '') in ['public', 'internal', 'confidential', 'restricted']
         && eventType in [
-          'VISITOR_REGISTERED', 'PRESENCE_SESSION_OPENED', 'PRESENCE_CONFIRMED',
+          'VISITOR_REGISTERED', 'PRESENCE_SESSION_OPENED', 'PRESENCE_CONFIRMED', 'PRESENCE_CORRECTED',
           'CARE_REQUESTED', 'CARE_ASSIGNED'
         ]
         && (
@@ -997,11 +1015,20 @@ service cloud.firestore {
             && existsAfter(sessionPath)
             && request.resource.data.get('scope', '') == 'congregation:' + getAfter(sessionPath).data.get('congregationId', ''))
           ||
-          (eventType == 'PRESENCE_CONFIRMED'
+          (eventType in ['PRESENCE_CONFIRMED', 'PRESENCE_CORRECTED']
             && checkId is string
             && request.resource.data.get('evidenceRef', '') == 'presenceCheck:' + checkId
             && existsAfter(checkPath)
             && getAfter(checkPath).data.get('state', '') != 'unverified'
+            && (
+              (eventType == 'PRESENCE_CONFIRMED'
+                && getAfter(checkPath).data.get('source', '') == 'human_check'
+                && getAfter(checkPath).data.get('correctedFromCheckId', '') == '')
+              ||
+              (eventType == 'PRESENCE_CORRECTED'
+                && getAfter(checkPath).data.get('source', '') == 'retroactive_human_correction'
+                && getAfter(checkPath).data.get('correctedFromCheckId', '') != '')
+            )
             && request.resource.data.get('subjectRef', '') == 'person:' + getAfter(checkPath).data.get('personId', '')
             && request.resource.data.get('scope', '') == 'congregation:' + getAfter(checkPath).data.get('congregationId', ''))
           ||
