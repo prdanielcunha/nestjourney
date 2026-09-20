@@ -268,6 +268,40 @@ describe('Presence Assist and canonical evidence', () => {
     })
     await assertSucceeds(batch.commit())
 
+    await seedMembership('presence-host-other', 'org-a', 'member', ['unit-a'], {
+      canManagePresence: true,
+      canManagePeople: true,
+    })
+    const otherDb = environment.authenticatedContext('presence-host-other').firestore()
+    const takeover = writeBatch(otherDb)
+    takeover.update(
+      doc(otherDb, 'organizations/org-a/products/raiz_e_mesa/people/person-bond'),
+      {
+        bondHostRef: 'presence-host-other',
+        bondAssignedAt: serverTimestamp(),
+        bondAssignedBy: 'presence-host-other',
+      },
+    )
+    takeover.set(
+      doc(otherDb, 'organizations/org-a/products/raiz_e_mesa/facts/bond-host-person-bond-presence-host-other'),
+      {
+        eventId: 'bond-host-person-bond-presence-host-other',
+        eventType: 'BOND_HOST_ASSIGNED',
+        occurredAt: serverTimestamp(),
+        recordedAt: serverTimestamp(),
+        organizationId: 'org-a',
+        actorId: 'presence-host-other',
+        subjectRef: 'person:person-bond',
+        sourceApp: 'nestjourney',
+        scope: 'congregation:unit-a',
+        evidenceRef: 'person:person-bond',
+        sensitivity: 'confidential',
+        version: 1,
+        payload: { personId: 'person-bond', bondHostRef: 'presence-host-other' },
+      },
+    )
+    await assertFails(takeover.commit())
+
     const ordinaryDb = environment.authenticatedContext('plain-member').firestore()
     await assertFails(updateDoc(
       doc(ordinaryDb, 'organizations/org-a/products/raiz_e_mesa/people/person-bond'),
