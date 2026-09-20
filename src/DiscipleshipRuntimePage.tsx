@@ -47,6 +47,9 @@ export default function DiscipleshipRuntimePage(){
   async function selectUnit(unitId:string){if(!access)return;setCongregationId(unitId);setBusy(true);setError('');try{await refresh(access,unitId)}catch(cause){console.error(cause);setError(t.error)}finally{setBusy(false)}}
   async function act(item:JourneyDiscipleshipRecord,action:'advance'|'pause'|'resume'){if(!access)return;setBusy(true);setError('');try{await updateJourneyDiscipleship({organizationId:access.organizationId,relation:item,actorId:access.userId,action});await refresh(access,congregationId)}catch(cause){console.error(cause);setError(t.error)}finally{setBusy(false)}}
 
+  const empty=emptyGuidance(locale,'discipleship_none')
+  const availablePeople=people.filter(person=>!items.some(item=>item.status==='active'&&item.personId===person.id))
+
   if(loading)return <main className="journey-runtime"><div className="runtime-loading">{t.loading}</div></main>
   if(!(access?.canManageDiscipleship||access?.broadJourneyAccess))return <main className="journey-runtime"><section className="runtime-panel runtime-no-access"><ShieldCheck size={34}/><h1>{t.noAccessTitle}</h1><p>{t.noAccess}</p><button className="runtime-button" onClick={()=>void bootstrap()}>{t.retry}</button></section></main>
 
@@ -67,7 +70,7 @@ export default function DiscipleshipRuntimePage(){
         {item.status!=='completed'?<div className="runtime-preparation"><span><BookOpen size={15}/><strong>{prep.title} · {item.meeting}/7</strong></span><ul>{prep.items.map(step=><li key={step}>{step}</li>)}</ul></div>:null}
         <div className="runtime-card-actions">{item.status!=='completed'?<><button className="runtime-button primary" disabled={busy||item.status==='paused'} onClick={()=>void act(item,'advance')}><CheckCircle2 size={16}/>{t.advance}</button>{item.status==='paused'?<button className="runtime-button" disabled={busy} onClick={()=>void act(item,'resume')}><Play size={16}/>{t.resume}</button>:<button className="runtime-button" disabled={busy} onClick={()=>void act(item,'pause')}><Pause size={16}/>{t.pause}</button>}</>:null}</div>
       </article>})}
-      {!items.length?<div className="runtime-panel runtime-empty">{t.empty}</div>:null}
+      {!items.length?<div className="runtime-panel"><GuidedEmptyState icon={Leaf} title={empty.title} body={empty.body} primary={availablePeople.length?{label:empty.primary,onClick:()=>setShowNew(true)}:{label:locale==='en'?'View People':locale==='es'?'Ver Personas':'Ver Pessoas',href:'/journey-profile'}} secondary={{label:empty.secondary||t.empty,href:'/journey-profile'}}/></div>:null}
     </section><p className="runtime-rule"><ShieldCheck size={15}/>{t.sourceRule}</p>
   </div>
   {showNew?<NewRelationModal locale={locale} people={people} activePersonIds={activePersonIds} close={()=>setShowNew(false)} save={async person=>{
