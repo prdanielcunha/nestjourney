@@ -23,6 +23,7 @@ import { careIntegrityCopy, getInitialLocale, localeLabels, persistLocale, type 
 import { useJourneyLabels } from './journeyLabels'
 import { GuidedEmptyState } from './GuidedEmptyState'
 import { emptyGuidance } from './emptyGuidance'
+import { AccessDeniedState } from './AccessDeniedState'
 import './CareIntegrityPage.css'
 
 type CareTab = 'attention' | 'open' | 'resolved'
@@ -162,7 +163,7 @@ export default function CareIntegrityPage() {
   if (loading) return <main className="care-integrity"><div className="care-loading">{t.loading}</div></main>
 
   if (!access?.canManageCare) {
-    return <main className="care-integrity"><section className="care-panel care-no-access"><ShieldCheck size={34} /><h1>{t.noAccessTitle}</h1><p>{t.noAccess}</p><button className="care-button" onClick={() => void bootstrap()}>{t.retry}</button></section></main>
+    return <main className="care-integrity"><AccessDeniedState locale={locale} title={t.noAccessTitle} body={t.noAccess} retryLabel={t.retry} onRetry={() => void bootstrap()} /></main>
   }
 
   return <main className="care-integrity"><div className="care-shell">

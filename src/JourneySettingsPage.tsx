@@ -10,6 +10,7 @@ import {
 } from './journeyRepository'
 import { notifyJourneyLabelsChanged, useJourneyLabels } from './journeyLabels'
 import { getInitialLocale, localeLabels, persistLocale, type AppLocale } from './i18n'
+import { AccessDeniedState } from './AccessDeniedState'
 import './JourneySettingsPage.css'
 
 const copy={
@@ -87,7 +88,7 @@ export default function JourneySettingsPage(){
   ] as const
 
   if(loading)return <main className="journey-settings"><div className="settings-loading">{t.loading}</div></main>
-  if(!canEdit)return <main className="journey-settings"><section className="settings-no-access"><Settings2 size={30}/><h1>{t.title}</h1><p>{t.noAccess}</p></section></main>
+  if(!canEdit)return <main className="journey-settings"><AccessDeniedState locale={locale} title={t.title} body={t.noAccess} /></main>
 
   return <main className="journey-settings"><div className="settings-shell">
     <header className="settings-header"><div><span className="settings-kicker">NestJourney / Settings</span><h1>{t.title}</h1><p>{t.subtitle}</p></div><select value={locale} onChange={e=>{const next=e.target.value as AppLocale;setLocale(next);persistLocale(next)}}>{(Object.keys(localeLabels) as AppLocale[]).map(id=><option key={id} value={id}>{localeLabels[id]}</option>)}</select></header>

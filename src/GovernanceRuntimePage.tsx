@@ -21,6 +21,7 @@ import {
   type PrivacyRequestType,
 } from './journeyRepository'
 import { getInitialLocale, governanceRuntimeCopy, localeLabels, persistLocale, type AppLocale } from './i18n'
+import { AccessDeniedState } from './AccessDeniedState'
 import './GovernanceRuntimePage.css'
 
 type Tab = 'privacy' | 'audit' | 'boundaries'
@@ -122,7 +123,7 @@ export default function GovernanceRuntimePage() {
   }
 
   if(loading)return <main className="governance-runtime"><div className="governance-loading">{t.loading}</div></main>
-  if(!canView)return <main className="governance-runtime"><section className="governance-panel governance-no-access"><ShieldCheck size={34}/><h1>{t.noAccessTitle}</h1><p>{t.noAccess}</p><button className="governance-button" onClick={()=>void bootstrap()}>{t.retry}</button></section></main>
+  if(!canView)return <main className="governance-runtime"><AccessDeniedState locale={locale} title={t.noAccessTitle} body={t.noAccess} retryLabel={t.retry} onRetry={()=>void bootstrap()} /></main>
 
   const requestLabels=t.requestTypes
   return <main className="governance-runtime"><div className="governance-shell">

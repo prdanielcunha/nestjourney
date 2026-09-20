@@ -23,6 +23,7 @@ import { getInitialLocale, localeLabels, persistLocale, type AppLocale } from '.
 import { useJourneyLabels } from './journeyLabels'
 import { GuidedEmptyState } from './GuidedEmptyState'
 import { emptyGuidance } from './emptyGuidance'
+import { AccessDeniedState } from './AccessDeniedState'
 import './JourneySectionPages.css'
 
 const copy={
@@ -156,7 +157,7 @@ export default function MesaRuntimePage(){
   const noPeopleGuide=emptyGuidance(locale,'mesa_no_people')
 
   if(loading)return <main className="journey-section-page"><div className="journey-loading">{t.loading}</div></main>
-  if(!access?.canManageMesa)return <main className="journey-section-page"><div className="journey-no-access"><ShieldCheck size={32}/><h1>{t.title}</h1><p>{t.noAccess}</p></div></main>
+  if(!access?.canManageMesa)return <main className="journey-section-page"><AccessDeniedState locale={locale} title={t.title} body={t.noAccess} /></main>
 
   return <main className="journey-section-page"><div className="journey-section-shell">
     <header className="journey-section-header"><div><span className="journey-section-kicker">NestJourney / Mesa</span><h1>{t.title}</h1><p>{t.subtitle}</p></div><select value={locale} onChange={e=>{const next=e.target.value as AppLocale;setLocale(next);persistLocale(next)}}>{(Object.keys(localeLabels) as AppLocale[]).map(id=><option key={id} value={id}>{localeLabels[id]}</option>)}</select></header>

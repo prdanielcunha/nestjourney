@@ -4,6 +4,7 @@ import { auth } from './firebase'
 import { completeImplementationStep, createImplementationCycle, getActiveJourneyOrganizationId, listImplementationCycles, listJourneyCongregations, loadJourneyAccess, type JourneyAccessContext, type JourneyCongregation, type JourneyImplementationCycle } from './journeyRepository'
 import { IMPLEMENTATION_PREPARATION_KEYS, IMPLEMENTATION_REQUIRED_KEYS, implementationPlaybooks, implementationProgress, implementationWeekForProgress, implementationWeekKeys } from './implementationPlaybook'
 import { getInitialLocale, implementationRuntimeCopy, localeLabels, persistLocale, type AppLocale } from './i18n'
+import { AccessDeniedState } from './AccessDeniedState'
 import './ImplementationRuntimePage.css'
 
 export default function ImplementationRuntimePage() {
@@ -45,7 +46,7 @@ export default function ImplementationRuntimePage() {
   async function mark(key:string){if(!access||!cycle||completed.has(key)||cycle.status==='completed')return;setBusy(true);setError('');try{await completeImplementationStep({organizationId:access.organizationId,cycle,actorId:access.userId,key,requiredKeys:IMPLEMENTATION_REQUIRED_KEYS});await refresh(access.organizationId,congregationId)}catch(cause){console.error(cause);setError(t.error)}finally{setBusy(false)}}
 
   if(loading)return <main className="implementation-runtime"><div className="implementation-loading">{t.loading}</div></main>
-  if(!access?.canManageImplementation)return <main className="implementation-runtime"><section className="implementation-panel implementation-no-access"><ShieldCheck size={34}/><h1>{t.noAccessTitle}</h1><p>{t.noAccess}</p><button className="implementation-button" onClick={()=>void bootstrap()}>{t.retry}</button></section></main>
+  if(!access?.canManageImplementation)return <main className="implementation-runtime"><AccessDeniedState locale={locale} title={t.noAccessTitle} body={t.noAccess} retryLabel={t.retry} onRetry={()=>void bootstrap()} /></main>
 
   return <main className="implementation-runtime"><div className="implementation-shell">
     <header className="implementation-topbar"><div className="implementation-brand"><img src="/icon.svg" alt=""/><span><strong>{t.product}</strong><small>Journey & Care Engine</small></span></div><div className="implementation-actions"><a href="/journey-overview"><ChevronLeft size={16}/>{t.back}</a><select value={locale} onChange={e=>{const next=e.target.value as AppLocale;setLocale(next);persistLocale(next)}}>{(Object.keys(localeLabels) as AppLocale[]).map(id=><option key={id} value={id}>{localeLabels[id]}</option>)}</select></div></header>

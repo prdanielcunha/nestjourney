@@ -24,6 +24,7 @@ import { getInitialLocale, journeyProfileCopy, localeLabels, persistLocale, type
 import { canViewJourneyPeople } from './journeyExperience'
 import { GuidedEmptyState } from './GuidedEmptyState'
 import { emptyGuidance } from './emptyGuidance'
+import { AccessDeniedState } from './AccessDeniedState'
 import './JourneyProfilePage.css'
 
 function initials(name: string) {
@@ -137,7 +138,7 @@ export default function JourneyProfilePage() {
   ].filter(Boolean) as Array<{href:string;label:string;Icon:typeof UserRound}>
 
   if (loading) return <main className="journey-profile"><div className="journey-loading">{t.loading}</div></main>
-  if (!canView) return <main className="journey-profile"><section className="journey-panel journey-no-access"><ShieldCheck size={34} /><h1>{t.noAccessTitle}</h1><p>{t.noAccess}</p><button className="journey-button" onClick={() => void bootstrap()}>{t.retry}</button></section></main>
+  if (!canView) return <main className="journey-profile"><AccessDeniedState locale={locale} title={t.noAccessTitle} body={t.noAccess} retryLabel={t.retry} onRetry={() => void bootstrap()} /></main>
 
   return <main className="journey-profile"><div className="journey-shell">
     <header className="journey-topbar">

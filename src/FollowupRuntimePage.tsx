@@ -21,6 +21,7 @@ import { buildConnectFollowupLaunchUrl, resolveRequestedFollowupId } from './con
 import { followupRuntimeCopy, getInitialLocale, localeLabels, persistLocale, type AppLocale } from './i18n'
 import { GuidedEmptyState } from './GuidedEmptyState'
 import { emptyGuidance } from './emptyGuidance'
+import { AccessDeniedState } from './AccessDeniedState'
 import './FollowupRuntimePage.css'
 
 function formatDate(value: string, locale: AppLocale) {
@@ -159,7 +160,7 @@ export default function FollowupRuntimePage() {
   const completedEmpty=emptyGuidance(locale,'followup_completed_none')
 
   if (loading) return <main className="followup-page"><div className="followup-loading">{t.loading}</div></main>
-  if (!access?.canManageCare) return <main className="followup-page"><section className="followup-panel followup-no-access"><ShieldCheck size={34}/><h1>{t.noAccessTitle}</h1><p>{t.noAccess}</p><button className="followup-button" onClick={()=>void bootstrap()}>{t.retry}</button></section></main>
+  if (!access?.canManageCare) return <main className="followup-page"><AccessDeniedState locale={locale} title={t.noAccessTitle} body={t.noAccess} retryLabel={t.retry} onRetry={()=>void bootstrap()} /></main>
 
   return <main className="followup-page"><div className="followup-shell">
     <header className="followup-topbar">

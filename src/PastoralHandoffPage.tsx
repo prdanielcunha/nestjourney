@@ -16,6 +16,7 @@ import {
 import { getInitialLocale, localeLabels, pastoralHandoffCopy, persistLocale, type AppLocale } from './i18n'
 import { GuidedEmptyState } from './GuidedEmptyState'
 import { emptyGuidance } from './emptyGuidance'
+import { AccessDeniedState } from './AccessDeniedState'
 import './PastoralHandoffPage.css'
 
 type Tab = 'open' | 'resolved'
@@ -90,7 +91,7 @@ export default function PastoralHandoffPage() {
   }
 
   if(loading)return <main className="pastoral-runtime"><div className="pastoral-loading">{t.loading}</div></main>
-  if(!access?.canManagePastoral)return <main className="pastoral-runtime"><section className="pastoral-panel pastoral-no-access"><ShieldCheck size={34}/><h1>{t.noAccessTitle}</h1><p>{t.noAccess}</p><button className="pastoral-button" onClick={()=>void bootstrap()}>{t.retry}</button></section></main>
+  if(!access?.canManagePastoral)return <main className="pastoral-runtime"><AccessDeniedState locale={locale} title={t.noAccessTitle} body={t.noAccess} retryLabel={t.retry} onRetry={()=>void bootstrap()} /></main>
 
   return <main className="pastoral-runtime"><div className="pastoral-shell">
     <header className="pastoral-topbar">
