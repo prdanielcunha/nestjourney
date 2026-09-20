@@ -349,6 +349,9 @@ service cloud.firestore {
       let sessionPath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/presenceSessions/$(sessionId);
       let personPath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/people/$(personId);
       let correctionPath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/presenceChecks/$(correctedFromCheckId);
+      let sessionData = get(sessionPath).data;
+      let personData = get(personPath).data;
+      let correctionData = correctedFromCheckId != '' ? get(correctionPath).data : {};
       return tenantCreate(orgId)
         && sessionId is string
         && congregationId is string
@@ -356,11 +359,9 @@ service cloud.firestore {
         && request.resource.data.get('actorId', '') == request.auth.uid
         && request.resource.data.get('recordedAt', null) == request.time
         && request.resource.data.get('state', '') in ['present_confirmed', 'absent_confirmed', 'unverified']
-        && exists(sessionPath)
-        && get(sessionPath).data.get('congregationId', '') == congregationId
-        && get(sessionPath).data.get('status', '') == 'open'
-        && exists(personPath)
-        && get(personPath).data.get('congregationId', '') == congregationId
+        && sessionData.get('congregationId', '') == congregationId
+        && sessionData.get('status', '') == 'open'
+        && personData.get('congregationId', '') == congregationId
         && (
           (
             source == 'human_check'
@@ -371,11 +372,10 @@ service cloud.firestore {
             source == 'retroactive_human_correction'
             && correctedFromCheckId != ''
             && request.resource.data.get('state', '') != 'unverified'
-            && exists(correctionPath)
-            && get(correctionPath).data.get('congregationId', '') == congregationId
-            && get(correctionPath).data.get('sessionId', '') == sessionId
-            && get(correctionPath).data.get('personId', '') == personId
-            && get(correctionPath).data.get('state', '') != request.resource.data.get('state', '')
+            && correctionData.get('congregationId', '') == congregationId
+            && correctionData.get('sessionId', '') == sessionId
+            && correctionData.get('personId', '') == personId
+            && correctionData.get('state', '') != request.resource.data.get('state', '')
           )
         );
     }
@@ -999,8 +999,7 @@ service cloud.firestore {
       let payload = request.resource.data.get('payload', {});
       let checkId = payload.get('checkId', '');
       let checkPath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/presenceChecks/$(checkId);
-      let checkExists = checkId is string && checkId.size() > 0 && existsAfter(checkPath);
-      let checkData = checkExists ? getAfter(checkPath).data : {};
+      let checkData = getAfter(checkPath).data;
       let congregationId = checkData.get('congregationId', '');
       let correctionId = checkData.get('correctedFromCheckId', '');
       return request.resource.data.get('organizationId', '') == orgId
@@ -1012,8 +1011,11 @@ service cloud.firestore {
         && request.resource.data.get('occurredAt', null) == request.time
         && request.resource.data.get('sensitivity', '') == 'confidential'
         && eventType in ['PRESENCE_CONFIRMED', 'PRESENCE_CORRECTED']
-        && checkExists
+        && checkId is string
+        && checkId.size() > 0
         && factId == 'presence-' + checkId
+        && checkData.get('actorId', '') == request.auth.uid
+        && checkData.get('recordedAt', null) == request.time
         && request.resource.data.get('evidenceRef', '') == 'presenceCheck:' + checkId
         && request.resource.data.get('subjectRef', '') == 'person:' + checkData.get('personId', '')
         && request.resource.data.get('scope', '') == 'congregation:' + congregationId
@@ -1021,7 +1023,6 @@ service cloud.firestore {
         && payload.get('state', '') == checkData.get('state', '')
         && payload.get('source', '') == checkData.get('source', '')
         && checkData.get('state', '') != 'unverified'
-        && canOperatePresenceInScope(orgId, congregationId)
         && (
           (
             eventType == 'PRESENCE_CONFIRMED'
