@@ -21,6 +21,8 @@ import {
   type JourneyPersonRecord,
 } from './journeyRepository'
 import { getInitialLocale, journeyProfileCopy, localeLabels, persistLocale, type AppLocale } from './i18n'
+import { GuidedEmptyState } from './GuidedEmptyState'
+import { emptyGuidance } from './emptyGuidance'
 import './JourneyProfilePage.css'
 
 function initials(name: string) {
@@ -128,6 +130,12 @@ export default function JourneyProfilePage() {
     finally { setBusy(false) }
   }
 
+  const empty = emptyGuidance(locale,'people_none')
+  const shortcuts = [
+    access?.canManagePresence ? {href:'/presence-assist',label:t.openPresence,Icon:UserRound} : null,
+    access?.canManageCare ? {href:'/care-integrity',label:t.openCarePage,Icon:HeartHandshake} : null,
+  ].filter(Boolean) as Array<{href:string;label:string;Icon:typeof UserRound}>
+
   if (loading) return <main className="journey-profile"><div className="journey-loading">{t.loading}</div></main>
   if (!canView) return <main className="journey-profile"><section className="journey-panel journey-no-access"><ShieldCheck size={34} /><h1>{t.noAccessTitle}</h1><p>{t.noAccess}</p><button className="journey-button" onClick={() => void bootstrap()}>{t.retry}</button></section></main>
 
@@ -142,7 +150,7 @@ export default function JourneyProfilePage() {
 
     <section className="journey-hero">
       <div><span className="journey-kicker">Journey / Profile</span><h1>{t.title}</h1><p>{t.subtitle}</p></div>
-      <div className="journey-shortcuts"><a className="journey-button" href="/presence-assist"><UserRound size={16} /> {t.openPresence}</a><a className="journey-button primary" href="/care-integrity"><HeartHandshake size={16} /> {t.openCarePage}</a></div>
+      <div className="journey-shortcuts">{shortcuts.map((item,index)=>{const Icon=item.Icon;return <a className={'journey-button '+(index===shortcuts.length-1?'primary':'')} href={item.href} key={item.href}><Icon size={16}/>{item.label}</a>})}</div>
     </section>
 
     {error ? <div className="journey-error" role="alert">{error}</div> : null}
@@ -162,7 +170,7 @@ export default function JourneyProfilePage() {
       </aside>
 
       <section className="journey-profile-main">
-        {!snapshot ? <div className="journey-panel journey-empty big">{t.selectPerson}</div> : <>
+        {!snapshot ? <div className="journey-panel journey-empty big">{!people.length?<GuidedEmptyState icon={UserRound} title={empty.title} body={empty.body} primary={{label:empty.primary,href:access?.canManagePresence?'/presence-assist':'/areas'}} secondary={{label:empty.secondary||t.back,href:'/areas'}}/>:t.selectPerson}</div> : <>
           <article className="journey-panel journey-person-card">
             <div className="journey-person-title"><span className="journey-avatar large">{initials(snapshot.person.name)}</span><div><span className="journey-kicker">{t.profile}</span><h2>{snapshot.person.name}</h2><p>{snapshot.person.stage || t.noStage}</p></div></div>
             <div className="journey-facts">

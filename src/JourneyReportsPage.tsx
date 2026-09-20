@@ -24,6 +24,8 @@ import {
 } from './journeyRepository'
 import { canViewJourneyReports } from './journeyExperience'
 import { getInitialLocale, localeLabels, persistLocale, type AppLocale } from './i18n'
+import { GuidedEmptyState } from './GuidedEmptyState'
+import { emptyGuidance } from './emptyGuidance'
 import { useJourneyLabels } from './journeyLabels'
 import './JourneySectionPages.css'
 
@@ -133,10 +135,13 @@ export default function JourneyReportsPage(){
     [t.pastoral,metrics.pastoral,ShieldCheck],
   ] as const
   const careRatio=metrics.careOpen===0?'0 / 0':String(Math.max(0,metrics.careOpen-metrics.careDebt))+' / '+String(metrics.careOpen)
+  const hasReportData=metrics.people+metrics.careOpen+metrics.sessions+metrics.groups+metrics.discipleships+metrics.pastoral>0
+  const empty=emptyGuidance(locale,'reports_no_data')
 
   return <main className="journey-section-page"><div className="journey-section-shell">
     <header className="journey-section-header"><div><span className="journey-section-kicker">NestJourney / Reports</span><h1>{t.title}</h1><p>{t.subtitle}</p></div><select value={locale} onChange={e=>{const next=e.target.value as AppLocale;setLocale(next);persistLocale(next)}}>{(Object.keys(localeLabels) as AppLocale[]).map(id=><option key={id} value={id}>{localeLabels[id]}</option>)}</select></header>
     {error?<div className="journey-error">{error}</div>:null}
+    {!hasReportData?<section className="journey-section-block"><GuidedEmptyState icon={BarChart3} title={empty.title} body={empty.body} primary={{label:empty.primary,href:'/my-today'}} secondary={{label:empty.secondary||t.title,href:access.canManageImplementation?'/implementation-runtime':'/help'}}/></section>:null}
     <section className="journey-section-block"><header><div><span className="journey-section-kicker">{t.unit}</span><h2>{units.find(x=>x.id===unitId)?.name||'—'}</h2></div><select className="journey-section-select" value={unitId} disabled={busy} onChange={e=>void selectUnit(e.target.value)}>{units.map(x=><option key={x.id} value={x.id}>{x.name+(x.city?' · '+x.city:'')}</option>)}</select></header>
       <div className="journey-stat-grid">{stats.map(([label,value,Icon])=><div className="journey-stat" key={label}><span>{label}</span><strong>{value}</strong><small><Icon size={13}/></small></div>)}</div>
     </section>
