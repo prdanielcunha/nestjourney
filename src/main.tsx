@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import './index.css'
 import { EcosystemSessionGate } from './EcosystemSessionGate.tsx'
 import { JourneyShell } from './JourneyShell.tsx'
+import { JourneyErrorBoundary } from './JourneyErrorBoundary.tsx'
 import { JourneyLabelsProvider } from './journeyLabels.tsx'
 import { resolveJourneyRoute } from './routeResolver'
 
@@ -122,11 +123,13 @@ createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <EcosystemSessionGate>
       <JourneyLabelsProvider>
-        <JourneyShell>
-          <Suspense fallback={<RouteFallback />}>
-            <JourneyRoute />
-          </Suspense>
-        </JourneyShell>
+        <JourneyErrorBoundary>
+          <JourneyShell>
+            <Suspense fallback={<RouteFallback />}>
+              <JourneyRoute />
+            </Suspense>
+          </JourneyShell>
+        </JourneyErrorBoundary>
       </JourneyLabelsProvider>
     </EcosystemSessionGate>
   </StrictMode>,
