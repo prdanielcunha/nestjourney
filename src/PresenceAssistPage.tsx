@@ -165,7 +165,9 @@ export default function PresenceAssistPage() {
     setBusy(true)
     setError('')
     try {
-      await claimJourneyPersonBond({ access, person })
+      const user = auth?.currentUser
+      if (!user) throw new Error('missing_auth')
+      await claimJourneyPersonBond({ access, person, idToken: await user.getIdToken() })
       await refreshScope(access.organizationId, congregationId)
     } catch (cause) {
       console.error(cause)
