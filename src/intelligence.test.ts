@@ -77,6 +77,22 @@ describe('Presence Assist — qualidade e evidência', () => {
     expect(fact.evidenceRef).toBe('presenceCheck:check-1')
     expect(fact.version).toBe(1)
   })
+
+  it('preserva a origem da correção e emite PRESENCE_CORRECTED', () => {
+    const corrected: PresenceCheck = {
+      ...checks[0],
+      id: 'check-corrected',
+      state: 'absent_confirmed',
+      source: 'retroactive_human_correction',
+      correctedFromCheckId: 'check-1',
+      recordedAt: '2026-09-20T12:05:00.000Z',
+    }
+    const fact = presenceCheckToFact(corrected)!
+    expect(fact.eventType).toBe('PRESENCE_CORRECTED')
+    expect(fact.payload.source).toBe('retroactive_human_correction')
+    expect(fact.payload.correctedFromCheckId).toBe('check-1')
+    expect(fact.payload.state).toBe('absent_confirmed')
+  })
 })
 
 describe('Care Integrity — promessa antes de interpretação', () => {
