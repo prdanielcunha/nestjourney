@@ -21,6 +21,7 @@ import {
   type JourneyPersonRecord,
 } from './journeyRepository'
 import { getInitialLocale, journeyProfileCopy, localeLabels, persistLocale, type AppLocale } from './i18n'
+import { canViewJourneyPeople } from './journeyExperience'
 import { GuidedEmptyState } from './GuidedEmptyState'
 import { emptyGuidance } from './emptyGuidance'
 import './JourneyProfilePage.css'
@@ -53,7 +54,7 @@ export default function JourneyProfilePage() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
-  const canView = Boolean(access && (access.broadJourneyAccess || access.canManagePeople || access.canManagePresence || access.canManageMesa || access.canManageCare || access.canManageGroups || access.canManageDiscipleship))
+  const canView = Boolean(access && canViewJourneyPeople(access))
   const canReadDiscipleship = Boolean(access && (access.broadJourneyAccess || access.canManageDiscipleship))
   const selected = people.find((person) => person.id === selectedId) ?? people[0]
   const snapshot = useMemo(() => selected ? buildJourneyProfileSnapshot({ person: selected, careRequests: care, groups, memberships, discipleships }) : null, [selected, care, groups, memberships, discipleships])
@@ -103,8 +104,7 @@ export default function JourneyProfilePage() {
       if (!user || !organizationId) throw new Error('missing_ecosystem_context')
       const nextAccess = await loadJourneyAccess(user.uid, organizationId)
       setAccess(nextAccess)
-      const hasLens = nextAccess.broadJourneyAccess || nextAccess.canManagePeople || nextAccess.canManagePresence || nextAccess.canManageMesa || nextAccess.canManageCare || nextAccess.canManageGroups || nextAccess.canManageDiscipleship
-      if (!hasLens) return
+      if (!canViewJourneyPeople(nextAccess)) return
       const nextCongregations = await listJourneyCongregations(nextAccess)
       setCongregations(nextCongregations)
       const unitId = nextCongregations[0]?.id ?? ''
