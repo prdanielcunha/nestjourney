@@ -224,7 +224,7 @@ export function EcosystemSessionGate({ children }: { children: ReactNode }) {
   }
 
   const switchAccount = async () => {
-    if (auth) await activeAuth.signOut().catch(() => undefined)
+    if (auth) await auth.signOut().catch(() => undefined)
     try {
       sessionStorage.removeItem(ACTIVE_ORG_KEY)
       localStorage.removeItem('mn_nestjourney_last_org_id')
