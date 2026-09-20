@@ -59,6 +59,8 @@ As regras e os testes seguem o padrão multi-tenant: escopo por organização/un
 
 O workflow `Quality` bloqueia regressões de lint, testes, build e Firestore Rules. A branch `production` publica o target Firebase Hosting e executa smoke test no domínio oficial.
 
+O gate de sessão também é limitado por tempo: falhas de rede ou resolução de acesso não deixam o usuário preso indefinidamente em carregamento. A interface oferece retry explícito, fallback seguro para o Hub e aviso global quando o dispositivo fica offline.
+
 Consulte:
 
 - [Arquitetura do ecossistema](docs/ECOSYSTEM_ARCHITECTURE.md)
