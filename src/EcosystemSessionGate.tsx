@@ -135,6 +135,12 @@ function saveOrganization(organizationId: string) {
   sessionStorage.removeItem(RECOVERY_KEY)
 }
 
+function accessErrorMessage(error: unknown, copy: Record<string, string>) {
+  if (!navigator.onLine || (error instanceof Error && error.message === 'offline')) return copy.offline
+  if (error instanceof OperationTimeoutError) return copy.slow
+  return copy.error
+}
+
 export function EcosystemSessionGate({ children }: { children: ReactNode }) {
   const lang = useMemo(language, [])
   const c = COPY[lang]
@@ -192,15 +198,9 @@ export function EcosystemSessionGate({ children }: { children: ReactNode }) {
         await signInWithRedirect(auth, provider)
         return
       }
-      setMessage(accessError(error))
+      setMessage(accessErrorMessage(error, c))
       setState('error')
     }
-  }
-
-  const accessError = (error: unknown) => {
-    if (!navigator.onLine || (error instanceof Error && error.message === 'offline')) return c.offline
-    if (error instanceof OperationTimeoutError) return c.slow
-    return c.error
   }
 
   const retry = async () => {
@@ -215,7 +215,7 @@ export function EcosystemSessionGate({ children }: { children: ReactNode }) {
       try {
         await resolveUser(user)
       } catch (error) {
-        setMessage(accessError(error))
+        setMessage(accessErrorMessage(error, c))
         setState('error')
       }
       return
@@ -295,7 +295,7 @@ export function EcosystemSessionGate({ children }: { children: ReactNode }) {
           }
         } catch (error) {
           if (!cancelled) {
-            setMessage(accessError(error))
+            setMessage(accessErrorMessage(error, c))
             setState('error')
           }
         }
@@ -306,7 +306,7 @@ export function EcosystemSessionGate({ children }: { children: ReactNode }) {
 
     void withTimeout(getRedirectResult(auth), 15000, 'redirect_signin').catch((error) => {
       if (!cancelled && !auth.currentUser) {
-        setMessage(accessError(error))
+        setMessage(accessErrorMessage(error, c))
         setState('error')
       }
     })
@@ -323,13 +323,13 @@ export function EcosystemSessionGate({ children }: { children: ReactNode }) {
 
       void resolveUser(user).catch((error) => {
         if (!cancelled) {
-          setMessage(accessError(error))
+          setMessage(accessErrorMessage(error, c))
           setState('error')
         }
       })
     }, (error) => {
       if (!cancelled) {
-        setMessage(accessError(error))
+        setMessage(accessErrorMessage(error, c))
         setState('error')
       }
     })
