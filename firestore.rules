@@ -1145,7 +1145,7 @@ service cloud.firestore {
             || (
               hasMembership(orgId)
               && (
-                (request.resource.data.get('eventType', '') == 'VISITOR_REGISTERED' && canManagePeople(orgId))
+                (request.resource.data.get('eventType', '') in ['VISITOR_REGISTERED', 'BOND_HOST_ASSIGNED'] && canManagePeople(orgId))
                 || (request.resource.data.get('eventType', '') in ['PRESENCE_SESSION_OPENED', 'PRESENCE_CONFIRMED'] && canManagePresence(orgId))
                 || request.resource.data.get('eventType', '') in ['CARE_REQUESTED', 'CARE_ASSIGNED']
               )
