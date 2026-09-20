@@ -70,7 +70,10 @@ export default function JourneyProfilePage() {
         ? listCareRequests(nextAccess.organizationId, unitId)
         : Promise.resolve([]),
     ]
-    const [nextPeople, nextGroups, nextCare] = await Promise.all(tasks)
+    const [nextPeople, allGroups, nextCare] = await Promise.all(tasks)
+    const nextGroups = nextAccess.role === 'group_leader' && !nextAccess.broadJourneyAccess
+      ? allGroups.filter(group => group.leaderId === nextAccess.userId || group.createdBy === nextAccess.userId)
+      : allGroups
     const [nextDiscipleships, membershipSets] = await Promise.all([
       nextAccess.broadJourneyAccess || nextAccess.canManageDiscipleship
         ? listJourneyDiscipleships(nextAccess, unitId)

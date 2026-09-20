@@ -340,6 +340,16 @@ service cloud.firestore {
         && exists(personPath)
         && get(personPath).data.get('congregationId', '') == congregationId;
     }
+    function personBondEmptyOnCreate() {
+      return request.resource.data.get('bondHostRef', '') == ''
+        && request.resource.data.get('bondAssignedAt', null) == null
+        && request.resource.data.get('bondAssignedBy', '') == '';
+    }
+    function personBondUnchanged() {
+      return request.resource.data.get('bondHostRef', '') == resource.data.get('bondHostRef', '')
+        && request.resource.data.get('bondAssignedAt', null) == resource.data.get('bondAssignedAt', null)
+        && request.resource.data.get('bondAssignedBy', '') == resource.data.get('bondAssignedBy', '');
+    }
     function canManageJourneySettings(orgId) {
       return isSystemAdmin() || role(orgId, ['owner', 'admin', 'pastor']);
     }
@@ -1061,10 +1071,12 @@ service cloud.firestore {
           allow create: if tenantCreate(orgId)
             && request.resource.data.get('deletedAt', null) == null
             && canAccessCongregation(orgId, request.resource.data.get('congregationId', ''))
-            && canManagePeople(orgId);
+            && canManagePeople(orgId)
+            && personBondEmptyOnCreate();
           allow update: if tenantUnchanged(orgId) && congregationUnchanged()
             && canAccessCongregation(orgId, resource.data.get('congregationId', ''))
-            && canManagePeople(orgId);
+            && canManagePeople(orgId)
+            && personBondUnchanged();
           allow delete: if false;
         }
         match /presenceSessions/{sessionId} {

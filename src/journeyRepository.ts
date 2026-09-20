@@ -7,6 +7,7 @@ import { journeyCollectionPath } from './productIdentity'
 import { planFollowupOutcome, type FollowupNextActionCode, type FollowupOutcomeCode } from './followup'
 import type { CarePromise, PresenceCheck, PresenceSession, PresenceSource, PresenceVerificationState } from './intelligence'
 
+const HUB_API_BASE = (import.meta.env.VITE_MILLIONSNEST_URL || 'https://www.millionsnest.com').replace(/\/$/, '')
 const SYSTEM_ROLES = new Set(['ceo', 'global_admin', 'ecosystem_owner', 'founder'])
 const BROAD_JOURNEY_ROLES = new Set(['owner', 'admin', 'pastor', 'data_admin'])
 const PRESENCE_ROLES = new Set(['owner', 'admin', 'pastor', 'coordinator', 'presence_host'])
@@ -76,6 +77,8 @@ export interface PresencePerson {
   phone?: string
   consent?: boolean
   visits?: number
+  bondHostRef?: string
+  bondAssignedAt?: string
 }
 
 export interface JourneyPersonRecord extends PresencePerson {
@@ -569,6 +572,8 @@ export async function listPresencePeople(organizationId: string, congregationId:
       phone: asString(data.phone) || undefined,
       consent: Boolean(data.consent),
       visits: typeof data.visits === 'number' ? data.visits : undefined,
+      bondHostRef: asString(data.bondHostRef) || undefined,
+      bondAssignedAt: data.bondAssignedAt ? toIso(data.bondAssignedAt) : undefined,
     }
   }).sort((a, b) => a.name.localeCompare(b.name))
 }
@@ -591,6 +596,8 @@ export async function listJourneyPeople(organizationId: string, congregationId: 
       phone: asString(data.phone) || undefined,
       consent: Boolean(data.consent),
       visits: typeof data.visits === 'number' ? data.visits : undefined,
+      bondHostRef: asString(data.bondHostRef) || undefined,
+      bondAssignedAt: data.bondAssignedAt ? toIso(data.bondAssignedAt) : undefined,
       firstVisit: asString(data.firstVisit) || undefined,
       stage: asString(data.stage) || undefined,
       groupId: asString(data.groupId) || undefined,
@@ -1536,6 +1543,37 @@ export async function setMesaParticipation(input: {
 
   await batch.commit()
   return id
+}
+
+export async function claimJourneyPersonBond(input: {
+  access: JourneyAccessContext
+  person: PresencePerson
+  idToken: string
+}) {
+  if (!input.access.canManagePresence && !input.access.canManagePeople) throw new Error('bond_forbidden')
+  if (input.person.organizationId !== input.access.organizationId) throw new Error('bond_tenant_mismatch')
+  if (
+    !input.access.broadJourneyAccess &&
+    input.access.congregationIds.length > 0 &&
+    !input.access.congregationIds.includes(input.person.congregationId)
+  ) throw new Error('bond_scope_mismatch')
+
+  const response = await fetch(
+    `${HUB_API_BASE}/api/v1/organizations/${encodeURIComponent(input.access.organizationId)}/nestjourney/people/${encodeURIComponent(input.person.id)}/bond-host`,
+    {
+      method: 'PUT',
+      headers: {
+        Authorization: `Bearer ${input.idToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({}),
+    },
+  )
+  const data = await response.json().catch(() => ({}))
+  if (!response.ok || data?.success !== true) {
+    throw new Error(String(data?.reasonCode || 'bond_command_failed'))
+  }
+  return String(data.bondHostRef || input.access.userId)
 }
 
 export async function createPresenceSession(input: {

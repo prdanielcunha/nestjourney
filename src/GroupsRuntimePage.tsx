@@ -54,7 +54,10 @@ export default function GroupsRuntimePage() {
   const [showNew, setShowNew] = useState(false)
 
   const refresh = useCallback(async (nextAccess: JourneyAccessContext, unitId: string) => {
-    const nextGroups = await listJourneyGroups(nextAccess.organizationId, unitId)
+    const allGroups = await listJourneyGroups(nextAccess.organizationId, unitId)
+    const nextGroups = nextAccess.role === 'group_leader' && !nextAccess.broadJourneyAccess
+      ? allGroups.filter(group => group.leaderId === nextAccess.userId || group.createdBy === nextAccess.userId)
+      : allGroups
     const nextPeople = canCreateJourneyGroupEntryRequest(nextAccess)
       ? await listJourneyPeople(nextAccess.organizationId, unitId)
       : []
@@ -196,7 +199,7 @@ export default function GroupsRuntimePage() {
 
   return <main className="journey-runtime"><div className="runtime-shell">
     <header className="runtime-topbar"><div className="runtime-brand"><img src="/icon.svg" alt=""/><span><strong>{t.product}</strong><small>Journey & Care Engine</small></span></div><div className="runtime-actions"><a href="/my-today"><ChevronLeft size={16}/>{t.back}</a><select value={locale} onChange={(e)=>{const next=e.target.value as AppLocale;setLocale(next);persistLocale(next)}}>{(Object.keys(localeLabels) as AppLocale[]).map(id=><option key={id} value={id}>{localeLabels[id]}</option>)}</select></div></header>
-    <section className="runtime-hero"><div><span className="runtime-kicker">Journey / Community</span><h1>{t.title}</h1><p>{t.subtitle}</p></div><button className="runtime-button primary" onClick={()=>setShowNew(true)}><Plus size={17}/>{t.newGroup}</button></section>
+    <section className="runtime-hero"><div><span className="runtime-kicker">Journey / Community</span><h1>{t.title}</h1><p>{t.subtitle}</p></div>{access&&canCreateJourneyGroupEntryRequest(access)?<button className="runtime-button primary" onClick={()=>setShowNew(true)}><Plus size={17}/>{t.newGroup}</button>:null}</section>
     {error ? <div className="runtime-error">{error}</div> : null}
     <section className="runtime-panel runtime-toolbar"><label><span>{t.congregation}</span><select value={congregationId} disabled={busy} onChange={(e)=>void selectUnit(e.target.value)}>{congregations.map(x=><option key={x.id} value={x.id}>{x.name}{x.city?` · ${x.city}`:''}</option>)}</select></label></section>
     <section className="runtime-grid">

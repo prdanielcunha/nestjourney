@@ -203,7 +203,7 @@ export default function MyTodayPage(){
 
     <div className="today-filters">
       {([
-        ['all',t.all,items.length+mesaPending.length],
+        ['all',t.all,items.length+mesaPending.length+(mesaPreparationPending?1:0)],
         ['care',labels.care||t.care,counts.care],
         ['presence',labels.presence||t.presence,counts.presence],
         ['mesa',labels.table||(locale==='en'?'Open Table':locale==='es'?'Mesa Abierta':'Mesa Aberta'),counts.mesa],
