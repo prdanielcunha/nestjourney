@@ -21,6 +21,8 @@ import {
 } from './journeyRepository'
 import { getInitialLocale, localeLabels, persistLocale, type AppLocale } from './i18n'
 import { useJourneyLabels } from './journeyLabels'
+import { GuidedEmptyState } from './GuidedEmptyState'
+import { emptyGuidance } from './emptyGuidance'
 import './JourneySectionPages.css'
 
 const copy={
@@ -150,6 +152,9 @@ export default function MesaRuntimePage(){
   const invited=records.filter(x=>x.status==='invited').length
   const joined=records.filter(x=>x.status==='joined').length
 
+  const noSessionGuide=emptyGuidance(locale,'mesa_no_session')
+  const noPeopleGuide=emptyGuidance(locale,'mesa_no_people')
+
   if(loading)return <main className="journey-section-page"><div className="journey-loading">{t.loading}</div></main>
   if(!access?.canManageMesa)return <main className="journey-section-page"><div className="journey-no-access"><ShieldCheck size={32}/><h1>{t.title}</h1><p>{t.noAccess}</p></div></main>
 
@@ -182,7 +187,7 @@ export default function MesaRuntimePage(){
       </div>
     </section>:null}
 
-    {!sessionId?<div className="journey-section-note"><ShieldCheck size={18}/><p>{t.noSession}</p></div>:<section className="journey-section-block">
+    {!sessionId?<section className="journey-section-block"><GuidedEmptyState icon={UsersRound} title={noSessionGuide.title} body={noSessionGuide.body} primary={{label:access.canManagePresence?noSessionGuide.primary:(locale==='en'?'Open Help':locale==='es'?'Abrir Ayuda':'Abrir Ajuda'),href:access.canManagePresence?'/presence-assist':'/help'}} secondary={{label:noSessionGuide.secondary||t.title,href:'/my-today'}}/></section>:<section className="journey-section-block">
       <header><div><span className="journey-section-kicker">{t.people}</span><h2>{t.people}</h2></div><input className="journey-section-select" value={query} placeholder={t.search} onChange={e=>setQuery(e.target.value)}/></header>
       <div className="journey-list">
         {visible.map(person=>{
@@ -192,7 +197,7 @@ export default function MesaRuntimePage(){
             <button className="journey-primary-button" disabled={busy||record?.status==='joined'} onClick={()=>void mark(person,'joined')}>{record?.status==='joined'?<><Check size={14}/>{t.participated}</>:t.markJoined}</button>
           </div></div>
         })}
-        {!visible.length?<div className="journey-empty">{t.empty}</div>:null}
+        {!visible.length?query.trim()?<div className="journey-empty">{t.empty}</div>:<GuidedEmptyState icon={UsersRound} title={noPeopleGuide.title} body={noPeopleGuide.body} primary={{label:access.canManagePresence?noPeopleGuide.primary:(locale==='en'?'Open Help':locale==='es'?'Abrir Ayuda':'Abrir Ajuda'),href:access.canManagePresence?'/presence-assist':'/help'}} secondary={{label:noPeopleGuide.secondary||t.title,href:'/my-today'}} compact/>:null}
       </div>
     </section>}
     <div className="journey-section-note"><ShieldCheck size={18}/><p>{t.rule}</p></div>
