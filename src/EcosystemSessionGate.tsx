@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import {
   browserLocalPersistence,
   getRedirectResult,
@@ -11,6 +11,7 @@ import {
   type User,
 } from 'firebase/auth'
 import { auth, db, firebaseConfigured } from './firebase'
+import { OperationTimeoutError, withTimeout } from './asyncGuard'
 import { resolveJourneyDirectEntry, type JourneyEntryOrganization } from './directEntry'
 
 const HUB_LAUNCH_URL = 'https://www.millionsnest.com/apps/nestjourney/launch'
@@ -23,6 +24,8 @@ type Lang = 'pt' | 'en' | 'es'
 const COPY: Record<Lang, Record<string, string>> = {
   pt: {
     checking: 'Confirmando sua conta e seu acesso…',
+    slow: 'Isso está levando mais tempo que o normal. Você pode tentar novamente sem ficar preso nesta tela.',
+    offline: 'Sem conexão com a internet. Assim que a rede voltar, tente novamente.',
     title: 'Entre para continuar',
     subtitle: 'Use sua conta MillionsNest. Seu acesso e suas organizações serão confirmados com segurança.',
     google: 'Continuar com Google',
@@ -38,6 +41,8 @@ const COPY: Record<Lang, Record<string, string>> = {
   },
   en: {
     checking: 'Confirming your account and access…',
+    slow: 'This is taking longer than usual. You can retry instead of staying stuck on this screen.',
+    offline: 'You are offline. Once your connection returns, try again.',
     title: 'Sign in to continue',
     subtitle: 'Use your MillionsNest account. Your access and organizations will be securely confirmed.',
     google: 'Continue with Google',
@@ -53,6 +58,8 @@ const COPY: Record<Lang, Record<string, string>> = {
   },
   es: {
     checking: 'Confirmando tu cuenta y acceso…',
+    slow: 'Esto está tardando más de lo normal. Puedes volver a intentarlo sin quedarte atrapado en esta pantalla.',
+    offline: 'No tienes conexión. Cuando vuelva la red, inténtalo de nuevo.',
     title: 'Inicia sesión para continuar',
     subtitle: 'Usa tu cuenta MillionsNest. Tu acceso y organizaciones se confirmarán de forma segura.',
     google: 'Continuar con Google',
@@ -128,20 +135,29 @@ function saveOrganization(organizationId: string) {
   sessionStorage.removeItem(RECOVERY_KEY)
 }
 
+function accessErrorMessage(error: unknown, copy: Record<string, string>) {
+  if (!navigator.onLine || (error instanceof Error && error.message === 'offline')) return copy.offline
+  if (error instanceof OperationTimeoutError) return copy.slow
+  return copy.error
+}
+
 export function EcosystemSessionGate({ children }: { children: ReactNode }) {
   const lang = useMemo(language, [])
   const c = COPY[lang]
   const [state, setState] = useState<GateState>('checking')
-  const [message, setMessage] = useState(c.checking)
+  const [message, setMessage] = useState(() => c.checking)
   const [organizations, setOrganizations] = useState<JourneyEntryOrganization[]>([])
   const [identity, setIdentity] = useState<User | null>(null)
+  const [online, setOnline] = useState(() => navigator.onLine)
+  const [slow, setSlow] = useState(false)
 
-  const resolveUser = async (user: User) => {
+  const resolveUser = useCallback(async (user: User) => {
     if (!db) throw new Error('firebase_unavailable')
     setState('checking')
     setMessage(c.checking)
 
-    const eligible = await resolveJourneyDirectEntry(db, user)
+    if (!navigator.onLine) throw new Error('offline')
+    const eligible = await withTimeout(resolveJourneyDirectEntry(db, user), 15000, 'access')
     if (eligible.length === 0) {
       setOrganizations([])
       setState('no_access')
@@ -159,10 +175,11 @@ export function EcosystemSessionGate({ children }: { children: ReactNode }) {
 
     setOrganizations(eligible)
     setState('choose')
-  }
+  }, [c.checking])
 
   const signInGoogle = async () => {
     if (!auth) return
+    setSlow(false)
     setState('checking')
     setMessage(c.checking)
     const provider = new GoogleAuthProvider()
@@ -170,7 +187,7 @@ export function EcosystemSessionGate({ children }: { children: ReactNode }) {
 
     try {
       await setPersistence(auth, browserLocalPersistence)
-      const credential = await signInWithPopup(auth, provider)
+      const credential = await withTimeout(signInWithPopup(auth, provider), 20000, 'google_signin')
       setIdentity(credential.user)
       await resolveUser(credential.user)
     } catch (error: any) {
@@ -182,9 +199,29 @@ export function EcosystemSessionGate({ children }: { children: ReactNode }) {
         await signInWithRedirect(auth, provider)
         return
       }
-      setMessage(c.error)
+      setMessage(accessErrorMessage(error, c))
       setState('error')
     }
+  }
+
+  const retry = async () => {
+    if (!navigator.onLine) {
+      setMessage(c.offline)
+      setState('error')
+      return
+    }
+    setSlow(false)
+    const user = identity || auth?.currentUser
+    if (user) {
+      try {
+        await resolveUser(user)
+      } catch (error) {
+        setMessage(accessErrorMessage(error, c))
+        setState('error')
+      }
+      return
+    }
+    await signInGoogle()
   }
 
   const switchAccount = async () => {
@@ -198,12 +235,39 @@ export function EcosystemSessionGate({ children }: { children: ReactNode }) {
   }
 
   useEffect(() => {
+    const handleOnline = () => {
+      setOnline(true)
+      setMessage((current) => current === c.offline ? c.checking : current)
+    }
+    const handleOffline = () => {
+      setOnline(false)
+      setMessage(c.offline)
+    }
+    window.addEventListener('online', handleOnline)
+    window.addEventListener('offline', handleOffline)
+    return () => {
+      window.removeEventListener('online', handleOnline)
+      window.removeEventListener('offline', handleOffline)
+    }
+  }, [c.checking, c.offline])
+
+  useEffect(() => {
+    if (state !== 'checking') return
+    const timer = window.setTimeout(() => {
+      setSlow(true)
+      setMessage(navigator.onLine ? c.slow : c.offline)
+    }, 12000)
+    return () => window.clearTimeout(timer)
+  }, [state, c.slow, c.offline])
+
+  useEffect(() => {
     if (!firebaseConfigured || !auth || !db) {
       setMessage('A configuração Firebase do NestJourney não está disponível.')
       setState('error')
       return
     }
 
+    const activeAuth = auth
     let cancelled = false
     let unsubscribe = () => {}
     const params = new URLSearchParams(window.location.search)
@@ -217,9 +281,9 @@ export function EcosystemSessionGate({ children }: { children: ReactNode }) {
       void (async () => {
         try {
           const payload = decodeHandoff(encodedContext)
-          const credential = await signInWithCustomToken(auth, payload.customToken)
+          const credential = await withTimeout(signInWithCustomToken(activeAuth, payload.customToken), 15000, 'handoff_signin')
           if (credential.user.uid !== payload.userId) {
-            await auth.signOut()
+            await activeAuth.signOut()
             throw new Error('identity_mismatch')
           }
 
@@ -228,9 +292,9 @@ export function EcosystemSessionGate({ children }: { children: ReactNode }) {
             setIdentity(credential.user)
             setState('ready')
           }
-        } catch {
+        } catch (error) {
           if (!cancelled) {
-            setMessage(c.error)
+            setMessage(accessErrorMessage(error, c))
             setState('error')
           }
         }
@@ -239,14 +303,14 @@ export function EcosystemSessionGate({ children }: { children: ReactNode }) {
       return () => { cancelled = true }
     }
 
-    void getRedirectResult(auth).catch(() => {
-      if (!cancelled) {
-        setMessage(c.error)
+    void withTimeout(getRedirectResult(activeAuth), 15000, 'redirect_signin').catch((error) => {
+      if (!cancelled && !activeAuth.currentUser) {
+        setMessage(accessErrorMessage(error, c))
         setState('error')
       }
     })
 
-    unsubscribe = onAuthStateChanged(auth, (user: User | null) => {
+    unsubscribe = onAuthStateChanged(activeAuth, (user: User | null) => {
       if (cancelled) return
       setIdentity(user)
 
@@ -256,15 +320,15 @@ export function EcosystemSessionGate({ children }: { children: ReactNode }) {
         return
       }
 
-      void resolveUser(user).catch(() => {
+      void resolveUser(user).catch((error) => {
         if (!cancelled) {
-          setMessage(c.error)
+          setMessage(accessErrorMessage(error, c))
           setState('error')
         }
       })
-    }, () => {
+    }, (error) => {
       if (!cancelled) {
-        setMessage(c.error)
+        setMessage(accessErrorMessage(error, c))
         setState('error')
       }
     })
@@ -273,7 +337,7 @@ export function EcosystemSessionGate({ children }: { children: ReactNode }) {
       cancelled = true
       unsubscribe()
     }
-  }, [])
+  }, [c, resolveUser])
 
   if (state === 'ready') return <>{children}</>
 
@@ -316,6 +380,10 @@ export function EcosystemSessionGate({ children }: { children: ReactNode }) {
           <div style={{ textAlign: 'center', padding: '18px 0 14px' }}>
             <div aria-hidden="true" style={{ width: 34, height: 34, margin: '0 auto 18px', borderRadius: 999, border: '3px solid rgba(255,255,255,.1)', borderTopColor: '#c79a57', animation: 'spin 1s linear infinite' }} />
             <p style={{ margin: 0, color: '#9a9b94', lineHeight: 1.6, fontSize: 14 }}>{message}</p>
+            {(slow || !online) ? <div style={{ display: 'grid', gap: 9, marginTop: 20 }}>
+              <button type="button" onClick={() => void retry()} style={primary} disabled={!online}>{c.retry}</button>
+              {online ? <button type="button" onClick={() => openHub()} style={secondary}>{c.hub}</button> : null}
+            </div> : null}
           </div>
         ) : state === 'choose' ? (
           <>
@@ -353,7 +421,7 @@ export function EcosystemSessionGate({ children }: { children: ReactNode }) {
             <h1 style={{ margin: 0, fontSize: 22, letterSpacing: '-.03em' }}>{c.error}</h1>
             <p style={{ margin: '10px 0 22px', color: '#969790', lineHeight: 1.55, fontSize: 14 }}>{message}</p>
             <div style={{ display: 'grid', gap: 9 }}>
-              <button type="button" onClick={() => identity ? resolveUser(identity) : signInGoogle()} style={primary}>{c.retry}</button>
+              <button type="button" onClick={() => void retry()} style={primary} disabled={!online}>{c.retry}</button>
               <button type="button" onClick={() => openHub()} style={secondary}>{c.hub}</button>
             </div>
           </>

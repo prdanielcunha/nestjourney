@@ -154,7 +154,7 @@ Algumas decisões antigas eram corretas para o piloto Raiz e Mesa, mas não deve
 - dashboard pastoral baseado em interpretação subjetiva;
 - qualquer score espiritual ou inferência de afastamento.
 
-Esses itens podem permanecer temporariamente na experiência legada enquanto a substituição equivalente não estiver completa.
+Esses itens poderiam permanecer temporariamente na experiência legada durante a migração. O cutover foi concluído: a experiência principal atual usa o runtime real e o shell role-first; o texto abaixo preserva a sequência histórica de implementação.
 
 ## 11. Migração incremental
 
@@ -350,7 +350,7 @@ Nenhum dado legado é apagado por esse cutover. A mudança é somente de **front
 
 As experiências são carregadas por `React.lazy`, evitando que o shell legado inteiro seja incluído no bundle inicial da Journey Overview. Isso reduz o custo da entrada principal e mantém o módulo legado isolado.
 
-O rollback permanece simples: `/legacy` continua disponível, e a regra de resolução de rota está centralizada em `src/routeResolver.ts`, coberta por teste. O produto não depende de apagar ou migrar documentos para alternar a entrada.
+Durante o cutover, `/legacy` serviu como mecanismo temporário de rollback. Com a consolidação do núcleo real, a rota legada foi retirada da navegação e o roteamento atual está centralizado em `src/routeResolver.ts`, coberto por teste. O histórico de dados não depende da interface legada.
 
 
 ## 20. Implementação corrente — Implementation Runtime V1

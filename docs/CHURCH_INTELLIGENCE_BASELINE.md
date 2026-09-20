@@ -30,6 +30,8 @@ The first slice establishes deterministic contracts before any AI signal:
 7. Canonical fact events carry tenant, actor, source, scope, evidence, sensitivity and schema version.
 8. `NO SOURCE -> NO CLAIM` is enforced by code and tests.
 
-## Next implementation checkpoint
+## Historical implementation checkpoint
 
-After this foundation passes CI, the next safe step is to persist Presence sessions/checks and canonical facts behind existing tenant/RBAC controls, then surface a mobile-first Presence Assist experience without removing the current hospitality/Mesa flow.
+The checkpoint originally recorded here has been completed. Presence sessions/checks, canonical evidence, mobile-first Presence Assist, Care Integrity, Mesa, Groups, Discipleship, My Today, Vision, governance and the role-first production shell now run on the real tenant/RBAC model.
+
+For the current product state and the active Definition of Done, use `docs/ROADMAP_AUDIT.md`. This file remains as the architectural baseline that established the NO SOURCE → NO CLAIM discipline.
