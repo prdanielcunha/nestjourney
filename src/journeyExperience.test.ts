@@ -28,11 +28,13 @@ function access(patch: Partial<JourneyAccessContext> = {}): JourneyAccessContext
 }
 
 describe('journey experience lenses', () => {
-  it('allows operational roles to use People when their work depends on a person lens', () => {
-    expect(canViewJourneyPeople(access({ role: 'mesa_team', canManageMesa: true }))).toBe(true)
-    expect(canViewJourneyPeople(access({ role: 'caregiver', canManageCare: true }))).toBe(true)
-    expect(canViewJourneyPeople(access({ role: 'group_leader', canManageGroups: true }))).toBe(true)
-    expect(canViewJourneyPeople(access({ role: 'discipler', canManageDiscipleship: true }))).toBe(true)
+  it('keeps operational roles in their scoped workspaces instead of the global People directory', () => {
+    expect(canViewJourneyPeople(access({ role: 'mesa_team', canManageMesa: true }))).toBe(false)
+    expect(canViewJourneyPeople(access({ role: 'caregiver', canManageCare: true }))).toBe(false)
+    expect(canViewJourneyPeople(access({ role: 'group_leader', canManageGroups: true }))).toBe(false)
+    expect(canViewJourneyPeople(access({ role: 'discipler', canManageDiscipleship: true }))).toBe(false)
+    expect(canViewJourneyPeople(access({ role: 'presence_host', canManagePeople: true }))).toBe(true)
+    expect(canViewJourneyPeople(access({ broadJourneyAccess: true }))).toBe(true)
   })
 
   it('does not expose People or Vision to an unassigned member', () => {
