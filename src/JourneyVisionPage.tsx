@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { ArrowRight, Eye, ShieldCheck } from 'lucide-react'
 import { auth } from './firebase'
 import { evaluateCarePromise } from './intelligence'
+import { buildJourneyUnitPulse, type JourneyUnitPulse } from './journeyExecutive'
 import {
   careRequestToPromise,
   getActiveJourneyOrganizationId,
@@ -106,6 +107,12 @@ const copy={
   }
 } as const
 
+const unitPulseCopy={
+  'pt-BR':{title:'Leitura rápida por unidade',desc:'Troque de unidade sem abrir módulo por módulo. O destaque usa apenas fatos operacionais registrados.',attention:'Precisa de atenção',watch:'Acompanhar',clear:'Sem pendência crítica',people:'Pessoas',debt:'Care Debt',unassigned:'Sem responsável',pastoral:'Pastoral',root:'Raiz ativo'},
+  en:{title:'Quick campus read',desc:'Switch campuses without opening every module. Highlights use only recorded operational facts.',attention:'Needs attention',watch:'Watch',clear:'No critical pending work',people:'People',debt:'Care Debt',unassigned:'Unassigned',pastoral:'Pastoral',root:'Active Root'},
+  es:{title:'Lectura rápida por sede',desc:'Cambia de sede sin abrir módulo por módulo. El destaque usa solo hechos operativos registrados.',attention:'Necesita atención',watch:'Acompañar',clear:'Sin pendiente crítico',people:'Personas',debt:'Care Debt',unassigned:'Sin responsable',pastoral:'Pastoral',root:'Raíz activo'},
+} as const
+
 export default function JourneyVisionPage(){
   const [locale,setLocale]=useState<AppLocale>(getInitialLocale)
   const t=copy[locale]
@@ -115,6 +122,7 @@ export default function JourneyVisionPage(){
   const [organizationId,setOrganizationId]=useState('')
   const [labels,setLabels]=useState<JourneyModuleLabels>({})
   const [units,setUnits]=useState<JourneyCongregation[]>([])
+  const [unitPulses,setUnitPulses]=useState<JourneyUnitPulse[]>([])
   const [unitId,setUnitId]=useState('')
   const [people,setPeople]=useState<JourneyPersonRecord[]>([])
   const [care,setCare]=useState<CareRequestRecord[]>([])
@@ -127,6 +135,18 @@ export default function JourneyVisionPage(){
   const [loading,setLoading]=useState(true)
   const [busy,setBusy]=useState(false)
   const [error,setError]=useState('')
+
+  const loadUnitPulse=useCallback(async(nextAccess:JourneyAccessContext,unit:JourneyCongregation)=>{
+    const [p,c,s,g,d,h]=await Promise.all([
+      listJourneyPeople(nextAccess.organizationId,unit.id),
+      (nextAccess.canManageCare||nextAccess.broadJourneyAccess)?listCareRequests(nextAccess.organizationId,unit.id):Promise.resolve([]),
+      (nextAccess.canManagePresence||nextAccess.canManageMesa)?listPresenceSessions(nextAccess.organizationId,unit.id):Promise.resolve([]),
+      (nextAccess.canManageGroups||nextAccess.broadJourneyAccess)?listJourneyGroups(nextAccess.organizationId,unit.id):Promise.resolve([]),
+      (nextAccess.canManageDiscipleship||nextAccess.broadJourneyAccess)?listJourneyDiscipleships(nextAccess,unit.id):Promise.resolve([]),
+      nextAccess.canManagePastoral?listPastoralHandoffs(nextAccess.organizationId,unit.id):Promise.resolve([]),
+    ])
+    return buildJourneyUnitPulse({unit,people:p,care:c,sessions:s,groups:g,discipleships:d,pastoral:h})
+  },[])
 
   const loadUnit=useCallback(async(nextAccess:JourneyAccessContext,nextUnit:string)=>{
     const [p,c,s,g,d,h,a]=await Promise.all([
@@ -146,10 +166,12 @@ export default function JourneyVisionPage(){
     setScopeAccess(nextAccess)
     setLabels(await loadJourneyModuleLabels(nextOrgId))
     const nextUnits=await listJourneyCongregations(nextAccess);setUnits(nextUnits)
+    const pulses=await Promise.all(nextUnits.map(unit=>loadUnitPulse(nextAccess,unit)))
+    setUnitPulses(pulses)
     const nextUnit=nextUnits[0]?.id??'';setUnitId(nextUnit)
     if(nextUnit)await loadUnit(nextAccess,nextUnit)
     else {setPeople([]);setCare([]);setSessions([]);setGroups([]);setDiscipleships([]);setPastoral([]);setAudit([])}
-  },[loadUnit])
+  },[loadUnit,loadUnitPulse])
 
   const bootstrap=useCallback(async()=>{
     setLoading(true);setError('')
@@ -209,6 +231,7 @@ export default function JourneyVisionPage(){
 
   const currentExperience=experienceCopy[locale][resolveJourneyResponsibility(access)]
   const preview=experienceCopy[locale][simulation]
+  const pulseText=unitPulseCopy[locale]
   const activeJourneyCount=organizations.filter(x=>x.journeyStatus==='active'||x.journeyStatus==='trialing').length
   const areaNames={
     presence:labels.presence||('pt-BR'===locale?'Presença':locale==='es'?'Presencia':'Presence'),
@@ -224,10 +247,11 @@ export default function JourneyVisionPage(){
 
     {access.isSystemAdmin?<section className="journey-section-block"><header><div><span className="journey-section-kicker">{t.ecosystem}</span><h2>{t.productHealth}</h2><p className="journey-section-copy">{t.productHealthDesc}</p></div></header>
       <div className="journey-stat-grid"><div className="journey-stat"><span>{t.organizations}</span><strong>{organizations.length}</strong><small>{t.ecosystem}</small></div><div className="journey-stat"><span>{t.activeJourney}</span><strong>{activeJourneyCount}</strong><small>NestJourney</small></div></div>
-      <div className="journey-list journey-section-block">{organizations.map(org=><button className="journey-list-row" key={org.id} onClick={()=>void selectOrganization(org.id)} disabled={busy}><div><strong>{org.name}</strong><span>{org.city||org.id}</span></div><span className={'journey-status '+((org.journeyStatus==='active'||org.journeyStatus==='trialing')?'':'muted')}>{org.journeyStatus}</span></button>)}</div>
+      <div className="journey-list journey-section-block">{organizations.map(org=><button className={'journey-list-row '+(org.id===organizationId?'selected':'')} aria-pressed={org.id===organizationId} key={org.id} onClick={()=>void selectOrganization(org.id)} disabled={busy}><div><strong>{org.name}</strong><span>{org.city||org.id}</span></div><span className={'journey-status '+((org.journeyStatus==='active'||org.journeyStatus==='trialing')?'':'muted')}>{org.journeyStatus}</span></button>)}</div>
     </section>:null}
 
     <section className="journey-section-block"><header><div><span className="journey-section-kicker">{t.organization}</span><h2>{organizations.find(x=>x.id===organizationId)?.name||organizationId}</h2></div><div className="journey-inline-actions">{access.isSystemAdmin?<select className="journey-section-select" value={organizationId} disabled={busy} onChange={e=>void selectOrganization(e.target.value)}>{organizations.map(x=><option value={x.id} key={x.id}>{x.name}</option>)}</select>:null}<select className="journey-section-select" value={unitId} disabled={busy||!units.length} onChange={e=>void selectUnit(e.target.value)}>{units.map(x=><option key={x.id} value={x.id}>{x.name}</option>)}</select></div></header>
+      {unitPulses.length>1?<div className="journey-unit-pulse-wrap"><div className="journey-unit-pulse-heading"><div><strong>{pulseText.title}</strong><span>{pulseText.desc}</span></div></div><div className="journey-unit-pulse-grid">{unitPulses.map(pulse=><button key={pulse.unitId} className={'journey-unit-pulse '+pulse.level+(pulse.unitId===unitId?' selected':'')} aria-pressed={pulse.unitId===unitId} onClick={()=>void selectUnit(pulse.unitId)} disabled={busy}><div className="journey-unit-pulse-top"><span><strong>{pulse.name}</strong><small>{pulse.city||pulseText.people+' '+pulse.people}</small></span><b>{pulse.level==='attention'?pulseText.attention:pulse.level==='watch'?pulseText.watch:pulseText.clear}</b></div><div className="journey-unit-pulse-metrics"><span><small>{pulseText.people}</small><strong>{pulse.people}</strong></span><span><small>{pulseText.debt}</small><strong>{pulse.careDebt}</strong></span><span><small>{pulseText.unassigned}</small><strong>{pulse.careUnassigned}</strong></span><span><small>{pulseText.pastoral}</small><strong>{pulse.pastoralOpen}</strong></span><span><small>{pulseText.root}</small><strong>{pulse.activeDiscipleships}</strong></span></div></button>)}</div></div>:null}
       {!unitId?<div className="journey-empty">{t.noUnit}</div>:<div className="journey-stat-grid">
         <div className="journey-stat"><span>{t.people}</span><strong>{metrics.people}</strong><small>{areaNames.presence}</small></div>
         <div className="journey-stat"><span>{t.careOpen}</span><strong>{metrics.careOpen}</strong><small>{areaNames.care}</small></div>
