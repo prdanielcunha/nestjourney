@@ -980,6 +980,31 @@ service cloud.firestore {
         && validFollowupCanonicalFact(orgId, factId, eventType, payload);
     }
 
+    function validBondHostFact(orgId, factId) {
+      let payload = request.resource.data.get('payload', {});
+      let personId = payload.get('personId', '');
+      let personPath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/people/$(personId);
+      return tenantCreate(orgId)
+        && request.resource.data.get('eventId', '') == factId
+        && factId == 'bond-host-' + personId + '-' + request.auth.uid
+        && request.resource.data.get('eventType', '') == 'BOND_HOST_ASSIGNED'
+        && request.resource.data.get('actorId', '') == request.auth.uid
+        && request.resource.data.get('sourceApp', '') == 'nestjourney'
+        && request.resource.data.get('version', 0) == 1
+        && request.resource.data.get('recordedAt', null) == request.time
+        && request.resource.data.get('occurredAt', null) == request.time
+        && personId is string
+        && personId.size() > 0
+        && payload.get('bondHostRef', '') == request.auth.uid
+        && request.resource.data.get('subjectRef', '') == 'person:' + personId
+        && request.resource.data.get('evidenceRef', '') == 'person:' + personId
+        && request.resource.data.get('sensitivity', '') == 'confidential'
+        && existsAfter(personPath)
+        && getAfter(personPath).data.get('bondHostRef', '') == request.auth.uid
+        && getAfter(personPath).data.get('bondAssignedBy', '') == request.auth.uid
+        && getAfter(personPath).data.get('bondAssignedAt', null) == request.time
+        && request.resource.data.get('scope', '') == 'congregation:' + getAfter(personPath).data.get('congregationId', '');
+    }
     function validCanonicalFact(orgId, factId) {
       let eventType = request.resource.data.get('eventType', '');
       let payload = request.resource.data.get('payload', {});
@@ -1004,7 +1029,7 @@ service cloud.firestore {
         && request.resource.data.get('evidenceRef', '').size() > 0
         && request.resource.data.get('sensitivity', '') in ['public', 'internal', 'confidential', 'restricted']
         && eventType in [
-          'VISITOR_REGISTERED', 'BOND_HOST_ASSIGNED', 'PRESENCE_SESSION_OPENED', 'PRESENCE_CONFIRMED',
+          'VISITOR_REGISTERED', 'PRESENCE_SESSION_OPENED', 'PRESENCE_CONFIRMED',
           'CARE_REQUESTED', 'CARE_ASSIGNED'
         ]
         && (
@@ -1013,17 +1038,6 @@ service cloud.firestore {
             && request.resource.data.get('subjectRef', '') == 'person:' + personId
             && request.resource.data.get('evidenceRef', '') == 'person:' + personId
             && existsAfter(personPath)
-            && request.resource.data.get('scope', '') == 'congregation:' + getAfter(personPath).data.get('congregationId', ''))
-          ||
-          (eventType == 'BOND_HOST_ASSIGNED'
-            && personId is string
-            && payload.get('bondHostRef', '') == request.auth.uid
-            && request.resource.data.get('subjectRef', '') == 'person:' + personId
-            && request.resource.data.get('evidenceRef', '') == 'person:' + personId
-            && existsAfter(personPath)
-            && getAfter(personPath).data.get('bondHostRef', '') == request.auth.uid
-            && getAfter(personPath).data.get('bondAssignedBy', '') == request.auth.uid
-            && getAfter(personPath).data.get('bondAssignedAt', null) == request.time
             && request.resource.data.get('scope', '') == 'congregation:' + getAfter(personPath).data.get('congregationId', ''))
           ||
           (eventType == 'PRESENCE_SESSION_OPENED'
@@ -1182,6 +1196,11 @@ service cloud.firestore {
         match /facts/{factId} {
           allow read: if isOrgAdmin(orgId);
           allow create: if (
+              request.resource.data.get('eventType', '') == 'BOND_HOST_ASSIGNED'
+              && canManagePeople(orgId)
+              && validBondHostFact(orgId, factId)
+            )
+            || (
               request.resource.data.get('eventType', '') in ['FOLLOWUP_CREATED', 'FOLLOWUP_COMPLETED']
               && validFollowupFactDocument(orgId, factId)
             )
@@ -1192,7 +1211,7 @@ service cloud.firestore {
             || (
               hasMembership(orgId)
               && (
-                (request.resource.data.get('eventType', '') in ['VISITOR_REGISTERED', 'BOND_HOST_ASSIGNED'] && canManagePeople(orgId))
+                (request.resource.data.get('eventType', '') == 'VISITOR_REGISTERED' && canManagePeople(orgId))
                 || (request.resource.data.get('eventType', '') in ['PRESENCE_SESSION_OPENED', 'PRESENCE_CONFIRMED'] && canManagePresence(orgId))
                 || request.resource.data.get('eventType', '') in ['CARE_REQUESTED', 'CARE_ASSIGNED']
               )
