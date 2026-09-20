@@ -21,6 +21,8 @@ import {
 } from './journeyRepository'
 import { careIntegrityCopy, getInitialLocale, localeLabels, persistLocale, type AppLocale } from './i18n'
 import { useJourneyLabels } from './journeyLabels'
+import { GuidedEmptyState } from './GuidedEmptyState'
+import { emptyGuidance } from './emptyGuidance'
 import './CareIntegrityPage.css'
 
 type CareTab = 'attention' | 'open' | 'resolved'
@@ -147,6 +149,9 @@ export default function CareIntegrityPage() {
     } catch (cause) { console.error(cause); setError(t.error) }
     finally { setBusy(false) }
   }
+
+  const emptyKey = tab==='attention'?'care_attention_clear':tab==='open'?'care_open_none':'care_resolved_none'
+  const empty = emptyGuidance(locale,emptyKey)
 
   if (loading) return <main className="care-integrity"><div className="care-loading">{t.loading}</div></main>
 
