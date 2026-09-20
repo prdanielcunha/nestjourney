@@ -128,7 +128,7 @@ export default function GovernanceRuntimePage() {
   return <main className="governance-runtime"><div className="governance-shell">
     <header className="governance-topbar">
       <div className="governance-brand"><img src="/icon.svg" alt=""/><span><strong>{t.product}</strong><small>Journey & Care Engine</small></span></div>
-      <div className="governance-actions"><a href="/journey-overview"><ArrowLeft size={16}/>{t.back}</a><select value={locale} onChange={e=>{const next=e.target.value as AppLocale;setLocale(next);persistLocale(next)}}>{(Object.keys(localeLabels) as AppLocale[]).map(id=><option key={id} value={id}>{localeLabels[id]}</option>)}</select></div>
+      <div className="governance-actions"><a href="/vision"><ArrowLeft size={16}/>{t.back}</a><select value={locale} onChange={e=>{const next=e.target.value as AppLocale;setLocale(next);persistLocale(next)}}>{(Object.keys(localeLabels) as AppLocale[]).map(id=><option key={id} value={id}>{localeLabels[id]}</option>)}</select></div>
     </header>
 
     <section className="governance-hero"><div><span className="governance-kicker">Journey / Governance</span><h1>{t.title}</h1><p>{t.subtitle}</p></div><span className="governance-role"><UserCog size={16}/>{access?.role||t.systemRole}</span></section>
