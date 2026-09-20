@@ -36,6 +36,7 @@ import {
   type JourneyResponsibility,
 } from './journeyExperience'
 import { getInitialLocale, localeLabels, persistLocale, type AppLocale } from './i18n'
+import { AccessDeniedState } from './AccessDeniedState'
 import './JourneySectionPages.css'
 
 const experienceCopy:Record<AppLocale,Record<JourneyResponsibility,{name:string;summary:string;items:string[]}>>={
@@ -227,7 +228,7 @@ export default function JourneyVisionPage(){
   },[people,care,sessions,pastoral,audit,groups,discipleships])
 
   if(loading)return <main className="journey-section-page"><div className="journey-loading">{t.loading}</div></main>
-  if(!access||!canViewJourneyVision(access))return <main className="journey-section-page"><div className="journey-no-access"><Eye size={32}/><h1>{t.title}</h1><p>{t.noAccess}</p></div></main>
+  if(!access||!canViewJourneyVision(access))return <main className="journey-section-page"><AccessDeniedState locale={locale} title={t.title} body={t.noAccess} /></main>
 
   const currentExperience=experienceCopy[locale][resolveJourneyResponsibility(access)]
   const preview=experienceCopy[locale][simulation]

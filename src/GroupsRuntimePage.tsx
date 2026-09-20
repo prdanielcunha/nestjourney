@@ -32,6 +32,7 @@ import {
 import { getInitialLocale, groupsRuntimeCopy, localeLabels, persistLocale, type AppLocale } from './i18n'
 import { GuidedEmptyState } from './GuidedEmptyState'
 import { emptyGuidance } from './emptyGuidance'
+import { AccessDeniedState } from './AccessDeniedState'
 import { useJourneyLabels } from './journeyLabels'
 import './JourneyRuntimePages.css'
 
@@ -197,7 +198,7 @@ export default function GroupsRuntimePage() {
   }
 
   if (loading) return <main className="journey-runtime"><div className="runtime-loading">{t.loading}</div></main>
-  if (!(access?.canManageGroups || access?.broadJourneyAccess)) return <main className="journey-runtime"><section className="runtime-panel runtime-no-access"><ShieldCheck size={34}/><h1>{t.noAccessTitle}</h1><p>{t.noAccess}</p><button className="runtime-button" onClick={() => void bootstrap()}>{t.retry}</button></section></main>
+  if (!(access?.canManageGroups || access?.broadJourneyAccess)) return <main className="journey-runtime"><AccessDeniedState locale={locale} title={t.noAccessTitle} body={t.noAccess} retryLabel={t.retry} onRetry={() => void bootstrap()} /></main>
 
   const canCreateGroup=Boolean(access&&canCreateJourneyGroupEntryRequest(access))
   const empty=emptyGuidance(locale,canCreateGroup?'groups_none':'groups_unassigned')

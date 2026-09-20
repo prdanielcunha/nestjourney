@@ -18,6 +18,7 @@ import { discipleshipRuntimeCopy, getInitialLocale, localeLabels, persistLocale,
 import { useJourneyLabels } from './journeyLabels'
 import { GuidedEmptyState } from './GuidedEmptyState'
 import { emptyGuidance } from './emptyGuidance'
+import { AccessDeniedState } from './AccessDeniedState'
 import './JourneyRuntimePages.css'
 
 export default function DiscipleshipRuntimePage(){
@@ -53,7 +54,7 @@ export default function DiscipleshipRuntimePage(){
   const availablePeople=people.filter(person=>!activePersonIds.has(person.id))
 
   if(loading)return <main className="journey-runtime"><div className="runtime-loading">{t.loading}</div></main>
-  if(!(access?.canManageDiscipleship||access?.broadJourneyAccess))return <main className="journey-runtime"><section className="runtime-panel runtime-no-access"><ShieldCheck size={34}/><h1>{t.noAccessTitle}</h1><p>{t.noAccess}</p><button className="runtime-button" onClick={()=>void bootstrap()}>{t.retry}</button></section></main>
+  if(!(access?.canManageDiscipleship||access?.broadJourneyAccess))return <main className="journey-runtime"><AccessDeniedState locale={locale} title={t.noAccessTitle} body={t.noAccess} retryLabel={t.retry} onRetry={()=>void bootstrap()} /></main>
 
   return <main className="journey-runtime"><div className="runtime-shell">
     <header className="runtime-topbar"><div className="runtime-brand"><img src="/icon.svg" alt=""/><span><strong>{t.product}</strong><small>Journey & Care Engine</small></span></div><div className="runtime-actions"><a href="/my-today"><ChevronLeft size={16}/>{t.back}</a><select value={locale} onChange={e=>{const next=e.target.value as AppLocale;setLocale(next);persistLocale(next)}}>{(Object.keys(localeLabels) as AppLocale[]).map(id=><option key={id} value={id}>{localeLabels[id]}</option>)}</select></div></header>

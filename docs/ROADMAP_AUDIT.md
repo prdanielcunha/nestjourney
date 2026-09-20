@@ -43,6 +43,7 @@ O princípio permanece: tecnologia deve desaparecer atrás do cuidado. O softwar
 | Resiliência de acesso | evitar login/carregamento infinito | timeout explícito para autenticação e resolução de acesso, retry guiado e fallback para o Hub | Implementado |
 | Conectividade | deixar claro quando a rede caiu | aviso global offline sem transformar falha de rede em erro de permissão ou dado | Implementado |
 | Recuperação de interface | evitar tela em branco em falha de render | error boundary global com reload e retorno ao Hoje | Implementado |
+| Recuperação de rota restrita | impedir becos sem saída ao abrir deep links sem permissão | estado comum com retorno ao Hoje, explicação de acesso, Ajuda e retry quando aplicável | Implementado |
 
 ## UX final consolidada
 
@@ -119,6 +120,7 @@ O núcleo é considerado pronto quando:
 10. produção é promovida por CI e o domínio oficial passa no smoke test;
 11. autenticação e resolução de acesso não podem deixar o usuário indefinidamente em loading;
 12. perda de conexão precisa ser comunicada sem inventar estado operacional;
-13. uma falha de render precisa oferecer recuperação explícita em vez de tela em branco.
+13. uma falha de render precisa oferecer recuperação explícita em vez de tela em branco;
+14. um deep link sem permissão precisa explicar o limite do papel e oferecer uma saída segura, sem deixar o usuário preso.
 
 Depois desse ponto, novas entregas são evolução de produto orientada por uso real — não correção de uma arquitetura incompleta.

@@ -24,6 +24,7 @@ import { getInitialLocale, localeLabels, persistLocale, presenceAssistCopy, type
 import { useJourneyLabels } from './journeyLabels'
 import { GuidedEmptyState } from './GuidedEmptyState'
 import { emptyGuidance } from './emptyGuidance'
+import { AccessDeniedState } from './AccessDeniedState'
 import './PresenceAssistPage.css'
 
 function initials(name: string) {
@@ -206,7 +207,7 @@ export default function PresenceAssistPage() {
   if (loading) return <main className="presence-assist"><div className="presence-loading">{t.loading}</div></main>
 
   if (!access?.canManagePresence) {
-    return <main className="presence-assist"><section className="presence-panel presence-no-access"><ShieldCheck size={34} /><h1>{t.noAccessTitle}</h1><p>{t.noAccess}</p><button className="presence-button" onClick={() => void bootstrap()}>{t.retry}</button></section></main>
+    return <main className="presence-assist"><AccessDeniedState locale={locale} title={t.noAccessTitle} body={t.noAccess} retryLabel={t.retry} onRetry={() => void bootstrap()} /></main>
   }
 
   return <main className="presence-assist"><div className="presence-shell">
