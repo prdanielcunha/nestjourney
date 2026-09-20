@@ -185,7 +185,9 @@ export function JourneyShell({children}:{children:ReactNode}){
     <nav className="journey-mobile-bar" aria-label="NestJourney">
       {mobile.map(item=>{
         const Icon=item.icon
-        return <button className={sameRoute(item.href,pathname)?'active':''} key={item.href} onClick={()=>navigate(item.href)}><Icon size={19}/><span>{item.label}</span></button>
+        const directHelp=mobile.some(candidate=>candidate.href==='/help')
+        const active=item.href==='/more'&&directHelp&&pathname==='/help'?false:sameRoute(item.href,pathname)
+        return <button className={active?'active':''} key={item.href} onClick={()=>navigate(item.href)}><Icon size={19}/><span>{item.label}</span></button>
       })}
     </nav>
   </div>
