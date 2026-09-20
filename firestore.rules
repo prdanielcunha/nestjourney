@@ -340,6 +340,40 @@ service cloud.firestore {
         && exists(personPath)
         && get(personPath).data.get('congregationId', '') == congregationId;
     }
+    function validPersonBondCreate() {
+      let bondHostRef = request.resource.data.get('bondHostRef', '');
+      return (
+          bondHostRef == ''
+          && request.resource.data.get('bondAssignedAt', null) == null
+          && request.resource.data.get('bondAssignedBy', '') == ''
+        )
+        || (
+          bondHostRef == request.auth.uid
+          && request.resource.data.get('bondAssignedAt', null) == request.time
+          && request.resource.data.get('bondAssignedBy', '') == request.auth.uid
+        );
+    }
+    function validPersonUpdate(orgId, personId) {
+      let oldBond = resource.data.get('bondHostRef', '');
+      let newBond = request.resource.data.get('bondHostRef', '');
+      let factPath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/facts/$(('bond-host-' + personId + '-' + request.auth.uid));
+      return tenantUnchanged(orgId)
+        && congregationUnchanged()
+        && (
+          (
+            newBond == oldBond
+            && request.resource.data.get('bondAssignedAt', null) == resource.data.get('bondAssignedAt', null)
+            && request.resource.data.get('bondAssignedBy', '') == resource.data.get('bondAssignedBy', '')
+          )
+          || (
+            oldBond == ''
+            && newBond == request.auth.uid
+            && request.resource.data.get('bondAssignedAt', null) == request.time
+            && request.resource.data.get('bondAssignedBy', '') == request.auth.uid
+            && existsAfter(factPath)
+          )
+        );
+    }
     function canManageJourneySettings(orgId) {
       return isSystemAdmin() || role(orgId, ['owner', 'admin', 'pastor']);
     }
@@ -1072,8 +1106,9 @@ service cloud.firestore {
           allow create: if tenantCreate(orgId)
             && request.resource.data.get('deletedAt', null) == null
             && canAccessCongregation(orgId, request.resource.data.get('congregationId', ''))
-            && canManagePeople(orgId);
-          allow update: if tenantUnchanged(orgId) && congregationUnchanged()
+            && canManagePeople(orgId)
+            && validPersonBondCreate();
+          allow update: if validPersonUpdate(orgId, personId)
             && canAccessCongregation(orgId, resource.data.get('congregationId', ''))
             && canManagePeople(orgId);
           allow delete: if false;
