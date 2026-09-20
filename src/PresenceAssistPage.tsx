@@ -248,7 +248,7 @@ export default function PresenceAssistPage() {
         </article>
       })}
     </section>
-    {!visiblePeople.length ? <div className="presence-panel presence-empty">{t.empty}</div> : null}
+    {!visiblePeople.length ? query.trim()?<div className="presence-panel presence-empty">{t.empty}</div>:<div className="presence-panel"><GuidedEmptyState icon={UserCheck} title={noPeopleGuide.title} body={noPeopleGuide.body} primary={canAddVisitor?{label:noPeopleGuide.primary,onClick:()=>setShowVisitor(true)}:displaySession?.status==='open'?{label:locale==='en'?'Open Help':locale==='es'?'Abrir Ayuda':'Abrir Ajuda',href:'/help'}:{label:t.newSession,onClick:()=>setShowSession(true)}} secondary={{label:noPeopleGuide.secondary||t.back,href:'/help'}}/></div> : null}
     <p className="presence-rule">{t.sourceRule}</p>
   </div>
 
