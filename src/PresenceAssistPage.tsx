@@ -137,9 +137,15 @@ export default function PresenceAssistPage() {
     setSessions(nextSessions)
     const session = nextSessions.find((item) => item.status === 'open') ?? nextSessions[0]
     if (session) {
-      setChecks(await listPresenceChecks(orgId, unitId, session.id))
+      const [nextChecks, routedPeople] = await Promise.all([
+        listPresenceChecks(orgId, unitId, session.id),
+        listAbsenceCareRoutePersonIds(orgId, unitId, session.id),
+      ])
+      setChecks(nextChecks)
+      setRoutedAbsenceIds(new Set(routedPeople))
     } else {
       setChecks([])
+      setRoutedAbsenceIds(new Set())
     }
   }, [])
 
