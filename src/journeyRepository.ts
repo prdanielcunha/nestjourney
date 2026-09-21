@@ -802,6 +802,7 @@ export async function resolvePrivacyRequest(input: {
     if (field === 'firstVisit' && !/^\d{4}-\d{2}-\d{2}$/.test(value)) throw new Error('invalid_first_visit')
     batch.update(personRef, {
       [field]: value,
+      privacyRequestId: input.request.id,
       privacyUpdatedAt: serverTimestamp(),
       privacyUpdatedBy: input.access.userId,
     })
@@ -815,6 +816,7 @@ export async function resolvePrivacyRequest(input: {
       nextActionCode: 'WELCOME_ON_NEXT_VISIT',
       consentRevokedAt: serverTimestamp(),
       consentRevokedBy: input.access.userId,
+      privacyRequestId: input.request.id,
       privacyUpdatedAt: serverTimestamp(),
       privacyUpdatedBy: input.access.userId,
     })
