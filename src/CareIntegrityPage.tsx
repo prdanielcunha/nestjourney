@@ -330,7 +330,7 @@ function ResolveCareModal({ locale, close, save }: { locale: AppLocale; close: (
   return <div className="care-modal-backdrop" onMouseDown={close}><section className="care-panel care-modal" role="dialog" aria-modal="true" aria-labelledby="care-resolve-title" onMouseDown={(event) => event.stopPropagation()}>
     <div className="care-modal-head"><div><span className="care-kicker">Outcome</span><h2 id="care-resolve-title">{t.recordOutcome}</h2></div><button className="care-button" onClick={close} aria-label={t.cancel}><X size={17} /></button></div>
     <div className="care-modal-grid">
-      <label className="care-field"><span>{t.outcome}</span><select value={code} onChange={(event) => { const next = event.target.value as CareResolutionCode; setCode(next); if (next === 'pastoral_handoff') setNote('') }}>{(Object.keys(t.resolutions) as CareResolutionCode[]).map((id) => <option value={id} key={id}>{t.resolutions[id]}</option>)}</select></label>
+      <label className="care-field"><span>{t.outcome}</span><select value={code} onChange={(event) => { const next = event.target.value as CareResolutionCode; setCode(next); if (next === 'pastoral_handoff') setNote('') }}>{(Object.keys(t.resolutions) as CareResolutionCode[]).filter((id) => id !== 'consent_revoked').map((id) => <option value={id} key={id}>{t.resolutions[id]}</option>)}</select></label>
       {code === 'pastoral_handoff'
         ? <p className="care-warning"><ShieldCheck size={16} /> {t.pastoralHandoffRule}</p>
         : <label className="care-field"><span>{t.operationalNote}</span><textarea maxLength={160} value={note} onChange={(event) => setNote(event.target.value)} placeholder={t.resolutionPlaceholder} /></label>}
