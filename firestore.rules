@@ -765,41 +765,44 @@ service cloud.firestore {
         && request.resource.data.get('assignedAt', null) == request.time
         && request.resource.data.get('assignedBy', '') == request.auth.uid;
     }
-    function validRevokedContactResolution(orgId) {
+    function validRevokedCareResolve(orgId) {
       let personId = resource.data.get('personId', '');
       let personPath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/people/$(personId);
       let personData = get(personPath).data;
-      return resource.data.get('careType', '') in ['first_contact', 'absence_check']
-        && personData.get('organizationId', '') == orgId
+      return resource.data.get('status', '') == 'open'
+        && resource.data.get('careType', '') in ['first_contact', 'absence_check']
+        && tenantUnchanged(orgId)
+        && congregationUnchanged()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'status', 'resolvedAt', 'resolvedBy', 'resolutionCode', 'resolutionNote'
+        ])
+        && request.resource.data.get('status', '') == 'resolved'
+        && request.resource.data.get('resolvedAt', null) == request.time
+        && request.resource.data.get('resolvedBy', '') == request.auth.uid
+        && request.resource.data.get('resolutionCode', '') == 'consent_revoked'
+        && request.resource.data.get('resolutionNote', '') == ''
         && personData.get('congregationId', '') == resource.data.get('congregationId', '')
         && (
           personData.get('consent', false) != true
-          || !(personData.get('phone', '') is string)
           || personData.get('phone', '').size() == 0
         );
     }
 
     function validCareResolve(orgId) {
       let note = request.resource.data.get('resolutionNote', '');
-      let resolutionCode = request.resource.data.get('resolutionCode', '');
-      let ownerRef = resource.data.get('ownerRef', '');
       return resource.data.get('status', '') == 'open'
-        && (
-          ownerRef == request.auth.uid
-          || isOrgAdmin(orgId)
-          || (resolutionCode == 'consent_revoked' && ownerRef == '')
-        )
+        && (resource.data.get('ownerRef', '') == request.auth.uid || isOrgAdmin(orgId))
         && tenantUnchanged(orgId)
         && congregationUnchanged()
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'resolvedAt', 'resolvedBy', 'resolutionCode', 'resolutionNote'])
         && request.resource.data.get('status', '') == 'resolved'
         && request.resource.data.get('resolvedAt', null) == request.time
         && request.resource.data.get('resolvedBy', '') == request.auth.uid
-        && resolutionCode in ['contact_completed', 'pastoral_handoff', 'declined_contact', 'consent_revoked', 'invalid_contact', 'closed_no_response', 'other_resolved']
-        && (resolutionCode != 'consent_revoked' || validRevokedContactResolution(orgId))
+        && request.resource.data.get('resolutionCode', '') in ['contact_completed', 'pastoral_handoff', 'declined_contact', 'invalid_contact', 'closed_no_response', 'other_resolved']
         && note is string
         && note.size() <= 160;
     }
+
     function validFollowupCreate(orgId, followupId) {
       let careRequestId = request.resource.data.get('careRequestId', '');
       let personId = request.resource.data.get('personId', '');
@@ -1456,7 +1459,11 @@ service cloud.firestore {
             && validCareRequestCreate(orgId, careRequestId);
           allow update: if canManageCare(orgId)
             && canAccessCongregation(orgId, resource.data.get('congregationId', ''))
-            && (validCareClaim(orgId) || validCareResolve(orgId));
+            && (
+              request.resource.data.get('resolutionCode', '') == 'consent_revoked'
+                ? validRevokedCareResolve(orgId)
+                : (validCareClaim(orgId) || validCareResolve(orgId))
+            );
           allow delete: if false;
         }
         match /absenceCareRoutes/{routeId} {
