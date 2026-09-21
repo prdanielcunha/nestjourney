@@ -144,6 +144,34 @@ describe('Presence Assist and canonical evidence', () => {
     await assertFails(setDoc(doc(coordDb, 'organizations/org-a/products/raiz_e_mesa/presenceSessions/session-wrong-unit'), { ...base, congregationId: 'unit-b', createdBy: 'coord-a' }))
   })
 
+  it('persists a bounded coverage gate when closing a presence session', async () => {
+    await seedMembership('coord-close', 'org-a', 'coordinator', ['unit-a'])
+    await environment.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore()
+      for (const id of ['session-close-ok', 'session-close-spoof']) {
+        await setDoc(doc(db, `organizations/org-a/products/raiz_e_mesa/presenceSessions/${id}`), {
+          organizationId: 'org-a', congregationId: 'unit-a', eventRef: `event:${id}`, openedAt: new Date(),
+          closedAt: null, status: 'open', expectedPeopleCount: 10, minimumCoveragePercent: 90, createdBy: 'coord-close',
+        })
+      }
+    })
+    const db = environment.authenticatedContext('coord-close').firestore()
+    await assertSucceeds(updateDoc(
+      doc(db, 'organizations/org-a/products/raiz_e_mesa/presenceSessions/session-close-ok'),
+      {
+        status: 'closed', closedAt: serverTimestamp(), closedBy: 'coord-close',
+        verifiedCountAtClose: 9, absenceEvidenceEligible: true,
+      },
+    ))
+    await assertFails(updateDoc(
+      doc(db, 'organizations/org-a/products/raiz_e_mesa/presenceSessions/session-close-spoof'),
+      {
+        status: 'closed', closedAt: serverTimestamp(), closedBy: 'coord-close',
+        verifiedCountAtClose: 8, absenceEvidenceEligible: true,
+      },
+    ))
+  })
+
   it('keeps checks append-only and only accepts canonical facts backed by a scoped person and check', async () => {
     await seedMembership('coord-a', 'org-a', 'coordinator', ['unit-a'])
     await environment.withSecurityRulesDisabled(async (context) => {
@@ -610,6 +638,175 @@ describe('Care Integrity persistence and scope', () => {
         completedAt: null, completedBy: '', outcomeCode: '', nextActionCode: '',
       },
     ))
+  })
+
+  it('routes an explicit confirmed absence into one evidence-backed unassigned Care Promise', async () => {
+    await seedMembership('presence-route', 'org-a', 'coordinator', ['unit-a'])
+    const closedAt = new Date()
+    const recordedAt = new Date(closedAt.getTime() - 60_000)
+    await environment.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore()
+      await setDoc(doc(db, 'organizations/org-a/products/raiz_e_mesa/people/person-absence'), {
+        organizationId: 'org-a', congregationId: 'unit-a', name: 'Pessoa Ausente',
+        consent: true, phone: '43999999999',
+      })
+      await setDoc(doc(db, 'organizations/org-a/products/raiz_e_mesa/presenceSessions/session-absence'), {
+        organizationId: 'org-a', congregationId: 'unit-a', eventRef: 'event:absence',
+        openedAt: new Date(closedAt.getTime() - 3_600_000), closedAt, status: 'closed',
+        expectedPeopleCount: 1, minimumCoveragePercent: 90, createdBy: 'presence-route', closedBy: 'presence-route',
+        verifiedCountAtClose: 1, absenceEvidenceEligible: true,
+      })
+      await setDoc(doc(db, 'organizations/org-a/products/raiz_e_mesa/presenceChecks/check-absence'), {
+        organizationId: 'org-a', congregationId: 'unit-a', sessionId: 'session-absence', personId: 'person-absence',
+        state: 'absent_confirmed', source: 'human_check', actorId: 'presence-route', recordedAt,
+      })
+    })
+
+    const db = environment.authenticatedContext('presence-route').firestore()
+    const requestId = 'absence-session-absence-person-absence'
+    const requestRef = doc(db, `organizations/org-a/products/raiz_e_mesa/careRequests/${requestId}`)
+    const create = writeBatch(db)
+    create.set(requestRef, {
+      organizationId: 'org-a', congregationId: 'unit-a', personId: 'person-absence',
+      careType: 'absence_check', source: 'presence_absence',
+      sourcePresenceSessionId: 'session-absence', sourcePresenceCheckId: 'check-absence',
+      summary: '', status: 'open', requestedAt: serverTimestamp(), requestedBy: 'presence-route',
+      promiseHours: 48, dueAt: Timestamp.fromMillis(Date.now() + 48 * 60 * 60 * 1000),
+      ownerRef: '', assignedAt: null, assignedBy: '', resolvedAt: null, resolvedBy: '', resolutionCode: '', resolutionNote: '',
+    })
+    create.set(
+      doc(db, `organizations/org-a/products/raiz_e_mesa/absenceCareRoutes/${requestId}`),
+      {
+        organizationId: 'org-a', congregationId: 'unit-a', sessionId: 'session-absence',
+        personId: 'person-absence', careRequestId: requestId, sourcePresenceCheckId: 'check-absence',
+        routedAt: serverTimestamp(), routedBy: 'presence-route',
+      },
+    )
+    create.set(
+      doc(db, `organizations/org-a/products/raiz_e_mesa/facts/care-requested-${requestId}`),
+      careFact(`care-requested-${requestId}`, 'CARE_REQUESTED', 'presence-route', {
+        careRequestId: requestId, personId: 'person-absence', careType: 'absence_check',
+        source: 'presence_absence', sessionId: 'session-absence', checkId: 'check-absence',
+      }),
+    )
+    await assertSucceeds(create.commit())
+    await assertSucceeds(getDoc(doc(db, `organizations/org-a/products/raiz_e_mesa/absenceCareRoutes/${requestId}`)))
+
+    const spoof = writeBatch(db)
+    spoof.set(doc(db, 'organizations/org-a/products/raiz_e_mesa/careRequests/absence-spoof'), {
+      organizationId: 'org-a', congregationId: 'unit-a', personId: 'person-absence',
+      careType: 'absence_check', source: 'presence_absence',
+      sourcePresenceSessionId: 'session-absence', sourcePresenceCheckId: 'check-absence',
+      summary: '', status: 'open', requestedAt: serverTimestamp(), requestedBy: 'presence-route',
+      promiseHours: 48, dueAt: Timestamp.fromMillis(Date.now() + 48 * 60 * 60 * 1000),
+      ownerRef: '', assignedAt: null, assignedBy: '', resolvedAt: null, resolvedBy: '', resolutionCode: '', resolutionNote: '',
+    })
+    await assertFails(spoof.commit())
+  })
+
+  it('closes an unassigned contact promise as consent revoked only when contact is no longer authorized', async () => {
+    await seedMembership('care-revoke', 'org-a', 'care', ['unit-a'])
+    await environment.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore()
+      await setDoc(doc(db, 'organizations/org-a/products/raiz_e_mesa/people/person-revoked'), {
+        organizationId: 'org-a', congregationId: 'unit-a', name: 'Revogado', consent: false, phone: '',
+      })
+      await setDoc(doc(db, 'organizations/org-a/products/raiz_e_mesa/people/person-authorized'), {
+        organizationId: 'org-a', congregationId: 'unit-a', name: 'Autorizado', consent: true, phone: '43999999999',
+      })
+      for (const [id, personId] of [['care-revoked', 'person-revoked'], ['care-authorized', 'person-authorized']]) {
+        await setDoc(doc(db, `organizations/org-a/products/raiz_e_mesa/careRequests/${id}`), {
+          organizationId: 'org-a', congregationId: 'unit-a', personId,
+          careType: 'absence_check', source: 'presence_absence', sourcePresenceSessionId: 'session-x', sourcePresenceCheckId: 'check-x',
+          summary: '', status: 'open', requestedAt: new Date(), requestedBy: 'presence-route',
+          promiseHours: 48, dueAt: new Date(Date.now() + 48 * 60 * 60 * 1000),
+          ownerRef: '', assignedAt: null, assignedBy: '', resolvedAt: null, resolvedBy: '', resolutionCode: '', resolutionNote: '',
+        })
+      }
+    })
+
+    const db = environment.authenticatedContext('care-revoke').firestore()
+    const revokedRef = doc(db, 'organizations/org-a/products/raiz_e_mesa/careRequests/care-revoked')
+    const close = writeBatch(db)
+    close.update(revokedRef, {
+      status: 'resolved', resolvedAt: serverTimestamp(), resolvedBy: 'care-revoke',
+      resolutionCode: 'consent_revoked', resolutionNote: '',
+    })
+    close.set(
+      doc(db, 'organizations/org-a/products/raiz_e_mesa/facts/care-resolved-care-revoked'),
+      careFact('care-resolved-care-revoked', 'CARE_RESOLVED', 'care-revoke', {
+        careRequestId: 'care-revoked', personId: 'person-revoked',
+        careType: 'absence_check', resolutionCode: 'consent_revoked',
+      }),
+    )
+    await assertSucceeds(close.commit())
+
+    await assertFails(updateDoc(
+      doc(db, 'organizations/org-a/products/raiz_e_mesa/careRequests/care-authorized'),
+      {
+        status: 'resolved', resolvedAt: serverTimestamp(), resolvedBy: 'care-revoke',
+        resolutionCode: 'consent_revoked', resolutionNote: '',
+      },
+    ))
+  })
+
+  it('finishes an already-started follow-up without opening Connect after consent is revoked', async () => {
+    await seedMembership('care-revoked-owner', 'org-a', 'care', ['unit-a'])
+    const due = new Date(Date.now() + 24 * 60 * 60 * 1000)
+    await environment.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore()
+      await setDoc(doc(db, 'organizations/org-a/products/raiz_e_mesa/people/person-followup-revoked'), {
+        organizationId: 'org-a', congregationId: 'unit-a', name: 'Pessoa Follow-up Revogado', consent: false, phone: '',
+      })
+      await setDoc(doc(db, 'organizations/org-a/products/raiz_e_mesa/careRequests/care-followup-revoked'), {
+        organizationId: 'org-a', congregationId: 'unit-a', personId: 'person-followup-revoked',
+        careType: 'first_contact', source: 'visitor_registration', summary: '', status: 'open',
+        requestedAt: new Date(), requestedBy: 'source-user', promiseHours: 24, dueAt: due,
+        ownerRef: 'care-revoked-owner', assignedAt: new Date(), assignedBy: 'care-revoked-owner',
+        resolvedAt: null, resolvedBy: '', resolutionCode: '', resolutionNote: '',
+      })
+      await setDoc(doc(db, 'organizations/org-a/products/raiz_e_mesa/followups/first-contact-care-followup-revoked'), {
+        organizationId: 'org-a', congregationId: 'unit-a', personId: 'person-followup-revoked',
+        careRequestId: 'care-followup-revoked', kind: 'first_contact', status: 'pending',
+        ownerRef: 'care-revoked-owner', dueAt: due, createdAt: new Date(), createdBy: 'care-revoked-owner',
+        completedAt: null, completedBy: '', outcomeCode: '', nextActionCode: '',
+      })
+    })
+
+    const db = environment.authenticatedContext('care-revoked-owner').firestore()
+    const followupRef = doc(db, 'organizations/org-a/products/raiz_e_mesa/followups/first-contact-care-followup-revoked')
+    const careRef = doc(db, 'organizations/org-a/products/raiz_e_mesa/careRequests/care-followup-revoked')
+    const complete = writeBatch(db)
+    complete.update(followupRef, {
+      status: 'completed', completedAt: serverTimestamp(), completedBy: 'care-revoked-owner',
+      outcomeCode: 'consent_revoked', nextActionCode: 'none',
+    })
+    complete.update(careRef, {
+      status: 'resolved', resolvedAt: serverTimestamp(), resolvedBy: 'care-revoked-owner',
+      resolutionCode: 'consent_revoked', resolutionNote: '',
+    })
+    complete.set(
+      doc(db, 'organizations/org-a/products/raiz_e_mesa/facts/followup-completed-first-contact-care-followup-revoked'),
+      {
+        eventId: 'followup-completed-first-contact-care-followup-revoked',
+        eventType: 'FOLLOWUP_COMPLETED', occurredAt: serverTimestamp(), recordedAt: serverTimestamp(),
+        organizationId: 'org-a', actorId: 'care-revoked-owner', subjectRef: 'person:person-followup-revoked',
+        sourceApp: 'nestjourney', scope: 'congregation:unit-a',
+        evidenceRef: 'followup:first-contact-care-followup-revoked', sensitivity: 'confidential', version: 1,
+        payload: {
+          followupId: 'first-contact-care-followup-revoked', careRequestId: 'care-followup-revoked',
+          personId: 'person-followup-revoked', outcomeCode: 'consent_revoked', nextActionCode: 'none',
+        },
+      },
+    )
+    complete.set(
+      doc(db, 'organizations/org-a/products/raiz_e_mesa/facts/care-resolved-care-followup-revoked'),
+      careFact('care-resolved-care-followup-revoked', 'CARE_RESOLVED', 'care-revoked-owner', {
+        careRequestId: 'care-followup-revoked', personId: 'person-followup-revoked',
+        careType: 'first_contact', resolutionCode: 'consent_revoked',
+      }),
+    )
+    await assertSucceeds(complete.commit())
   })
 
 })

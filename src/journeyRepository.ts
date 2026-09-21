@@ -5,7 +5,7 @@ import {
 import { db } from './firebase'
 import { journeyCollectionPath } from './productIdentity'
 import { planFollowupOutcome, type FollowupNextActionCode, type FollowupOutcomeCode } from './followup'
-import type { CarePromise, PresenceCheck, PresenceSession, PresenceSource, PresenceVerificationState } from './intelligence'
+import { calculatePresenceCoverage, canUseAbsenceEvidence, type CarePromise, type PresenceCheck, type PresenceSession, type PresenceSource, type PresenceVerificationState } from './intelligence'
 
 const HUB_API_BASE = (import.meta.env.VITE_MILLIONSNEST_URL || 'https://www.millionsnest.com').replace(/\/$/, '')
 const SYSTEM_ROLES = new Set(['ceo', 'global_admin', 'ecosystem_owner', 'founder'])
@@ -192,6 +192,8 @@ export interface PresenceSessionRecord extends PresenceSession {
   status: 'open' | 'closed'
   createdBy: string
   closedBy?: string
+  verifiedCountAtClose?: number
+  absenceEvidenceEligible?: boolean
 }
 
 export interface MesaParticipationRecord {
@@ -245,10 +247,13 @@ export type CareType =
   | 'absence_check'
   | 'operational_followup'
 
+export type CareSource = 'manual' | 'visitor_registration' | 'presence_absence'
+
 export type CareResolutionCode =
   | 'contact_completed'
   | 'pastoral_handoff'
   | 'declined_contact'
+  | 'consent_revoked'
   | 'invalid_contact'
   | 'closed_no_response'
   | 'other_resolved'
@@ -259,7 +264,9 @@ export interface CareRequestRecord {
   congregationId: string
   personId: string
   careType: CareType
-  source: 'manual' | 'visitor_registration'
+  source: CareSource
+  sourcePresenceSessionId?: string
+  sourcePresenceCheckId?: string
   summary?: string
   status: 'open' | 'resolved'
   requestedAt: string
@@ -1490,6 +1497,8 @@ export async function listPresenceSessions(organizationId: string, congregationI
       status,
       createdBy: asString(data.createdBy),
       closedBy: asString(data.closedBy) || undefined,
+      verifiedCountAtClose: typeof data.verifiedCountAtClose === 'number' ? data.verifiedCountAtClose : undefined,
+      absenceEvidenceEligible: typeof data.absenceEvidenceEligible === 'boolean' ? data.absenceEvidenceEligible : undefined,
     }
   }).sort((a, b) => Date.parse(b.openedAt) - Date.parse(a.openedAt))
 }
@@ -1787,11 +1796,23 @@ export async function recordPresenceCheck(input: {
   return checkRef.id
 }
 
-export async function closePresenceSession(organizationId: string, sessionId: string, actorId: string) {
+export async function closePresenceSession(
+  organizationId: string,
+  session: PresenceSessionRecord,
+  checks: PresenceCheck[],
+  actorId: string,
+) {
   const firestore = requireDb()
-  const ref = doc(firestore, `${journeyCollectionPath(organizationId, 'presenceSessions')}/${sessionId}`)
+  const ref = doc(firestore, `${journeyCollectionPath(organizationId, 'presenceSessions')}/${session.id}`)
+  const coverage = calculatePresenceCoverage(session, checks)
   const batch = writeBatch(firestore)
-  batch.update(ref, { status: 'closed', closedAt: serverTimestamp(), closedBy: actorId })
+  batch.update(ref, {
+    status: 'closed',
+    closedAt: serverTimestamp(),
+    closedBy: actorId,
+    verifiedCountAtClose: coverage.verified,
+    absenceEvidenceEligible: coverage.meetsMinimum,
+  })
   await batch.commit()
 }
 
@@ -1882,7 +1903,10 @@ export async function listCareRequests(organizationId: string, congregationId: s
     const resolutionCode = asString(data.resolutionCode)
     return {
       id: item.id, organizationId, congregationId, personId: asString(data.personId), careType: data.careType as CareType,
-      source: data.source === 'visitor_registration' ? 'visitor_registration' : 'manual', summary: asString(data.summary) || undefined,
+      source: data.source === 'visitor_registration' ? 'visitor_registration' : data.source === 'presence_absence' ? 'presence_absence' : 'manual',
+      sourcePresenceSessionId: asString(data.sourcePresenceSessionId) || undefined,
+      sourcePresenceCheckId: asString(data.sourcePresenceCheckId) || undefined,
+      summary: asString(data.summary) || undefined,
       status: data.status === 'resolved' ? 'resolved' : 'open', requestedAt: toIso(data.requestedAt), requestedBy: asString(data.requestedBy),
       promiseHours: typeof data.promiseHours === 'number' ? data.promiseHours : 48, dueAt: toIso(data.dueAt),
       ownerRef: asString(data.ownerRef) || undefined, assignedAt: data.assignedAt ? toIso(data.assignedAt) : undefined,
@@ -2093,6 +2117,123 @@ export async function createCareRequest(input: {
   })
   await batch.commit()
   return requestRef.id
+}
+
+export function absenceCareRequestId(sessionId: string, personId: string) {
+  return `absence-${sessionId}-${personId}`
+}
+
+export async function listAbsenceCareRoutePersonIds(
+  organizationId: string,
+  congregationId: string,
+  sessionId: string,
+): Promise<string[]> {
+  const firestore = requireDb()
+  const snapshot = await getDocs(query(
+    collection(firestore, journeyCollectionPath(organizationId, 'absenceCareRoutes')),
+    where('congregationId', '==', congregationId),
+    where('sessionId', '==', sessionId),
+  ))
+  return snapshot.docs
+    .map((item) => asString(item.data().personId))
+    .filter(Boolean)
+}
+
+export async function createAbsenceCareRequest(input: {
+  access: JourneyAccessContext
+  session: PresenceSessionRecord
+  person: PresencePerson
+  checks: PresenceCheck[]
+  promiseHours?: number
+}) {
+  if (!input.access.canManagePresence && !input.access.canManageCare) throw new Error('absence_care_forbidden')
+  if (
+    input.session.organizationId !== input.access.organizationId
+    || input.person.organizationId !== input.access.organizationId
+    || input.session.congregationId !== input.person.congregationId
+  ) throw new Error('absence_care_scope_mismatch')
+  if (
+    !input.access.broadJourneyAccess
+    && input.access.congregationIds.length > 0
+    && !input.access.congregationIds.includes(input.session.congregationId)
+  ) throw new Error('absence_care_scope_mismatch')
+  if (input.session.status !== 'closed' || !input.session.closedAt) throw new Error('absence_care_session_open')
+  if (!canUseAbsenceEvidence(input.session, input.checks)) throw new Error('absence_care_coverage_insufficient')
+  if (!input.person.consent || !String(input.person.phone ?? '').trim()) throw new Error('absence_care_contact_not_authorized')
+
+  const latest = latestChecksByPerson(input.checks).get(input.person.id)
+  if (
+    !latest
+    || latest.sessionId !== input.session.id
+    || latest.congregationId !== input.session.congregationId
+    || latest.state !== 'absent_confirmed'
+  ) throw new Error('absence_care_evidence_missing')
+
+  const firestore = requireDb()
+  const requestId = absenceCareRequestId(input.session.id, input.person.id)
+  const requestRef = doc(firestore, `${journeyCollectionPath(input.access.organizationId, 'careRequests')}/${requestId}`)
+  const routeRef = doc(firestore, `${journeyCollectionPath(input.access.organizationId, 'absenceCareRoutes')}/${requestId}`)
+  const requestedFactRef = doc(firestore, `${journeyCollectionPath(input.access.organizationId, 'facts')}/care-requested-${requestId}`)
+  const promiseHours = Math.max(1, Math.min(48, Math.floor(input.promiseHours ?? 48)))
+  const batch = writeBatch(firestore)
+
+  batch.set(requestRef, {
+    organizationId: input.access.organizationId,
+    congregationId: input.session.congregationId,
+    personId: input.person.id,
+    careType: 'absence_check',
+    source: 'presence_absence',
+    sourcePresenceSessionId: input.session.id,
+    sourcePresenceCheckId: latest.id,
+    summary: '',
+    status: 'open',
+    requestedAt: serverTimestamp(),
+    requestedBy: input.access.userId,
+    promiseHours,
+    dueAt: Timestamp.fromMillis(Date.now() + promiseHours * 60 * 60 * 1000),
+    ownerRef: '',
+    assignedAt: null,
+    assignedBy: '',
+    resolvedAt: null,
+    resolvedBy: '',
+    resolutionCode: '',
+    resolutionNote: '',
+  })
+  batch.set(routeRef, {
+    organizationId: input.access.organizationId,
+    congregationId: input.session.congregationId,
+    sessionId: input.session.id,
+    personId: input.person.id,
+    careRequestId: requestId,
+    sourcePresenceCheckId: latest.id,
+    routedAt: serverTimestamp(),
+    routedBy: input.access.userId,
+  })
+  batch.set(requestedFactRef, {
+    eventId: requestedFactRef.id,
+    eventType: 'CARE_REQUESTED',
+    occurredAt: serverTimestamp(),
+    recordedAt: serverTimestamp(),
+    organizationId: input.access.organizationId,
+    actorId: input.access.userId,
+    subjectRef: `person:${input.person.id}`,
+    sourceApp: 'nestjourney',
+    scope: `congregation:${input.session.congregationId}`,
+    evidenceRef: `careRequest:${requestId}`,
+    sensitivity: 'confidential',
+    version: 1,
+    payload: {
+      careRequestId: requestId,
+      personId: input.person.id,
+      careType: 'absence_check',
+      source: 'presence_absence',
+      sessionId: input.session.id,
+      checkId: latest.id,
+    },
+  })
+
+  await batch.commit()
+  return requestId
 }
 
 export async function claimCareRequest(input: { organizationId: string; request: CareRequestRecord; actorId: string }) {

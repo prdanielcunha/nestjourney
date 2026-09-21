@@ -140,19 +140,29 @@ export default function FollowupRuntimePage() {
     } finally { setBusy(false) }
   }
 
-  async function complete(outcomeCode: FollowupOutcomeCode) {
-    if (!access || !resolving) return
-    const request = care.find((item) => item.id === resolving.careRequestId)
+  async function completeFollowup(item: JourneyFollowupRecord, outcomeCode: FollowupOutcomeCode) {
+    if (!access) return
+    const request = care.find((candidate) => candidate.id === item.careRequestId)
     if (!request) { setError(t.missingCare); return }
     setBusy(true); setError('')
     try {
-      await completeJourneyFollowup({ access, followup: resolving, request, outcomeCode })
+      await completeJourneyFollowup({ access, followup: item, request, outcomeCode })
       setResolving(null)
       await refresh(access, congregationId)
     } catch (cause) {
       console.error(cause)
       setError(t.error)
     } finally { setBusy(false) }
+  }
+
+  async function complete(outcomeCode: FollowupOutcomeCode) {
+    if (!resolving) return
+    await completeFollowup(resolving, outcomeCode)
+  }
+
+  async function closeRevoked(item: JourneyFollowupRecord) {
+    if (!window.confirm(t.revokedHint)) return
+    await completeFollowup(item, 'consent_revoked')
   }
 
   const readyEmpty=emptyGuidance(locale,'followup_ready_none')
@@ -195,12 +205,16 @@ export default function FollowupRuntimePage() {
       <div className="followup-grid">
         {pending.map((item)=>{
           const person=peopleById.get(item.personId)
+          const mine=item.ownerRef===access.userId
+          const contactAllowed=Boolean(person?.consent&&person.phone)
           return <article className="followup-panel followup-card" key={item.id}>
             <div className="followup-card-head"><span className="followup-icon warning"><Clock3 size={18}/></span><div><h3>{person?.name??t.unknownPerson}</h3><p>{t.due}: {formatDate(item.dueAt,locale)}</p></div><span className="followup-badge attention">{t.pending}</span></div>
-            <div className="followup-facts"><span><small>{t.contact}</small><b>{person?.consent&&person.phone?person.phone:t.contactUnavailable}</b></span><span><small>{t.source}</small><b>{t.firstContact}</b></span></div>
+            <div className="followup-facts"><span><small>{t.contact}</small><b>{contactAllowed?person?.phone:t.contactUnavailable}</b></span><span><small>{t.source}</small><b>{t.firstContact}</b></span></div>
+            {!contactAllowed?<p className="followup-revoked-note"><ShieldCheck size={15}/>{t.revokedHint}</p>:null}
             <div className="followup-card-actions">
-              <a className="followup-button" aria-disabled={item.ownerRef!==access.userId} href={item.ownerRef===access.userId?buildConnectFollowupLaunchUrl(item.id):undefined} onClick={(event)=>{if(item.ownerRef!==access.userId)event.preventDefault()}}><MessageCircle size={16}/>{t.openConnect}</a>
-              <button className="followup-button primary" disabled={busy||item.ownerRef!==access.userId} onClick={()=>setResolving(item)}><CheckCircle2 size={16}/>{t.recordOutcome}</button>
+              {contactAllowed?<a className="followup-button" aria-disabled={!mine} href={mine?buildConnectFollowupLaunchUrl(item.id):undefined} onClick={(event)=>{if(!mine)event.preventDefault()}}><MessageCircle size={16}/>{t.openConnect}</a>:null}
+              {contactAllowed?<button className="followup-button primary" disabled={busy||!mine} onClick={()=>setResolving(item)}><CheckCircle2 size={16}/>{t.recordOutcome}</button>:null}
+              {!contactAllowed?<button className="followup-button primary span-all" disabled={busy||!mine} onClick={()=>void closeRevoked(item)}><ShieldCheck size={16}/>{t.closeRevoked}</button>:null}
             </div>
           </article>
         })}
@@ -235,7 +249,7 @@ function OutcomeModal({locale,busy,close,save}:{locale:AppLocale;busy:boolean;cl
   const [outcome,setOutcome]=useState<FollowupOutcomeCode>('responded')
   return <div className="followup-modal-backdrop" onMouseDown={close}><section className="followup-panel followup-modal" role="dialog" aria-modal="true" aria-labelledby="followup-outcome-title" onMouseDown={(event)=>event.stopPropagation()}>
     <div className="followup-modal-head"><div><span className="followup-kicker">Outcome</span><h2 id="followup-outcome-title">{t.recordOutcome}</h2></div><button className="followup-button" onClick={close} aria-label={t.cancel}><X size={17}/></button></div>
-    <label className="followup-field"><span>{t.outcome}</span><select value={outcome} onChange={(event)=>setOutcome(event.target.value as FollowupOutcomeCode)}>{(Object.keys(t.outcomes) as FollowupOutcomeCode[]).map((id)=><option key={id} value={id}>{t.outcomes[id]}</option>)}</select></label>
+    <label className="followup-field"><span>{t.outcome}</span><select value={outcome} onChange={(event)=>setOutcome(event.target.value as FollowupOutcomeCode)}>{(Object.keys(t.outcomes) as FollowupOutcomeCode[]).filter((id)=>id!=='consent_revoked').map((id)=><option key={id} value={id}>{t.outcomes[id]}</option>)}</select></label>
     <p className="followup-modal-note">{t.outcomeRule}</p>
     <div className="followup-modal-actions"><button className="followup-button" onClick={close}>{t.cancel}</button><button className="followup-button primary" disabled={busy} onClick={()=>void save(outcome)}>{t.complete}</button></div>
   </section></div>

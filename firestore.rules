@@ -234,11 +234,18 @@ service cloud.firestore {
           || permissions.get('canManagePeople', false) == true
         )
       );
+      let hasPresenceCapability = privileged || (
+        active && (
+          roleName in ['owner', 'admin', 'pastor', 'coordinator', 'presence_host']
+          || permissions.get('canManagePresence', false) == true
+        )
+      );
       return hasProductAccess(orgId)
         && inScope
         && (
           (source == 'manual' && hasCareCapability)
           || (source == 'visitor_registration' && hasPeopleCapability)
+          || (source == 'presence_absence' && (hasPresenceCapability || hasCareCapability))
         );
     }
     function tenantCreate(orgId) {
@@ -637,7 +644,44 @@ service cloud.firestore {
         && get(sessionPath).data.get('status', '') == 'open';
     }
 
-    function validCareRequestCreate(orgId) {
+    function validAbsenceCareCreate(orgId, careRequestId, congregationId, personId) {
+      let sessionId = request.resource.data.get('sourcePresenceSessionId', '');
+      let checkId = request.resource.data.get('sourcePresenceCheckId', '');
+      let sessionPath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/presenceSessions/$(sessionId);
+      let checkPath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/presenceChecks/$(checkId);
+      let personPath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/people/$(personId);
+      let sessionData = get(sessionPath).data;
+      let checkData = get(checkPath).data;
+      let personData = get(personPath).data;
+      return careRequestId == 'absence-' + sessionId + '-' + personId
+        && request.resource.data.get('careType', '') == 'absence_check'
+        && request.resource.data.get('summary', '') == ''
+        && request.resource.data.get('promiseHours', 0) <= 48
+        && request.resource.data.get('dueAt', null) <= request.time + duration.value(48, 'h')
+        && sessionId is string && sessionId.size() > 0
+        && checkId is string && checkId.size() > 0
+        && sessionData.get('organizationId', '') == orgId
+        && sessionData.get('congregationId', '') == congregationId
+        && sessionData.get('status', '') == 'closed'
+        && sessionData.get('closedAt', null) is timestamp
+        && sessionData.get('absenceEvidenceEligible', false) == true
+        && sessionData.get('verifiedCountAtClose', -1) is number
+        && sessionData.get('verifiedCountAtClose', -1) >= 0
+        && checkData.get('organizationId', '') == orgId
+        && checkData.get('congregationId', '') == congregationId
+        && checkData.get('sessionId', '') == sessionId
+        && checkData.get('personId', '') == personId
+        && checkData.get('state', '') == 'absent_confirmed'
+        && checkData.get('recordedAt', null) is timestamp
+        && checkData.get('recordedAt', null) <= sessionData.get('closedAt', null)
+        && personData.get('organizationId', '') == orgId
+        && personData.get('congregationId', '') == congregationId
+        && personData.get('consent', false) == true
+        && personData.get('phone', '') is string
+        && personData.get('phone', '').size() > 0;
+    }
+
+    function validCareRequestCreate(orgId, careRequestId) {
       let congregationId = request.resource.data.get('congregationId', '');
       let personId = request.resource.data.get('personId', '');
       let source = request.resource.data.get('source', '');
@@ -647,7 +691,7 @@ service cloud.firestore {
         && congregationId is string
         && personId is string
         && request.resource.data.get('careType', '') in ['first_contact', 'prayer', 'pastoral_contact', 'group_interest', 'absence_check', 'operational_followup']
-        && source in ['manual', 'visitor_registration']
+        && source in ['manual', 'visitor_registration', 'presence_absence']
         && request.resource.data.get('status', '') == 'open'
         && request.resource.data.get('requestedAt', null) == request.time
         && request.resource.data.get('requestedBy', '') == request.auth.uid
@@ -662,16 +706,55 @@ service cloud.firestore {
         && summary.size() <= 160
         && (
           (source == 'manual'
+            && request.resource.data.get('sourcePresenceSessionId', '') == ''
+            && request.resource.data.get('sourcePresenceCheckId', '') == ''
             && ownerRef == request.auth.uid
             && request.resource.data.get('assignedAt', null) == request.time
             && request.resource.data.get('assignedBy', '') == request.auth.uid)
           ||
           (source == 'visitor_registration'
+            && request.resource.data.get('sourcePresenceSessionId', '') == ''
+            && request.resource.data.get('sourcePresenceCheckId', '') == ''
             && ownerRef == ''
             && request.resource.data.get('assignedAt', null) == null
             && request.resource.data.get('assignedBy', '') == '')
+          ||
+          (source == 'presence_absence'
+            && ownerRef == ''
+            && request.resource.data.get('assignedAt', null) == null
+            && request.resource.data.get('assignedBy', '') == ''
+            && validAbsenceCareCreate(orgId, careRequestId, congregationId, personId))
         );
     }
+    function validAbsenceCareRouteCreate(orgId, routeId) {
+      let congregationId = request.resource.data.get('congregationId', '');
+      let sessionId = request.resource.data.get('sessionId', '');
+      let personId = request.resource.data.get('personId', '');
+      let careRequestId = request.resource.data.get('careRequestId', '');
+      let checkId = request.resource.data.get('sourcePresenceCheckId', '');
+      let carePath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/careRequests/$(careRequestId);
+      let careData = getAfter(carePath).data;
+      return request.resource.data.keys().hasOnly([
+          'organizationId', 'congregationId', 'sessionId', 'personId',
+          'careRequestId', 'sourcePresenceCheckId', 'routedAt', 'routedBy'
+        ])
+        && tenantCreate(orgId)
+        && routeId == 'absence-' + sessionId + '-' + personId
+        && careRequestId == routeId
+        && request.resource.data.get('routedAt', null) == request.time
+        && request.resource.data.get('routedBy', '') == request.auth.uid
+        && canCreateCareInScope(orgId, congregationId, 'presence_absence')
+        && careData.get('organizationId', '') == orgId
+        && careData.get('congregationId', '') == congregationId
+        && careData.get('personId', '') == personId
+        && careData.get('careType', '') == 'absence_check'
+        && careData.get('source', '') == 'presence_absence'
+        && careData.get('sourcePresenceSessionId', '') == sessionId
+        && careData.get('sourcePresenceCheckId', '') == checkId
+        && careData.get('requestedAt', null) == request.time
+        && careData.get('requestedBy', '') == request.auth.uid;
+    }
+
     function validCareClaim(orgId) {
       return resource.data.get('status', '') == 'open'
         && resource.data.get('ownerRef', '') == ''
@@ -682,6 +765,29 @@ service cloud.firestore {
         && request.resource.data.get('assignedAt', null) == request.time
         && request.resource.data.get('assignedBy', '') == request.auth.uid;
     }
+    function validRevokedCareResolve(orgId) {
+      let personId = resource.data.get('personId', '');
+      let personPath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/people/$(personId);
+      let personData = get(personPath).data;
+      return resource.data.get('status', '') == 'open'
+        && resource.data.get('careType', '') in ['first_contact', 'absence_check']
+        && tenantUnchanged(orgId)
+        && congregationUnchanged()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'status', 'resolvedAt', 'resolvedBy', 'resolutionCode', 'resolutionNote'
+        ])
+        && request.resource.data.get('status', '') == 'resolved'
+        && request.resource.data.get('resolvedAt', null) == request.time
+        && request.resource.data.get('resolvedBy', '') == request.auth.uid
+        && request.resource.data.get('resolutionCode', '') == 'consent_revoked'
+        && request.resource.data.get('resolutionNote', '') == ''
+        && personData.get('congregationId', '') == resource.data.get('congregationId', '')
+        && (
+          personData.get('consent', false) != true
+          || personData.get('phone', '').size() == 0
+        );
+    }
+
     function validCareResolve(orgId) {
       let note = request.resource.data.get('resolutionNote', '');
       return resource.data.get('status', '') == 'open'
@@ -696,6 +802,7 @@ service cloud.firestore {
         && note is string
         && note.size() <= 160;
     }
+
     function validFollowupCreate(orgId, followupId) {
       let careRequestId = request.resource.data.get('careRequestId', '');
       let personId = request.resource.data.get('personId', '');
@@ -738,6 +845,7 @@ service cloud.firestore {
         || (outcomeCode == 'prayer_requested' && nextActionCode == 'care_prayer')
         || (outcomeCode == 'group_interest' && nextActionCode == 'group_entry')
         || (outcomeCode == 'declined_contact' && nextActionCode == 'none')
+        || (outcomeCode == 'consent_revoked' && nextActionCode == 'none')
         || (outcomeCode == 'invalid_contact' && nextActionCode == 'data_correction')
         || (outcomeCode == 'no_response' && nextActionCode == 'manual_review');
     }
@@ -746,6 +854,7 @@ service cloud.firestore {
       return
         (outcomeCode in ['responded', 'prayer_requested', 'group_interest'] && resolutionCode == 'contact_completed')
         || (outcomeCode == 'declined_contact' && resolutionCode == 'declined_contact')
+        || (outcomeCode == 'consent_revoked' && resolutionCode == 'consent_revoked')
         || (outcomeCode == 'invalid_contact' && resolutionCode == 'invalid_contact')
         || (outcomeCode == 'no_response' && resolutionCode == 'closed_no_response');
     }
@@ -1212,6 +1321,13 @@ service cloud.firestore {
             && getAfter(carePath).data.get('personId', '') == personId
             && getAfter(carePath).data.get('careType', '') == payload.get('careType', '')
             && getAfter(carePath).data.get('source', '') == payload.get('source', '')
+            && (
+              payload.get('source', '') != 'presence_absence'
+              || (
+                payload.get('sessionId', '') == getAfter(carePath).data.get('sourcePresenceSessionId', '')
+                && payload.get('checkId', '') == getAfter(carePath).data.get('sourcePresenceCheckId', '')
+              )
+            )
             && request.resource.data.get('subjectRef', '') == 'person:' + personId
             && request.resource.data.get('evidenceRef', '') == 'careRequest:' + careRequestId
             && request.resource.data.get('scope', '') == 'congregation:' + getAfter(carePath).data.get('congregationId', ''))
@@ -1287,10 +1403,21 @@ service cloud.firestore {
             && tenantUnchanged(orgId)
             && congregationUnchanged()
             && canAccessCongregation(orgId, resource.data.get('congregationId', ''))
-            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'closedAt', 'closedBy'])
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'status', 'closedAt', 'closedBy', 'verifiedCountAtClose', 'absenceEvidenceEligible'
+            ])
             && request.resource.data.get('status', '') == 'closed'
             && request.resource.data.get('closedAt', null) == request.time
-            && request.resource.data.get('closedBy', '') == request.auth.uid;
+            && request.resource.data.get('closedBy', '') == request.auth.uid
+            && request.resource.data.get('verifiedCountAtClose', -1) is number
+            && request.resource.data.get('verifiedCountAtClose', -1) >= 0
+            && request.resource.data.get('verifiedCountAtClose', -1) <= resource.data.get('expectedPeopleCount', 0)
+            && request.resource.data.get('absenceEvidenceEligible', false) is bool
+            && request.resource.data.get('absenceEvidenceEligible', false) == (
+              resource.data.get('expectedPeopleCount', 0) > 0
+              && request.resource.data.get('verifiedCountAtClose', 0) * 100
+                >= resource.data.get('expectedPeopleCount', 0) * resource.data.get('minimumCoveragePercent', 90)
+            );
           allow delete: if false;
         }
         match /presenceChecks/{checkId} {
@@ -1329,11 +1456,21 @@ service cloud.firestore {
               request.resource.data.get('congregationId', ''),
               request.resource.data.get('source', '')
             )
-            && validCareRequestCreate(orgId);
+            && validCareRequestCreate(orgId, careRequestId);
           allow update: if canManageCare(orgId)
             && canAccessCongregation(orgId, resource.data.get('congregationId', ''))
-            && (validCareClaim(orgId) || validCareResolve(orgId));
+            && (
+              request.resource.data.get('resolutionCode', '') == 'consent_revoked'
+                ? validRevokedCareResolve(orgId)
+                : (validCareClaim(orgId) || validCareResolve(orgId))
+            );
           allow delete: if false;
+        }
+        match /absenceCareRoutes/{routeId} {
+          allow read: if canAccessCongregation(orgId, resource.data.get('congregationId', ''))
+            && (canManagePresence(orgId) || canManageCare(orgId));
+          allow create: if validAbsenceCareRouteCreate(orgId, routeId);
+          allow update, delete: if false;
         }
         match /followups/{followupId} {
           allow read: if canManageCare(orgId)

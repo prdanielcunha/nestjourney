@@ -64,18 +64,125 @@ jobs:
         shell: bash
         run: |
           set -uo pipefail
-          for attempt in 1 2 3 4 5; do
-            echo "Firestore Rules deploy attempt $attempt/5"
+
+          # Prefer the supported Firebase CLI. The Rules service has returned
+          # transient 503/409 responses in production, so retry before using
+          # the documented Rules REST management API as a fail-closed fallback.
+          for attempt in 1 2 3; do
+            echo "Firestore Rules CLI attempt $attempt/3"
             if npx -y firebase-tools@15.30.2 deploy --only firestore:rules --project millionsnest --non-interactive; then
-              echo "FIRESTORE_RULES_DEPLOY_OK"
+              echo "FIRESTORE_RULES_DEPLOY_OK=cli"
               exit 0
-            fi
-            if [ "$attempt" -eq 5 ]; then
-              echo "FIRESTORE_RULES_DEPLOY_FAILED_AFTER_RETRIES" >&2
-              exit 1
             fi
             sleep $((attempt * 10))
           done
+
+          echo "CLI retries exhausted; trying Firebase Rules REST management API."
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          payload = {
+              "source": {
+                  "files": [{
+                      "name": "firestore.rules",
+                      "content": Path("firestore.rules").read_text(encoding="utf-8"),
+                  }]
+              }
+          }
+          Path("/tmp/ruleset-request.json").write_text(json.dumps(payload), encoding="utf-8")
+          PY
+
+          RULESET_NAME=""
+          for attempt in 1 2 3 4 5; do
+            TOKEN="$(gcloud auth print-access-token)"
+            HTTP_CODE="$(curl --silent --show-error --output /tmp/ruleset-response.json --write-out '%{http_code}' \
+              --request POST \
+              --header "Authorization: Bearer $TOKEN" \
+              --header "Content-Type: application/json" \
+              --data-binary @/tmp/ruleset-request.json \
+              "https://firebaserules.googleapis.com/v1/projects/millionsnest/rulesets" || true)"
+            if [[ "$HTTP_CODE" =~ ^2 ]]; then
+              RULESET_NAME="$(python - <<'PY'
+          import json
+          print(json.load(open("/tmp/ruleset-response.json")).get("name", ""))
+          PY
+              )"
+              if [ -n "$RULESET_NAME" ]; then
+                break
+              fi
+            fi
+            echo "Rules REST ruleset attempt $attempt/5 returned HTTP $HTTP_CODE" >&2
+            sleep $((attempt * 10))
+          done
+
+          if [ -z "$RULESET_NAME" ]; then
+            echo "FIRESTORE_RULESET_CREATE_FAILED" >&2
+            cat /tmp/ruleset-response.json >&2 || true
+            exit 1
+          fi
+
+          RULESET_NAME="$RULESET_NAME" python - <<'PY'
+          import json, os
+          from pathlib import Path
+          name = "projects/millionsnest/releases/cloud.firestore"
+          payload = {
+              "release": {
+                  "name": name,
+                  "rulesetName": os.environ["RULESET_NAME"],
+              },
+              "updateMask": "rulesetName",
+          }
+          Path("/tmp/release-request.json").write_text(json.dumps(payload), encoding="utf-8")
+          PY
+
+          RELEASE_OK=""
+          for attempt in 1 2 3 4 5; do
+            TOKEN="$(gcloud auth print-access-token)"
+            HTTP_CODE="$(curl --silent --show-error --output /tmp/release-response.json --write-out '%{http_code}' \
+              --request PATCH \
+              --header "Authorization: Bearer $TOKEN" \
+              --header "Content-Type: application/json" \
+              --data-binary @/tmp/release-request.json \
+              "https://firebaserules.googleapis.com/v1/projects/millionsnest/releases/cloud.firestore" || true)"
+            if [[ "$HTTP_CODE" =~ ^2 ]]; then
+              RELEASE_OK="yes"
+              break
+            fi
+            echo "Rules REST release attempt $attempt/5 returned HTTP $HTTP_CODE" >&2
+            sleep $((attempt * 10))
+          done
+
+          if [ "$RELEASE_OK" != "yes" ]; then
+            echo "FIRESTORE_RULES_RELEASE_FAILED" >&2
+            cat /tmp/release-response.json >&2 || true
+            exit 1
+          fi
+
+          VERIFY_OK=""
+          for attempt in 1 2 3 4 5; do
+            TOKEN="$(gcloud auth print-access-token)"
+            HTTP_CODE="$(curl --silent --show-error --output /tmp/release-verify.json --write-out '%{http_code}' \
+              --header "Authorization: Bearer $TOKEN" \
+              "https://firebaserules.googleapis.com/v1/projects/millionsnest/releases/cloud.firestore" || true)"
+            if [[ "$HTTP_CODE" =~ ^2 ]] && RULESET_NAME="$RULESET_NAME" python - <<'PY'
+          import json, os, sys
+          data = json.load(open("/tmp/release-verify.json"))
+          sys.exit(0 if data.get("rulesetName") == os.environ["RULESET_NAME"] else 1)
+          PY
+            then
+              VERIFY_OK="yes"
+              break
+            fi
+            echo "Rules REST verify attempt $attempt/5 returned HTTP $HTTP_CODE" >&2
+            sleep $((attempt * 10))
+          done
+
+          if [ "$VERIFY_OK" != "yes" ]; then
+            echo "FIRESTORE_RULES_VERIFY_FAILED" >&2
+            exit 1
+          fi
+
+          echo "FIRESTORE_RULES_DEPLOY_OK=rest"
       - name: Deploy Hosting
         run: npx -y firebase-tools@15.30.2 deploy --only hosting:nestjourney --project millionsnest --non-interactive
       - name: Smoke test Firebase Hosting

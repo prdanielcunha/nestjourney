@@ -5,10 +5,12 @@ import { evaluateCarePromise } from './intelligence'
 import {
   careRequestToPromise,
   claimCareRequest,
+  completeJourneyFollowup,
   createCareRequest,
   getActiveJourneyOrganizationId,
   listCareRequests,
   listJourneyCongregations,
+  listJourneyFollowups,
   listPresencePeople,
   loadJourneyAccess,
   resolveCareRequest,
@@ -17,6 +19,7 @@ import {
   type CareType,
   type JourneyAccessContext,
   type JourneyCongregation,
+  type JourneyFollowupRecord,
   type PresencePerson,
 } from './journeyRepository'
 import { careIntegrityCopy, getInitialLocale, localeLabels, persistLocale, type AppLocale } from './i18n'
@@ -60,6 +63,7 @@ export default function CareIntegrityPage() {
   const [congregationId, setCongregationId] = useState('')
   const [people, setPeople] = useState<PresencePerson[]>([])
   const [requests, setRequests] = useState<CareRequestRecord[]>([])
+  const [followups, setFollowups] = useState<JourneyFollowupRecord[]>([])
   const [tab, setTab] = useState<CareTab>('attention')
   const [query, setQuery] = useState('')
   const [loading, setLoading] = useState(true)
@@ -79,6 +83,7 @@ export default function CareIntegrityPage() {
     request,
     evaluation: evaluateCarePromise(careRequestToPromise(request)),
   })), [lensRequests])
+  const followupByCare = useMemo(() => new Map(followups.map((item) => [item.careRequestId, item])), [followups])
 
   const debtCount = evaluated.filter((item) => item.evaluation.state === 'debt').length
   const dueSoonCount = evaluated.filter((item) => item.evaluation.state === 'due_soon').length
@@ -102,13 +107,15 @@ export default function CareIntegrityPage() {
     })
   }, [evaluated, locale, personById, query, tab])
 
-  const refreshScope = useCallback(async (orgId: string, unitId: string) => {
-    const [nextPeople, nextRequests] = await Promise.all([
-      listPresencePeople(orgId, unitId),
-      listCareRequests(orgId, unitId),
+  const refreshScope = useCallback(async (nextAccess: JourneyAccessContext, unitId: string) => {
+    const [nextPeople, nextRequests, nextFollowups] = await Promise.all([
+      listPresencePeople(nextAccess.organizationId, unitId),
+      listCareRequests(nextAccess.organizationId, unitId),
+      listJourneyFollowups(nextAccess, unitId),
     ])
     setPeople(nextPeople)
     setRequests(nextRequests)
+    setFollowups(nextFollowups)
   }, [])
 
   const bootstrap = useCallback(async () => {
@@ -125,7 +132,7 @@ export default function CareIntegrityPage() {
       setCongregations(nextCongregations)
       const unitId = nextCongregations[0]?.id ?? ''
       setCongregationId(unitId)
-      if (unitId) await refreshScope(organizationId, unitId)
+      if (unitId) await refreshScope(nextAccess, unitId)
     } catch (cause) {
       console.error('Care Integrity bootstrap failed', cause)
       setError(t.error)
@@ -141,7 +148,7 @@ export default function CareIntegrityPage() {
     setCongregationId(unitId)
     setBusy(true)
     setError('')
-    try { await refreshScope(access.organizationId, unitId) }
+    try { await refreshScope(access, unitId) }
     catch (cause) { console.error(cause); setError(t.error) }
     finally { setBusy(false) }
   }
@@ -152,9 +159,38 @@ export default function CareIntegrityPage() {
     setError('')
     try {
       await claimCareRequest({ organizationId: access.organizationId, request, actorId: access.userId })
-      await refreshScope(access.organizationId, congregationId)
+      await refreshScope(access, congregationId)
     } catch (cause) { console.error(cause); setError(t.error) }
     finally { setBusy(false) }
+  }
+
+  async function closeRevokedContact(request: CareRequestRecord) {
+    if (!access || request.status !== 'open') return
+    const followup = followupByCare.get(request.id)
+    const canClose = !request.ownerRef || request.ownerRef === access.userId || access.broadJourneyAccess
+    if (!canClose || !window.confirm(t.confirmCloseRevoked)) return
+    setBusy(true)
+    setError('')
+    try {
+      if (followup?.status === 'pending') {
+        if (followup.ownerRef !== access.userId) throw new Error('followup_owner_required')
+        await completeJourneyFollowup({ access, followup, request, outcomeCode: 'consent_revoked' })
+      } else {
+        await resolveCareRequest({
+          organizationId: access.organizationId,
+          request,
+          actorId: access.userId,
+          resolutionCode: 'consent_revoked',
+          resolutionNote: '',
+        })
+      }
+      await refreshScope(access, congregationId)
+    } catch (cause) {
+      console.error(cause)
+      setError(t.error)
+    } finally {
+      setBusy(false)
+    }
   }
 
   const emptyKey = tab==='attention'?'care_attention_clear':tab==='open'?'care_open_none':'care_resolved_none'
@@ -203,26 +239,35 @@ export default function CareIntegrityPage() {
     <section className="care-list">
       {visible.map(({ request, evaluation }) => {
         const person = personById.get(request.personId)
+        const contactRequired = request.careType === 'first_contact' || request.careType === 'absence_check'
+        const contactAllowed = Boolean(person?.consent && person?.phone)
+        const contactBlocked = request.status === 'open' && contactRequired && !contactAllowed
         const canResolve = Boolean(request.ownerRef === access.userId || access.broadJourneyAccess)
+        const canCloseRevoked = Boolean(!request.ownerRef || request.ownerRef === access.userId || access.broadJourneyAccess)
+        const sourceLabel = request.source === 'visitor_registration' ? t.fromVisitor : request.source === 'presence_absence' ? t.fromAbsence : t.manual
         const stateLabel = evaluation.state === 'debt' ? t.debt : evaluation.state === 'due_soon' ? t.dueSoon : evaluation.state === 'resolved' ? t.resolved : t.open
         return <article className="care-panel care-card" key={request.id}>
           <div className="care-person"><span className="care-avatar">{initials(person?.name ?? '?')}</span><div><strong>{person?.name ?? t.unknownPerson}</strong><small>{t.careTypes[request.careType]}</small></div><span className={`care-state ${evaluation.state}`}>{stateLabel}</span></div>
           <div className="care-card-grid">
             <div><span>{t.promise}</span><strong>{new Date(request.dueAt).toLocaleString(locale)}</strong><small>{evaluation.state === 'debt' ? `${t.overdueBy} ${formatDistance(evaluation.overdueMs)}` : evaluation.state === 'due_soon' ? `${t.remaining} ${formatDistance(evaluation.remainingMs)}` : request.status === 'resolved' ? t.promiseResolved : `${request.promiseHours}h`}</small></div>
-            <div><span>{t.owner}</span><strong>{request.ownerRef ? (request.ownerRef === access.userId ? t.you : t.assigned) : t.unassigned}</strong><small>{request.source === 'visitor_registration' ? t.fromVisitor : t.manual}</small></div>
+            <div><span>{t.owner}</span><strong>{request.ownerRef ? (request.ownerRef === access.userId ? t.you : t.assigned) : t.unassigned}</strong><small>{sourceLabel}</small></div>
           </div>
           {request.summary ? <p className="care-summary">{request.summary}</p> : null}
-          {request.status === 'open' && request.careType === 'first_contact' && person?.consent ? <div className="care-suggested-message">
+          {contactBlocked ? <div className="care-contact-blocked"><AlertTriangle size={16}/><div><strong>{t.contactBlocked}</strong><p>{t.contactBlockedHint}</p></div></div> : null}
+          {request.status === 'open' && request.careType === 'first_contact' && contactAllowed ? <div className="care-suggested-message">
             <span><MessageSquareText size={15}/><strong>{suggestedMessageLabel(locale).title}</strong></span>
-            <p>{suggestedFirstContact(locale, person.name)}</p>
-            <div><small>{suggestedMessageLabel(locale).hint}</small><button className="care-copy-button" type="button" onClick={()=>void navigator.clipboard?.writeText(suggestedFirstContact(locale, person.name))}><Copy size={14}/>{suggestedMessageLabel(locale).copy}</button></div>
+            <p>{suggestedFirstContact(locale, person?.name ?? t.unknownPerson)}</p>
+            <div><small>{suggestedMessageLabel(locale).hint}</small><button className="care-copy-button" type="button" onClick={()=>void navigator.clipboard?.writeText(suggestedFirstContact(locale, person?.name ?? t.unknownPerson))}><Copy size={14}/>{suggestedMessageLabel(locale).copy}</button></div>
           </div> : null}
           <div className="care-card-actions">
             {!request.ownerRef && request.status === 'open' ? <button className="care-button" disabled={busy} onClick={() => void claim(request)}>{t.claim}</button> : null}
-            {request.status === 'open' && request.ownerRef && request.careType === 'first_contact'
+            {request.status === 'open' && contactBlocked
+              ? <button className="care-button" disabled={busy || !canCloseRevoked} onClick={() => void closeRevokedContact(request)}><ShieldCheck size={16} /> {t.closeRevoked}</button>
+              : null}
+            {request.status === 'open' && request.ownerRef && request.careType === 'first_contact' && contactAllowed
               ? <a className="care-button primary" aria-disabled={!canResolve} href={canResolve ? `/followup-runtime?care=${encodeURIComponent(request.id)}` : undefined}><CheckCircle2 size={16} /> {t.openFollowup}</a>
               : null}
-            {request.status === 'open' && request.ownerRef && request.careType !== 'first_contact' ? <button className="care-button primary" disabled={busy || !canResolve} onClick={() => setResolving(request)}><CheckCircle2 size={16} /> {t.recordOutcome}</button> : null}
+            {request.status === 'open' && request.ownerRef && request.careType !== 'first_contact' && !contactBlocked ? <button className="care-button primary" disabled={busy || !canResolve} onClick={() => setResolving(request)}><CheckCircle2 size={16} /> {t.recordOutcome}</button> : null}
             {request.status === 'resolved' ? <span className="care-resolution"><CheckCircle2 size={16} /> {request.resolutionCode ? t.resolutions[request.resolutionCode] : t.resolved}</span> : null}
           </div>
         </article>
@@ -238,7 +283,7 @@ export default function CareIntegrityPage() {
     try {
       await createCareRequest({ organizationId: access.organizationId, congregationId, personId, actorId: access.userId, careType, promiseHours, summary })
       setShowNew(false)
-      await refreshScope(access.organizationId, congregationId)
+      await refreshScope(access, congregationId)
     } catch (cause) { console.error(cause); setError(t.error) }
     finally { setBusy(false) }
   }} /> : null}
@@ -248,7 +293,7 @@ export default function CareIntegrityPage() {
     try {
       await resolveCareRequest({ organizationId: access.organizationId, request: resolving, actorId: access.userId, resolutionCode, resolutionNote })
       setResolving(null)
-      await refreshScope(access.organizationId, congregationId)
+      await refreshScope(access, congregationId)
     } catch (cause) { console.error(cause); setError(t.error) }
     finally { setBusy(false) }
   }} /> : null}
@@ -285,7 +330,7 @@ function ResolveCareModal({ locale, close, save }: { locale: AppLocale; close: (
   return <div className="care-modal-backdrop" onMouseDown={close}><section className="care-panel care-modal" role="dialog" aria-modal="true" aria-labelledby="care-resolve-title" onMouseDown={(event) => event.stopPropagation()}>
     <div className="care-modal-head"><div><span className="care-kicker">Outcome</span><h2 id="care-resolve-title">{t.recordOutcome}</h2></div><button className="care-button" onClick={close} aria-label={t.cancel}><X size={17} /></button></div>
     <div className="care-modal-grid">
-      <label className="care-field"><span>{t.outcome}</span><select value={code} onChange={(event) => { const next = event.target.value as CareResolutionCode; setCode(next); if (next === 'pastoral_handoff') setNote('') }}>{(Object.keys(t.resolutions) as CareResolutionCode[]).map((id) => <option value={id} key={id}>{t.resolutions[id]}</option>)}</select></label>
+      <label className="care-field"><span>{t.outcome}</span><select value={code} onChange={(event) => { const next = event.target.value as CareResolutionCode; setCode(next); if (next === 'pastoral_handoff') setNote('') }}>{(Object.keys(t.resolutions) as CareResolutionCode[]).filter((id) => id !== 'consent_revoked').map((id) => <option value={id} key={id}>{t.resolutions[id]}</option>)}</select></label>
       {code === 'pastoral_handoff'
         ? <p className="care-warning"><ShieldCheck size={16} /> {t.pastoralHandoffRule}</p>
         : <label className="care-field"><span>{t.operationalNote}</span><textarea maxLength={160} value={note} onChange={(event) => setNote(event.target.value)} placeholder={t.resolutionPlaceholder} /></label>}

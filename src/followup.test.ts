@@ -12,6 +12,11 @@ describe('first-contact follow-up outcomes', () => {
     expect(planFollowupOutcome('group_interest').nextActionCode).toBe('group_entry')
     expect(planFollowupOutcome('invalid_contact').nextActionCode).toBe('data_correction')
     expect(planFollowupOutcome('no_response').nextActionCode).toBe('manual_review')
+    expect(planFollowupOutcome('consent_revoked')).toEqual({
+      outcomeCode: 'consent_revoked',
+      nextActionCode: 'none',
+      careResolutionCode: 'consent_revoked',
+    })
   })
 
   it('never turns a response outcome into a spiritual or emotional label', () => {
@@ -20,6 +25,7 @@ describe('first-contact follow-up outcomes', () => {
       planFollowupOutcome('prayer_requested'),
       planFollowupOutcome('group_interest'),
       planFollowupOutcome('declined_contact'),
+      planFollowupOutcome('consent_revoked'),
       planFollowupOutcome('invalid_contact'),
       planFollowupOutcome('no_response'),
     ]
@@ -27,6 +33,7 @@ describe('first-contact follow-up outcomes', () => {
       'none',
       'care_prayer',
       'group_entry',
+      'none',
       'none',
       'data_correction',
       'manual_review',
