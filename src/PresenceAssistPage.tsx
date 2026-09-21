@@ -235,6 +235,22 @@ export default function PresenceAssistPage() {
     finally { setBusy(false) }
   }
 
+  async function routeAbsenceToCare(person: PresencePerson) {
+    if (!access || !displaySession || displaySession.status !== 'closed') return
+    if (!confirmedAbsences.includes(person.id) || routedAbsenceIds.has(person.id)) return
+    setBusy(true)
+    setError('')
+    try {
+      await createAbsenceCareRequest({ access, session: displaySession, person, checks })
+      setRoutedAbsenceIds((current) => new Set(current).add(person.id))
+    } catch (cause) {
+      console.error(cause)
+      setError(t.error)
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const noSessionGuide=emptyGuidance(locale,'presence_no_session')
   const noPeopleGuide=emptyGuidance(locale,'presence_no_people')
   const canAddVisitor=Boolean(access?.canManagePeople&&displaySession?.status==='open')
