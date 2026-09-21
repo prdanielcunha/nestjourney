@@ -61,7 +61,21 @@ jobs:
       - name: Validate
         run: npm run check
       - name: Deploy Firestore Rules
-        run: npx -y firebase-tools@15.26.0 deploy --only firestore:rules --project millionsnest --non-interactive
+        shell: bash
+        run: |
+          set -uo pipefail
+          for attempt in 1 2 3 4 5; do
+            echo "Firestore Rules deploy attempt $attempt/5"
+            if npx -y firebase-tools@15.26.0 deploy --only firestore:rules --project millionsnest --non-interactive; then
+              echo "FIRESTORE_RULES_DEPLOY_OK"
+              exit 0
+            fi
+            if [ "$attempt" -eq 5 ]; then
+              echo "FIRESTORE_RULES_DEPLOY_FAILED_AFTER_RETRIES" >&2
+              exit 1
+            fi
+            sleep $((attempt * 10))
+          done
       - name: Deploy Hosting
         run: npx -y firebase-tools@15.26.0 deploy --only hosting:nestjourney --project millionsnest --non-interactive
       - name: Smoke test Firebase Hosting
