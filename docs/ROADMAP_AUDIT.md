@@ -19,7 +19,8 @@ O princípio permanece: tecnologia deve desaparecer atrás do cuidado. O softwar
 | UX por papel | cada líder vê o que precisa | navegação e atalhos filtrados por capability; Vision só para gestão | Implementado |
 | Estados vazios | nunca deixar “e agora?” | estados guiados em Pessoas, Presença, Mesa, Cuidado, Follow-up, Casas, Raiz, Relatórios, Pastoral e Equipe | Implementado |
 | Implantação | ciclo de sete semanas | playbook persistido por unidade, prática e progresso | Implementado |
-| Presença | visita, retorno e vínculo | sessão, presença confirmada, visitante mínimo, vínculo governado e correção auditável | Implementado |
+| Presença | visita, retorno e vínculo | sessão, presença/ausência explicitamente confirmadas, visitante mínimo, vínculo governado, correção auditável e cobertura registrada no encerramento | Implementado |
+| Ausência → Cuidado | transformar evidência factual em responsabilidade humana sem inferência | ausência confirmada + sessão encerrada/elegível + contato autorizado → Care Promise única, sem responsável até alguém assumir | Implementado |
 | Mesa | preparação, convite e participação | checklist, convidados e registro factual de participação | Implementado |
 | Pessoas | cadastro mínimo e jornada factual | consentimento, visitas, vínculos, cuidado, grupos e discipulado conforme Lens | Implementado |
 | Cuidado | contato em ~24h, máximo 48h | Care Promise, responsável, prazo, resultado e Care Debt | Implementado |
@@ -33,7 +34,7 @@ O princípio permanece: tecnologia deve desaparecer atrás do cuidado. O softwar
 | CEO | leitura entre organizações | seletor de organizações habilitadas e inspeção das unidades sem trocar de login | Implementado |
 | Simulação | entender experiências por papel | preview somente leitura das responsabilidades na Vision | Implementado |
 | Equipe | responsabilidade e escopo | papéis NestJourney sobre membership canônica; membros/convites ficam no Hub | Implementado |
-| LGPD | minimização e consentimento | contato opcional, revogação/correção, governança e limites explícitos | Implementado |
+| LGPD | minimização e consentimento | contato opcional, revogação/correção, governança e limites explícitos; revogação bloqueia Connect e encerra contato pendente de forma factual | Implementado |
 | Operações de privacidade | tratar solicitações sem edição destrutiva livre | correção e revogação auditadas; exclusão/retenção encaminhadas para execução protegida | Implementado |
 | Auditoria | mudanças operacionais rastreáveis | eventos append-only e regras testadas | Implementado |
 | Relatórios | indicadores objetivos | pessoas, cuidado, sessões, grupos, Raiz e pastoral sem score espiritual | Implementado |
@@ -125,6 +126,8 @@ O núcleo é considerado pronto quando:
 13. uma falha de render precisa oferecer recuperação explícita em vez de tela em branco;
 14. um deep link sem permissão precisa explicar o limite do papel e oferecer uma saída segura, sem deixar o usuário preso;
 15. correção ou revogação de dados pessoais precisa nascer de solicitação estruturada, ser auditável e não permitir edição solta do cadastro;
-16. as Firestore Rules validadas pelo CI precisam ser promovidas antes do frontend que depende delas.
+16. as Firestore Rules validadas pelo CI precisam ser promovidas antes do frontend que depende delas;
+17. ausência só pode originar cuidado quando for explicitamente confirmada, vier de sessão encerrada com cobertura elegível e houver autorização de contato;
+18. revogação de autorização precisa bloquear qualquer abertura de canal e oferecer encerramento factual do compromisso, sem tentativa de contato.
 
 Depois desse ponto, novas entregas são evolução de produto orientada por uso real — não correção de uma arquitetura incompleta.
