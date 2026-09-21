@@ -11,6 +11,8 @@ on:
       - "package.json"
       - "package-lock.json"
       - "firebase.json"
+      - "firestore.rules"
+      - "firestore.indexes.json"
       - ".firebaserc"
       - "vite.config.*"
   workflow_dispatch:
@@ -58,6 +60,8 @@ jobs:
           echo "NESTJOURNEY_FIREBASE_WEB_CONFIG_OK"
       - name: Validate
         run: npm run check
+      - name: Deploy Firestore Rules
+        run: npx -y firebase-tools@15.26.0 deploy --only firestore:rules --project millionsnest --non-interactive
       - name: Deploy Hosting
         run: npx -y firebase-tools@15.26.0 deploy --only hosting:nestjourney --project millionsnest --non-interactive
       - name: Smoke test Firebase Hosting
