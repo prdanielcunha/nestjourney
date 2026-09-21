@@ -245,7 +245,7 @@ service cloud.firestore {
         && (
           (source == 'manual' && hasCareCapability)
           || (source == 'visitor_registration' && hasPeopleCapability)
-          || (source == 'presence_absence' && hasPresenceCapability)
+          || (source == 'presence_absence' && (hasPresenceCapability || hasCareCapability))
         );
     }
     function tenantCreate(orgId) {
@@ -723,6 +723,35 @@ service cloud.firestore {
             && validAbsenceCareCreate(orgId, careRequestId, congregationId, personId))
         );
     }
+    function validAbsenceCareRouteCreate(orgId, routeId) {
+      let congregationId = request.resource.data.get('congregationId', '');
+      let sessionId = request.resource.data.get('sessionId', '');
+      let personId = request.resource.data.get('personId', '');
+      let careRequestId = request.resource.data.get('careRequestId', '');
+      let checkId = request.resource.data.get('sourcePresenceCheckId', '');
+      let carePath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/careRequests/$(careRequestId);
+      let careData = getAfter(carePath).data;
+      return request.resource.data.keys().hasOnly([
+          'organizationId', 'congregationId', 'sessionId', 'personId',
+          'careRequestId', 'sourcePresenceCheckId', 'routedAt', 'routedBy'
+        ])
+        && tenantCreate(orgId)
+        && routeId == 'absence-' + sessionId + '-' + personId
+        && careRequestId == routeId
+        && request.resource.data.get('routedAt', null) == request.time
+        && request.resource.data.get('routedBy', '') == request.auth.uid
+        && canCreateCareInScope(orgId, congregationId, 'presence_absence')
+        && careData.get('organizationId', '') == orgId
+        && careData.get('congregationId', '') == congregationId
+        && careData.get('personId', '') == personId
+        && careData.get('careType', '') == 'absence_check'
+        && careData.get('source', '') == 'presence_absence'
+        && careData.get('sourcePresenceSessionId', '') == sessionId
+        && careData.get('sourcePresenceCheckId', '') == checkId
+        && careData.get('requestedAt', null) == request.time
+        && careData.get('requestedBy', '') == request.auth.uid;
+    }
+
     function validCareClaim(orgId) {
       return resource.data.get('status', '') == 'open'
         && resource.data.get('ownerRef', '') == ''
@@ -1415,6 +1444,12 @@ service cloud.firestore {
             && canAccessCongregation(orgId, resource.data.get('congregationId', ''))
             && (validCareClaim(orgId) || validCareResolve(orgId));
           allow delete: if false;
+        }
+        match /absenceCareRoutes/{routeId} {
+          allow read: if canAccessCongregation(orgId, resource.data.get('congregationId', ''))
+            && (canManagePresence(orgId) || canManageCare(orgId));
+          allow create: if validAbsenceCareRouteCreate(orgId, routeId);
+          allow update, delete: if false;
         }
         match /followups/{followupId} {
           allow read: if canManageCare(orgId)
