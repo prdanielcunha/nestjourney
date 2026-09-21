@@ -5,10 +5,12 @@ import { calculatePresenceCoverage, confirmedAbsencePersonIds, type PresenceChec
 import {
   claimJourneyPersonBond,
   closePresenceSession,
+  createAbsenceCareRequest,
   createMinimalVisitor,
   createPresenceSession,
   getActiveJourneyOrganizationId,
   latestChecksByPerson,
+  listAbsenceCareRoutePersonIds,
   listJourneyCongregations,
   listPresenceChecks,
   listPresencePeople,
@@ -61,10 +63,36 @@ function bondCopy(locale: AppLocale) {
   }
 }
 
+
+function absenceCareCopy(locale: AppLocale) {
+  if (locale === 'en') return {
+    route: 'Route to care',
+    routed: 'Routed to care',
+    noContact: 'No contact authorization',
+    noContactHint: 'This confirmed absence stays factual, but no contact task is created without authorization and a phone number.',
+    routeHint: 'Creates one unassigned Care Promise from this confirmed absence. A care worker still needs to claim it.',
+  }
+  if (locale === 'es') return {
+    route: 'Enviar a cuidado',
+    routed: 'Enviado a cuidado',
+    noContact: 'Sin autorización de contacto',
+    noContactHint: 'Esta ausencia confirmada sigue siendo un hecho, pero no se crea una tarea de contacto sin autorización y teléfono.',
+    routeHint: 'Crea una Care Promise sin responsable a partir de esta ausencia confirmada. El equipo de cuidado todavía debe asumirla.',
+  }
+  return {
+    route: 'Encaminhar para cuidado',
+    routed: 'Encaminhado ao cuidado',
+    noContact: 'Sem autorização de contato',
+    noContactHint: 'A ausência confirmada continua sendo um fato, mas nenhuma tarefa de contato é criada sem autorização e telefone.',
+    routeHint: 'Cria uma Care Promise sem responsável a partir desta ausência confirmada. Alguém do cuidado ainda precisa assumi-la.',
+  }
+}
+
 export default function PresenceAssistPage() {
   const [locale, setLocale] = useState<AppLocale>(getInitialLocale)
   const baseCopy = presenceAssistCopy[locale]
   const bond = bondCopy(locale)
+  const absenceCare = absenceCareCopy(locale)
   const { labels } = useJourneyLabels()
   const defaultTitle = baseCopy.title.split(' & ')[0]
   const t = {
@@ -83,6 +111,7 @@ export default function PresenceAssistPage() {
   const [error, setError] = useState('')
   const [showSession, setShowSession] = useState(false)
   const [showVisitor, setShowVisitor] = useState(false)
+  const [routedAbsenceIds, setRoutedAbsenceIds] = useState<Set<string>>(new Set())
 
   const displaySession = sessions.find((item) => item.status === 'open') ?? sessions[0]
   const latest = useMemo(() => latestChecksByPerson(checks), [checks])
