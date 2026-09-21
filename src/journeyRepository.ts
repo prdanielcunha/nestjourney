@@ -295,6 +295,8 @@ export interface JourneyFollowupRecord {
 
 export type PrivacyRequestType = 'correction' | 'consent_revocation' | 'deletion_review' | 'retention_review'
 export type PrivacyCorrectionField = 'name' | 'phone' | 'firstVisit'
+export type PrivacyRequestStatus = 'open' | 'applied' | 'rejected' | 'protected_action_required'
+export type PrivacyResolutionCode = 'applied' | 'rejected' | 'protected_action_required'
 
 export interface JourneyPrivacyRequest {
   id: string
@@ -305,9 +307,12 @@ export interface JourneyPrivacyRequest {
   requestType: PrivacyRequestType
   targetField?: PrivacyCorrectionField
   proposedValue?: string
-  status: 'open'
+  status: PrivacyRequestStatus
   requestedAt: string
   requestedBy: string
+  resolvedAt?: string
+  resolvedBy?: string
+  resolutionCode?: PrivacyResolutionCode
 }
 
 export interface JourneyAuditEvent {
@@ -751,6 +756,90 @@ export async function createJourneyGroupEntryRequest(input: {
   })
   await batch.commit()
   return requestRef.id
+}
+
+export async function resolvePrivacyRequest(input: {
+  access: JourneyAccessContext
+  request: JourneyPrivacyRequest
+  decision: 'apply' | 'reject' | 'protected_action_required'
+}) {
+  if (!input.access.canManagePrivacy) throw new Error('privacy_resolution_forbidden')
+  if (input.request.organizationId !== input.access.organizationId) throw new Error('privacy_tenant_mismatch')
+  if (input.request.status !== 'open') throw new Error('privacy_request_already_resolved')
+  if (
+    !input.access.broadJourneyAccess
+    && input.access.congregationIds.length > 0
+    && !input.access.congregationIds.includes(input.request.congregationId)
+  ) throw new Error('privacy_scope_mismatch')
+
+  const protectedOnly = input.request.requestType === 'deletion_review' || input.request.requestType === 'retention_review'
+  const resolutionCode: PrivacyResolutionCode = protectedOnly
+    ? (input.decision === 'reject' ? 'rejected' : 'protected_action_required')
+    : (input.decision === 'reject' ? 'rejected' : 'applied')
+
+  if (protectedOnly && input.decision === 'apply') throw new Error('privacy_protected_action_required')
+  if (!protectedOnly && input.decision === 'protected_action_required') throw new Error('privacy_resolution_invalid')
+
+  const firestore = requireDb()
+  const requestRef = doc(firestore, `${journeyCollectionPath(input.access.organizationId, 'retentionRequests')}/${input.request.id}`)
+  const personRef = doc(firestore, `${journeyCollectionPath(input.access.organizationId, 'people')}/${input.request.personId}`)
+  const auditRef = doc(firestore, `${journeyCollectionPath(input.access.organizationId, 'audit')}/privacy-resolution-${input.request.id}`)
+  const personSnapshot = await getDoc(personRef)
+
+  if (!personSnapshot.exists()) throw new Error('privacy_person_missing')
+  const personData = personSnapshot.data()
+  if (
+    asString(personData.organizationId) !== input.access.organizationId
+    || asString(personData.congregationId) !== input.request.congregationId
+  ) throw new Error('privacy_scope_mismatch')
+
+  const batch = writeBatch(firestore)
+
+  if (resolutionCode === 'applied' && input.request.requestType === 'correction') {
+    const field = input.request.targetField
+    const value = String(input.request.proposedValue ?? '').trim().slice(0, 120)
+    if (!field || !value) throw new Error('invalid_correction_request')
+    if (field === 'firstVisit' && !/^\d{4}-\d{2}-\d{2}$/.test(value)) throw new Error('invalid_first_visit')
+    batch.update(personRef, {
+      [field]: value,
+      privacyRequestId: input.request.id,
+      privacyUpdatedAt: serverTimestamp(),
+      privacyUpdatedBy: input.access.userId,
+    })
+  }
+
+  if (resolutionCode === 'applied' && input.request.requestType === 'consent_revocation') {
+    batch.update(personRef, {
+      consent: false,
+      phone: '',
+      contactStatus: 'closed',
+      nextActionCode: 'WELCOME_ON_NEXT_VISIT',
+      consentRevokedAt: serverTimestamp(),
+      consentRevokedBy: input.access.userId,
+      privacyRequestId: input.request.id,
+      privacyUpdatedAt: serverTimestamp(),
+      privacyUpdatedBy: input.access.userId,
+    })
+  }
+
+  batch.update(requestRef, {
+    status: resolutionCode,
+    resolutionCode,
+    resolvedAt: serverTimestamp(),
+    resolvedBy: input.access.userId,
+  })
+  batch.set(auditRef, {
+    organizationId: input.access.organizationId,
+    congregationId: input.request.congregationId,
+    actorId: input.access.userId,
+    action: `privacy.${resolutionCode}`,
+    targetRef: `privacyRequest:${input.request.id}`,
+    subjectRef: `person:${input.request.personId}`,
+    requestType: input.request.requestType,
+    createdAt: serverTimestamp(),
+  })
+  await batch.commit()
+  return resolutionCode
 }
 
 export async function resolveJourneyGroupEntryRequest(input: {
@@ -1209,9 +1298,20 @@ export async function listPrivacyRequests(organizationId: string, congregationId
       requestType,
       targetField,
       proposedValue: asString(data.proposedValue) || undefined,
-      status: 'open',
+      status: (
+        data.status === 'applied'
+        || data.status === 'rejected'
+        || data.status === 'protected_action_required'
+      ) ? data.status : 'open',
       requestedAt: toIso(data.requestedAt),
       requestedBy: asString(data.requestedBy),
+      resolvedAt: data.resolvedAt ? toIso(data.resolvedAt) : undefined,
+      resolvedBy: asString(data.resolvedBy) || undefined,
+      resolutionCode: (
+        data.resolutionCode === 'applied'
+        || data.resolutionCode === 'rejected'
+        || data.resolutionCode === 'protected_action_required'
+      ) ? data.resolutionCode : undefined,
     }
   }).sort((a, b) => Date.parse(b.requestedAt) - Date.parse(a.requestedAt))
 }

@@ -978,6 +978,142 @@ describe('Governance Runtime rules', () => {
       request('care-gov', 'consent_revocation'),
     ))
   })
+
+  it('applies a correction only as an atomic privacy resolution with audit evidence', async () => {
+    await seedMembership('data-a', 'org-a', 'data_admin', ['unit-a'])
+    await seedGovernancePerson()
+    await environment.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), 'organizations/org-a/products/raiz_e_mesa/retentionRequests/request-correction'), {
+        ...request('data-a', 'correction'),
+        requestedAt: new Date(),
+      })
+    })
+
+    const db = environment.authenticatedContext('data-a').firestore()
+    const personRef = doc(db, 'organizations/org-a/products/raiz_e_mesa/people/privacy-person')
+    const requestRef = doc(db, 'organizations/org-a/products/raiz_e_mesa/retentionRequests/request-correction')
+    const auditRef = doc(db, 'organizations/org-a/products/raiz_e_mesa/audit/privacy-resolution-request-correction')
+
+    await assertFails(updateDoc(personRef, { phone: '43977777777' }))
+    await assertFails(updateDoc(requestRef, {
+      status: 'applied', resolutionCode: 'applied', resolvedAt: serverTimestamp(), resolvedBy: 'data-a',
+    }))
+
+    const batch = writeBatch(db)
+    batch.update(personRef, {
+      phone: '43988888888',
+      privacyRequestId: 'request-correction',
+      privacyUpdatedAt: serverTimestamp(),
+      privacyUpdatedBy: 'data-a',
+    })
+    batch.update(requestRef, {
+      status: 'applied',
+      resolutionCode: 'applied',
+      resolvedAt: serverTimestamp(),
+      resolvedBy: 'data-a',
+    })
+    batch.set(auditRef, {
+      organizationId: 'org-a', congregationId: 'unit-a', actorId: 'data-a',
+      action: 'privacy.applied', targetRef: 'privacyRequest:request-correction',
+      subjectRef: 'person:privacy-person', requestType: 'correction', createdAt: serverTimestamp(),
+    })
+    await assertSucceeds(batch.commit())
+  })
+
+  it('revokes contact consent atomically and rejects incomplete revocation writes', async () => {
+    await seedMembership('data-a', 'org-a', 'data_admin', ['unit-a'])
+    await seedGovernancePerson()
+    await environment.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), 'organizations/org-a/products/raiz_e_mesa/retentionRequests/request-revoke'), {
+        ...request('data-a', 'consent_revocation'),
+        requestedAt: new Date(),
+      })
+    })
+
+    const db = environment.authenticatedContext('data-a').firestore()
+    const personRef = doc(db, 'organizations/org-a/products/raiz_e_mesa/people/privacy-person')
+    const requestRef = doc(db, 'organizations/org-a/products/raiz_e_mesa/retentionRequests/request-revoke')
+    const auditRef = doc(db, 'organizations/org-a/products/raiz_e_mesa/audit/privacy-resolution-request-revoke')
+
+    const incomplete = writeBatch(db)
+    incomplete.update(personRef, {
+      consent: false,
+      privacyRequestId: 'request-revoke',
+      privacyUpdatedAt: serverTimestamp(),
+      privacyUpdatedBy: 'data-a',
+    })
+    incomplete.update(requestRef, {
+      status: 'applied', resolutionCode: 'applied', resolvedAt: serverTimestamp(), resolvedBy: 'data-a',
+    })
+    incomplete.set(auditRef, {
+      organizationId: 'org-a', congregationId: 'unit-a', actorId: 'data-a',
+      action: 'privacy.applied', targetRef: 'privacyRequest:request-revoke',
+      subjectRef: 'person:privacy-person', requestType: 'consent_revocation', createdAt: serverTimestamp(),
+    })
+    await assertFails(incomplete.commit())
+
+    const batch = writeBatch(db)
+    batch.update(personRef, {
+      consent: false,
+      phone: '',
+      contactStatus: 'closed',
+      nextActionCode: 'WELCOME_ON_NEXT_VISIT',
+      consentRevokedAt: serverTimestamp(),
+      consentRevokedBy: 'data-a',
+      privacyRequestId: 'request-revoke',
+      privacyUpdatedAt: serverTimestamp(),
+      privacyUpdatedBy: 'data-a',
+    })
+    batch.update(requestRef, {
+      status: 'applied', resolutionCode: 'applied', resolvedAt: serverTimestamp(), resolvedBy: 'data-a',
+    })
+    batch.set(auditRef, {
+      organizationId: 'org-a', congregationId: 'unit-a', actorId: 'data-a',
+      action: 'privacy.applied', targetRef: 'privacyRequest:request-revoke',
+      subjectRef: 'person:privacy-person', requestType: 'consent_revocation', createdAt: serverTimestamp(),
+    })
+    await assertSucceeds(batch.commit())
+  })
+
+  it('routes deletion and retention review to protected execution instead of destructive browser writes', async () => {
+    await seedMembership('data-a', 'org-a', 'data_admin', ['unit-a'])
+    await seedGovernancePerson()
+    await environment.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), 'organizations/org-a/products/raiz_e_mesa/retentionRequests/request-delete'), {
+        ...request('data-a', 'deletion_review'),
+        requestedAt: new Date(),
+      })
+    })
+
+    const db = environment.authenticatedContext('data-a').firestore()
+    const requestRef = doc(db, 'organizations/org-a/products/raiz_e_mesa/retentionRequests/request-delete')
+    const auditRef = doc(db, 'organizations/org-a/products/raiz_e_mesa/audit/privacy-resolution-request-delete')
+
+    const forbidden = writeBatch(db)
+    forbidden.update(requestRef, {
+      status: 'applied', resolutionCode: 'applied', resolvedAt: serverTimestamp(), resolvedBy: 'data-a',
+    })
+    forbidden.set(auditRef, {
+      organizationId: 'org-a', congregationId: 'unit-a', actorId: 'data-a',
+      action: 'privacy.applied', targetRef: 'privacyRequest:request-delete',
+      subjectRef: 'person:privacy-person', requestType: 'deletion_review', createdAt: serverTimestamp(),
+    })
+    await assertFails(forbidden.commit())
+
+    const protectedBatch = writeBatch(db)
+    protectedBatch.update(requestRef, {
+      status: 'protected_action_required',
+      resolutionCode: 'protected_action_required',
+      resolvedAt: serverTimestamp(),
+      resolvedBy: 'data-a',
+    })
+    protectedBatch.set(auditRef, {
+      organizationId: 'org-a', congregationId: 'unit-a', actorId: 'data-a',
+      action: 'privacy.protected_action_required', targetRef: 'privacyRequest:request-delete',
+      subjectRef: 'person:privacy-person', requestType: 'deletion_review', createdAt: serverTimestamp(),
+    })
+    await assertSucceeds(protectedBatch.commit())
+  })
 })
 
 

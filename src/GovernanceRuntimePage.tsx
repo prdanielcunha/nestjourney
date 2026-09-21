@@ -12,6 +12,7 @@ import {
   listJourneyPeople,
   listPrivacyRequests,
   loadJourneyAccess,
+  resolvePrivacyRequest,
   type JourneyAccessContext,
   type JourneyAuditEvent,
   type JourneyCongregation,
@@ -56,7 +57,7 @@ export default function GovernanceRuntimePage() {
   const canView=Boolean(access?.canViewGovernance)
   const canManagePrivacy=Boolean(access?.canManagePrivacy)
   const selectedPerson=people.find((person)=>person.id===personId)
-  const openRequests=useMemo(()=>requests.filter((item)=>item.status==='open'),[requests])
+  const activeRequests=useMemo(()=>requests.filter((item)=>item.status==='open'||item.status==='protected_action_required'),[requests])
   const filteredAudit=useMemo(()=>{
     const needle=search.trim().toLowerCase()
     if(!needle)return audit
@@ -122,6 +123,24 @@ export default function GovernanceRuntimePage() {
     }catch(cause){console.error(cause);setError(t.error)}finally{setBusy(false)}
   }
 
+  async function resolveRequest(item:JourneyPrivacyRequest,decision:'apply'|'reject'|'protected_action_required'){
+    if(!access||!canManagePrivacy||item.status!=='open')return
+    const confirmText=decision==='reject'?t.confirmReject:t.confirmApply
+    if(!window.confirm(confirmText))return
+    setBusy(true);setError('')
+    try{
+      await resolvePrivacyRequest({access,request:item,decision})
+      await refresh(access,congregationId)
+    }catch(cause){console.error(cause);setError(t.error)}finally{setBusy(false)}
+  }
+
+  function requestStatus(item:JourneyPrivacyRequest){
+    if(item.status==='applied')return t.statusApplied
+    if(item.status==='rejected')return t.statusRejected
+    if(item.status==='protected_action_required')return t.statusProtected
+    return t.statusOpen
+  }
+
   if(loading)return <main className="governance-runtime"><div className="governance-loading">{t.loading}</div></main>
   if(!canView)return <main className="governance-runtime"><AccessDeniedState locale={locale} title={t.noAccessTitle} body={t.noAccess} retryLabel={t.retry} onRetry={()=>void bootstrap()} /></main>
 
@@ -138,7 +157,7 @@ export default function GovernanceRuntimePage() {
     <section className="governance-panel governance-toolbar"><label><span>{t.congregation}</span><select value={congregationId} disabled={busy} onChange={e=>void selectUnit(e.target.value)}>{congregations.map(unit=><option key={unit.id} value={unit.id}>{unit.name}{unit.city?` · ${unit.city}`:''}</option>)}</select></label></section>
 
     <section className="governance-metrics">
-      <article className="governance-panel governance-metric"><span><FileClock size={18}/></span><div><small>{t.openRequests}</small><strong>{canManagePrivacy?openRequests.length:'—'}</strong><p>{canManagePrivacy?t.openRequestsHint:t.restricted}</p></div></article>
+      <article className="governance-panel governance-metric"><span><FileClock size={18}/></span><div><small>{t.openRequests}</small><strong>{canManagePrivacy?activeRequests.length:'—'}</strong><p>{canManagePrivacy?t.openRequestsHint:t.restricted}</p></div></article>
       <article className="governance-panel governance-metric"><span><ClipboardList size={18}/></span><div><small>{t.auditEvents}</small><strong>{audit.length}</strong><p>{t.auditHint}</p></div></article>
       <article className="governance-panel governance-metric"><span><LockKeyhole size={18}/></span><div><small>{t.accessBoundary}</small><strong>{access?.congregationIds.length||congregations.length}</strong><p>{t.accessBoundaryHint}</p></div></article>
     </section>
@@ -159,8 +178,28 @@ export default function GovernanceRuntimePage() {
         <button className="governance-button primary" disabled={busy||!selectedPerson||(requestType==='correction'&&!proposedValue.trim())} onClick={()=>void submit()}>{t.createRequest}</button>
       </div>
       <div className="governance-panel governance-list">
-        <div className="governance-list-head"><div><span className="governance-kicker">{t.queue}</span><h2>{t.privacyQueue}</h2></div><span>{openRequests.length}</span></div>
-        {requests.length?requests.map(item=><article className="governance-request" key={item.id}><i>{initials(item.personName||'?')}</i><div><strong>{item.personName||t.unknownPerson}</strong><span>{requestLabels[item.requestType]}</span><small>{item.requestType==='correction'&&item.targetField?`${t.fields[item.targetField]} · ${item.proposedValue??''}`:t.noSensitiveDetails}</small></div><time>{formatDate(item.requestedAt)}</time></article>):<div className="governance-empty"><CheckCircle2 size={24}/><strong>{t.emptyQueue}</strong><p>{t.emptyQueueHint}</p></div>}
+        <div className="governance-list-head"><div><span className="governance-kicker">{t.queue}</span><h2>{t.privacyQueue}</h2></div><span>{activeRequests.length}</span></div>
+        {requests.length?requests.map(item=>{
+          const protectedOnly=item.requestType==='deletion_review'||item.requestType==='retention_review'
+          return <article className={'governance-request '+item.status} key={item.id}>
+            <i>{initials(item.personName||'?')}</i>
+            <div className="governance-request-copy">
+              <strong>{item.personName||t.unknownPerson}</strong>
+              <span>{requestLabels[item.requestType]}</span>
+              <small>{item.requestType==='correction'&&item.targetField?`${t.fields[item.targetField]} · ${item.proposedValue??''}`:t.noSensitiveDetails}</small>
+              <div className="governance-request-meta">
+                <b className={'governance-status '+item.status}>{requestStatus(item)}</b>
+                {item.resolvedBy?<small>{t.resolvedBy}: {item.resolvedBy}</small>:null}
+              </div>
+              {item.status==='protected_action_required'?<p className="governance-protected-hint">{t.protectedHint}</p>:null}
+              {item.status==='open'?<div className="governance-request-actions">
+                <button className="governance-button primary" disabled={busy} onClick={()=>void resolveRequest(item,protectedOnly?'protected_action_required':'apply')}>{protectedOnly?t.protectedAction:t.applyRequest}</button>
+                <button className="governance-button" disabled={busy} onClick={()=>void resolveRequest(item,'reject')}>{t.rejectRequest}</button>
+              </div>:null}
+            </div>
+            <time>{formatDate(item.resolvedAt||item.requestedAt)}</time>
+          </article>
+        }):<div className="governance-empty"><CheckCircle2 size={24}/><strong>{t.emptyQueue}</strong><p>{t.emptyQueueHint}</p></div>}
       </div>
     </section>:null}
 
