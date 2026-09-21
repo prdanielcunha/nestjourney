@@ -5,10 +5,12 @@ import { calculatePresenceCoverage, confirmedAbsencePersonIds, type PresenceChec
 import {
   claimJourneyPersonBond,
   closePresenceSession,
+  createAbsenceCareRequest,
   createMinimalVisitor,
   createPresenceSession,
   getActiveJourneyOrganizationId,
   latestChecksByPerson,
+  listAbsenceCareRoutePersonIds,
   listJourneyCongregations,
   listPresenceChecks,
   listPresencePeople,
@@ -61,10 +63,36 @@ function bondCopy(locale: AppLocale) {
   }
 }
 
+
+function absenceCareCopy(locale: AppLocale) {
+  if (locale === 'en') return {
+    route: 'Route to care',
+    routed: 'Routed to care',
+    noContact: 'No contact authorization',
+    noContactHint: 'This confirmed absence stays factual, but no contact task is created without authorization and a phone number.',
+    routeHint: 'Creates one unassigned Care Promise from this confirmed absence. A care worker still needs to claim it.',
+  }
+  if (locale === 'es') return {
+    route: 'Enviar a cuidado',
+    routed: 'Enviado a cuidado',
+    noContact: 'Sin autorización de contacto',
+    noContactHint: 'Esta ausencia confirmada sigue siendo un hecho, pero no se crea una tarea de contacto sin autorización y teléfono.',
+    routeHint: 'Crea una Care Promise sin responsable a partir de esta ausencia confirmada. El equipo de cuidado todavía debe asumirla.',
+  }
+  return {
+    route: 'Encaminhar para cuidado',
+    routed: 'Encaminhado ao cuidado',
+    noContact: 'Sem autorização de contato',
+    noContactHint: 'A ausência confirmada continua sendo um fato, mas nenhuma tarefa de contato é criada sem autorização e telefone.',
+    routeHint: 'Cria uma Care Promise sem responsável a partir desta ausência confirmada. Alguém do cuidado ainda precisa assumi-la.',
+  }
+}
+
 export default function PresenceAssistPage() {
   const [locale, setLocale] = useState<AppLocale>(getInitialLocale)
   const baseCopy = presenceAssistCopy[locale]
   const bond = bondCopy(locale)
+  const absenceCare = absenceCareCopy(locale)
   const { labels } = useJourneyLabels()
   const defaultTitle = baseCopy.title.split(' & ')[0]
   const t = {
@@ -83,6 +111,7 @@ export default function PresenceAssistPage() {
   const [error, setError] = useState('')
   const [showSession, setShowSession] = useState(false)
   const [showVisitor, setShowVisitor] = useState(false)
+  const [routedAbsenceIds, setRoutedAbsenceIds] = useState<Set<string>>(new Set())
 
   const displaySession = sessions.find((item) => item.status === 'open') ?? sessions[0]
   const latest = useMemo(() => latestChecksByPerson(checks), [checks])
@@ -108,9 +137,15 @@ export default function PresenceAssistPage() {
     setSessions(nextSessions)
     const session = nextSessions.find((item) => item.status === 'open') ?? nextSessions[0]
     if (session) {
-      setChecks(await listPresenceChecks(orgId, unitId, session.id))
+      const [nextChecks, routedPeople] = await Promise.all([
+        listPresenceChecks(orgId, unitId, session.id),
+        listAbsenceCareRoutePersonIds(orgId, unitId, session.id),
+      ])
+      setChecks(nextChecks)
+      setRoutedAbsenceIds(new Set(routedPeople))
     } else {
       setChecks([])
+      setRoutedAbsenceIds(new Set())
     }
   }, [])
 
@@ -194,10 +229,26 @@ export default function PresenceAssistPage() {
     setBusy(true)
     setError('')
     try {
-      await closePresenceSession(access.organizationId, displaySession.id, access.userId)
+      await closePresenceSession(access.organizationId, displaySession, checks, access.userId)
       await refreshScope(access.organizationId, congregationId)
     } catch (cause) { console.error(cause); setError(t.error) }
     finally { setBusy(false) }
+  }
+
+  async function routeAbsenceToCare(person: PresencePerson) {
+    if (!access || !displaySession || displaySession.status !== 'closed') return
+    if (!confirmedAbsences.includes(person.id) || routedAbsenceIds.has(person.id)) return
+    setBusy(true)
+    setError('')
+    try {
+      await createAbsenceCareRequest({ access, session: displaySession, person, checks })
+      setRoutedAbsenceIds((current) => new Set(current).add(person.id))
+    } catch (cause) {
+      console.error(cause)
+      setError(t.error)
+    } finally {
+      setBusy(false)
+    }
   }
 
   const noSessionGuide=emptyGuidance(locale,'presence_no_session')
@@ -243,6 +294,9 @@ export default function PresenceAssistPage() {
         const current = latest.get(person.id)
         const present = current?.state === 'present_confirmed'
         const absent = current?.state === 'absent_confirmed'
+        const absenceUsable = Boolean(displaySession?.status === 'closed' && confirmedAbsences.includes(person.id))
+        const contactAllowed = Boolean(person.consent && person.phone)
+        const routedToCare = routedAbsenceIds.has(person.id)
         return <article className="presence-panel presence-person" key={person.id}>
           <div className="presence-person-top"><span className="presence-avatar">{person.photoUrl ? <img src={person.photoUrl} alt="" /> : initials(person.name)}</span><div className="presence-person-name"><strong>{person.name}</strong><small>{person.visits ? `${person.visits}x` : t.notVerified}</small></div></div>
           <span className={`presence-state ${present ? 'confirmed' : absent ? 'absent' : ''}`}>{present ? t.present : absent ? t.absent : t.notVerified}{current?.correctedFromCheckId ? ` · ${t.correcting}` : ''}</span>
@@ -250,6 +304,11 @@ export default function PresenceAssistPage() {
             <span className={`presence-bond-state ${person.bondHostRef ? 'assigned' : ''}`}><HeartHandshake size={14}/>{person.bondHostRef ? (person.bondHostRef === access.userId ? bond.mine : bond.assigned) : bond.none}</span>
             {!person.bondHostRef && displaySession?.status === 'open' ? <button className="presence-bond-button" disabled={busy} onClick={() => void claimBond(person)}>{bond.claim}</button> : null}
           </div>
+          {absenceUsable ? <div className={`presence-absence-care ${contactAllowed ? '' : 'blocked'}`}>
+            <HeartHandshake size={15}/>
+            <div><strong>{routedToCare ? absenceCare.routed : contactAllowed ? absenceCare.route : absenceCare.noContact}</strong><p>{contactAllowed ? absenceCare.routeHint : absenceCare.noContactHint}</p></div>
+            {contactAllowed && !routedToCare ? <button className="presence-bond-button" disabled={busy} onClick={() => void routeAbsenceToCare(person)}>{absenceCare.route}</button> : null}
+          </div> : null}
           <div className="presence-person-actions">
             <button className={`presence-button ${present ? 'success' : 'primary'}`} disabled={busy || present || displaySession?.status !== 'open'} onClick={() => void markPresenceState(person, 'present_confirmed')}>{present ? <><Check size={17} /> {t.present}</> : t.markPresent}</button>
             <button className={`presence-button ${absent ? 'absence' : ''}`} disabled={busy || absent || displaySession?.status !== 'open'} onClick={() => void markPresenceState(person, 'absent_confirmed')}>{absent ? <><X size={17} /> {t.absent}</> : t.markAbsent}</button>
