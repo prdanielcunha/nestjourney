@@ -328,6 +328,137 @@ service cloud.firestore {
           )
         );
     }
+    function validPrivacyResolutionAudit(orgId, requestId, personId, congregationId, requestType, resolutionCode) {
+      let auditPath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/audit/privacy-resolution-$(requestId);
+      return existsAfter(auditPath)
+        && getAfter(auditPath).data.get('organizationId', '') == orgId
+        && getAfter(auditPath).data.get('congregationId', '') == congregationId
+        && getAfter(auditPath).data.get('actorId', '') == request.auth.uid
+        && getAfter(auditPath).data.get('action', '') == 'privacy.' + resolutionCode
+        && getAfter(auditPath).data.get('targetRef', '') == 'privacyRequest:' + requestId
+        && getAfter(auditPath).data.get('subjectRef', '') == 'person:' + personId
+        && getAfter(auditPath).data.get('requestType', '') == requestType
+        && getAfter(auditPath).data.get('createdAt', null) == request.time;
+    }
+
+    function validPrivacyPersonAfter(orgId, requestId, personId, congregationId, requestType) {
+      let personPath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/people/$(personId);
+      let requestPath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/retentionRequests/$(requestId);
+      let source = get(requestPath).data;
+      let person = getAfter(personPath).data;
+      let targetField = source.get('targetField', '');
+      let proposedValue = source.get('proposedValue', '');
+      return existsAfter(personPath)
+        && person.get('organizationId', '') == orgId
+        && person.get('congregationId', '') == congregationId
+        && person.get('privacyRequestId', '') == requestId
+        && person.get('privacyUpdatedAt', null) == request.time
+        && person.get('privacyUpdatedBy', '') == request.auth.uid
+        && (
+          (
+            requestType == 'correction'
+            && targetField in ['name', 'phone', 'firstVisit']
+            && person.get(targetField, '') == proposedValue
+          )
+          || (
+            requestType == 'consent_revocation'
+            && person.get('consent', true) == false
+            && person.get('phone', 'x') == ''
+            && person.get('contactStatus', '') == 'closed'
+            && person.get('nextActionCode', '') == 'WELCOME_ON_NEXT_VISIT'
+            && person.get('consentRevokedAt', null) == request.time
+            && person.get('consentRevokedBy', '') == request.auth.uid
+          )
+        );
+    }
+
+    function validPrivacyRequestUpdate(orgId, requestId) {
+      let congregationId = resource.data.get('congregationId', '');
+      let personId = resource.data.get('personId', '');
+      let requestType = resource.data.get('requestType', '');
+      let resolutionCode = request.resource.data.get('resolutionCode', '');
+      return canManagePrivacy(orgId)
+        && canAccessCongregation(orgId, congregationId)
+        && resource.data.get('status', '') == 'open'
+        && request.resource.data.get('organizationId', '') == orgId
+        && request.resource.data.get('congregationId', '') == congregationId
+        && request.resource.data.get('personId', '') == personId
+        && request.resource.data.get('requestType', '') == requestType
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'status', 'resolutionCode', 'resolvedAt', 'resolvedBy'
+        ])
+        && resolutionCode in ['applied', 'rejected', 'protected_action_required']
+        && request.resource.data.get('status', '') == resolutionCode
+        && request.resource.data.get('resolvedAt', null) == request.time
+        && request.resource.data.get('resolvedBy', '') == request.auth.uid
+        && (
+          (
+            requestType in ['correction', 'consent_revocation']
+            && resolutionCode in ['applied', 'rejected']
+          )
+          || (
+            requestType in ['deletion_review', 'retention_review']
+            && resolutionCode in ['rejected', 'protected_action_required']
+          )
+        )
+        && validPrivacyResolutionAudit(
+          orgId,
+          requestId,
+          personId,
+          congregationId,
+          requestType,
+          resolutionCode
+        )
+        && (
+          resolutionCode != 'applied'
+          || validPrivacyPersonAfter(orgId, requestId, personId, congregationId, requestType)
+        );
+    }
+
+    function validPrivacyPersonUpdate(orgId, personId) {
+      let requestId = request.resource.data.get('privacyRequestId', '');
+      let requestPath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/retentionRequests/$(requestId);
+      let source = get(requestPath).data;
+      let requestType = source.get('requestType', '');
+      let targetField = source.get('targetField', '');
+      return requestId is string
+        && requestId.size() > 0
+        && exists(requestPath)
+        && canManagePrivacy(orgId)
+        && source.get('organizationId', '') == orgId
+        && source.get('personId', '') == personId
+        && source.get('congregationId', '') == resource.data.get('congregationId', '')
+        && source.get('status', '') == 'open'
+        && getAfter(requestPath).data.get('status', '') == 'applied'
+        && request.resource.data.get('privacyUpdatedAt', null) == request.time
+        && request.resource.data.get('privacyUpdatedBy', '') == request.auth.uid
+        && (
+          (
+            requestType == 'correction'
+            && targetField in ['name', 'phone', 'firstVisit']
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              targetField, 'privacyRequestId', 'privacyUpdatedAt', 'privacyUpdatedBy'
+            ])
+            && request.resource.data.get(targetField, '') == source.get('proposedValue', '')
+          )
+          || (
+            requestType == 'consent_revocation'
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'consent', 'phone', 'contactStatus', 'nextActionCode',
+              'consentRevokedAt', 'consentRevokedBy',
+              'privacyRequestId', 'privacyUpdatedAt', 'privacyUpdatedBy'
+            ])
+            && resource.data.get('consent', false) == true
+            && request.resource.data.get('consent', true) == false
+            && request.resource.data.get('phone', 'x') == ''
+            && request.resource.data.get('contactStatus', '') == 'closed'
+            && request.resource.data.get('nextActionCode', '') == 'WELCOME_ON_NEXT_VISIT'
+            && request.resource.data.get('consentRevokedAt', null) == request.time
+            && request.resource.data.get('consentRevokedBy', '') == request.auth.uid
+          )
+        );
+    }
+
     function validPresenceSessionCreate(orgId) {
       return tenantCreate(orgId)
         && request.resource.data.get('congregationId', '') is string
@@ -1176,8 +1307,8 @@ service cloud.firestore {
             && personBondEmptyOnCreate();
           allow update: if tenantUnchanged(orgId) && congregationUnchanged()
             && canAccessCongregation(orgId, resource.data.get('congregationId', ''))
-            && canManagePeople(orgId)
-            && personBondUnchanged();
+            && personBondUnchanged()
+            && validPrivacyPersonUpdate(orgId, personId);
           allow delete: if false;
         }
         match /presenceSessions/{sessionId} {
@@ -1395,7 +1526,8 @@ service cloud.firestore {
           allow create: if canManagePrivacy(orgId)
             && canAccessCongregation(orgId, request.resource.data.get('congregationId', ''))
             && validPrivacyRequestCreate(orgId);
-          allow update, delete: if false;
+          allow update: if validPrivacyRequestUpdate(orgId, requestId);
+          allow delete: if false;
         }
         match /{document=**} { allow read, write: if false; }
       }
