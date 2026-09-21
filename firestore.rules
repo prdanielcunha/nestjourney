@@ -328,49 +328,17 @@ service cloud.firestore {
           )
         );
     }
-    function validPrivacyResolutionAudit(orgId, requestId, personId, congregationId, requestType, resolutionCode) {
+    function validPrivacyResolutionAudit(orgId, requestId, personId, requestType, resolutionCode) {
       let auditId = 'privacy-resolution-' + requestId;
       let auditPath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/audit/$(auditId);
+      let auditData = getAfter(auditPath).data;
       return existsAfter(auditPath)
-        && getAfter(auditPath).data.get('organizationId', '') == orgId
-        && getAfter(auditPath).data.get('congregationId', '') == congregationId
-        && getAfter(auditPath).data.get('actorId', '') == request.auth.uid
-        && getAfter(auditPath).data.get('action', '') == 'privacy.' + resolutionCode
-        && getAfter(auditPath).data.get('targetRef', '') == 'privacyRequest:' + requestId
-        && getAfter(auditPath).data.get('subjectRef', '') == 'person:' + personId
-        && getAfter(auditPath).data.get('requestType', '') == requestType
-        && getAfter(auditPath).data.get('createdAt', null) == request.time;
-    }
-
-    function validPrivacyPersonAfter(orgId, requestId, personId, congregationId, requestType) {
-      let personPath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/people/$(personId);
-      let requestPath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/retentionRequests/$(requestId);
-      let source = get(requestPath).data;
-      let person = getAfter(personPath).data;
-      let targetField = source.get('targetField', '');
-      let proposedValue = source.get('proposedValue', '');
-      return existsAfter(personPath)
-        && person.get('organizationId', '') == orgId
-        && person.get('congregationId', '') == congregationId
-        && person.get('privacyRequestId', '') == requestId
-        && person.get('privacyUpdatedAt', null) == request.time
-        && person.get('privacyUpdatedBy', '') == request.auth.uid
-        && (
-          (
-            requestType == 'correction'
-            && targetField in ['name', 'phone', 'firstVisit']
-            && person.get(targetField, '') == proposedValue
-          )
-          || (
-            requestType == 'consent_revocation'
-            && person.get('consent', true) == false
-            && person.get('phone', 'x') == ''
-            && person.get('contactStatus', '') == 'closed'
-            && person.get('nextActionCode', '') == 'WELCOME_ON_NEXT_VISIT'
-            && person.get('consentRevokedAt', null) == request.time
-            && person.get('consentRevokedBy', '') == request.auth.uid
-          )
-        );
+        && auditData.get('actorId', '') == request.auth.uid
+        && auditData.get('action', '') == 'privacy.' + resolutionCode
+        && auditData.get('targetRef', '') == 'privacyRequest:' + requestId
+        && auditData.get('subjectRef', '') == 'person:' + personId
+        && auditData.get('requestType', '') == requestType
+        && auditData.get('createdAt', null) == request.time;
     }
 
     function validPrivacyRequestUpdate(orgId, requestId) {
@@ -378,17 +346,14 @@ service cloud.firestore {
       let personId = resource.data.get('personId', '');
       let requestType = resource.data.get('requestType', '');
       let resolutionCode = request.resource.data.get('resolutionCode', '');
+      let personPath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/people/$(personId);
+      let personAfter = getAfter(personPath).data;
       return canManagePrivacy(orgId)
         && canAccessCongregation(orgId, congregationId)
         && resource.data.get('status', '') == 'open'
-        && request.resource.data.get('organizationId', '') == orgId
-        && request.resource.data.get('congregationId', '') == congregationId
-        && request.resource.data.get('personId', '') == personId
-        && request.resource.data.get('requestType', '') == requestType
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'status', 'resolutionCode', 'resolvedAt', 'resolvedBy'
         ])
-        && resolutionCode in ['applied', 'rejected', 'protected_action_required']
         && request.resource.data.get('status', '') == resolutionCode
         && request.resource.data.get('resolvedAt', null) == request.time
         && request.resource.data.get('resolvedBy', '') == request.auth.uid
@@ -402,17 +367,15 @@ service cloud.firestore {
             && resolutionCode in ['rejected', 'protected_action_required']
           )
         )
-        && validPrivacyResolutionAudit(
-          orgId,
-          requestId,
-          personId,
-          congregationId,
-          requestType,
-          resolutionCode
-        )
+        && validPrivacyResolutionAudit(orgId, requestId, personId, requestType, resolutionCode)
         && (
           resolutionCode != 'applied'
-          || validPrivacyPersonAfter(orgId, requestId, personId, congregationId, requestType)
+          || (
+            existsAfter(personPath)
+            && personAfter.get('privacyRequestId', '') == requestId
+            && personAfter.get('privacyUpdatedAt', null) == request.time
+            && personAfter.get('privacyUpdatedBy', '') == request.auth.uid
+          )
         );
     }
 
@@ -420,17 +383,18 @@ service cloud.firestore {
       let requestId = request.resource.data.get('privacyRequestId', '');
       let requestPath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/retentionRequests/$(requestId);
       let source = get(requestPath).data;
+      let resolved = getAfter(requestPath).data;
       let requestType = source.get('requestType', '');
       let targetField = source.get('targetField', '');
       return requestId is string
         && requestId.size() > 0
-        && exists(requestPath)
-        && canManagePrivacy(orgId)
         && source.get('organizationId', '') == orgId
         && source.get('personId', '') == personId
         && source.get('congregationId', '') == resource.data.get('congregationId', '')
         && source.get('status', '') == 'open'
-        && getAfter(requestPath).data.get('status', '') == 'applied'
+        && resolved.get('status', '') == 'applied'
+        && resolved.get('resolvedBy', '') == request.auth.uid
+        && resolved.get('resolvedAt', null) == request.time
         && request.resource.data.get('privacyUpdatedAt', null) == request.time
         && request.resource.data.get('privacyUpdatedBy', '') == request.auth.uid
         && (
