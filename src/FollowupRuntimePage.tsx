@@ -249,7 +249,7 @@ function OutcomeModal({locale,busy,close,save}:{locale:AppLocale;busy:boolean;cl
   const [outcome,setOutcome]=useState<FollowupOutcomeCode>('responded')
   return <div className="followup-modal-backdrop" onMouseDown={close}><section className="followup-panel followup-modal" role="dialog" aria-modal="true" aria-labelledby="followup-outcome-title" onMouseDown={(event)=>event.stopPropagation()}>
     <div className="followup-modal-head"><div><span className="followup-kicker">Outcome</span><h2 id="followup-outcome-title">{t.recordOutcome}</h2></div><button className="followup-button" onClick={close} aria-label={t.cancel}><X size={17}/></button></div>
-    <label className="followup-field"><span>{t.outcome}</span><select value={outcome} onChange={(event)=>setOutcome(event.target.value as FollowupOutcomeCode)}>{(Object.keys(t.outcomes) as FollowupOutcomeCode[]).map((id)=><option key={id} value={id}>{t.outcomes[id]}</option>)}</select></label>
+    <label className="followup-field"><span>{t.outcome}</span><select value={outcome} onChange={(event)=>setOutcome(event.target.value as FollowupOutcomeCode)}>{(Object.keys(t.outcomes) as FollowupOutcomeCode[]).filter((id)=>id!=='consent_revoked').map((id)=><option key={id} value={id}>{t.outcomes[id]}</option>)}</select></label>
     <p className="followup-modal-note">{t.outcomeRule}</p>
     <div className="followup-modal-actions"><button className="followup-button" onClick={close}>{t.cancel}</button><button className="followup-button primary" disabled={busy} onClick={()=>void save(outcome)}>{t.complete}</button></div>
   </section></div>
