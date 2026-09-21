@@ -2103,16 +2103,6 @@ export async function createCareRequest(input: {
     dueAt: Timestamp.fromMillis(Date.now() + promiseHours * 60 * 60 * 1000), ownerRef: input.actorId,
     assignedAt: serverTimestamp(), assignedBy: input.actorId, resolvedAt: null, resolvedBy: '', resolutionCode: '', resolutionNote: '',
   })
-  batch.set(routeRef, {
-    organizationId: input.access.organizationId,
-    congregationId: input.session.congregationId,
-    sessionId: input.session.id,
-    personId: input.person.id,
-    careRequestId: requestId,
-    sourcePresenceCheckId: latest.id,
-    routedAt: serverTimestamp(),
-    routedBy: input.access.userId,
-  })
   batch.set(requestedFactRef, {
     eventId: requestedFactRef.id, eventType: 'CARE_REQUESTED', occurredAt: serverTimestamp(), recordedAt: serverTimestamp(),
     organizationId: input.organizationId, actorId: input.actorId, subjectRef: `person:${input.personId}`, sourceApp: 'nestjourney',
@@ -2208,6 +2198,16 @@ export async function createAbsenceCareRequest(input: {
     resolvedBy: '',
     resolutionCode: '',
     resolutionNote: '',
+  })
+  batch.set(routeRef, {
+    organizationId: input.access.organizationId,
+    congregationId: input.session.congregationId,
+    sessionId: input.session.id,
+    personId: input.person.id,
+    careRequestId: requestId,
+    sourcePresenceCheckId: latest.id,
+    routedAt: serverTimestamp(),
+    routedBy: input.access.userId,
   })
   batch.set(requestedFactRef, {
     eventId: requestedFactRef.id,
