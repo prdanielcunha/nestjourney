@@ -626,6 +626,7 @@ describe('Care Integrity persistence and scope', () => {
         organizationId: 'org-a', congregationId: 'unit-a', eventRef: 'event:absence',
         openedAt: new Date(closedAt.getTime() - 3_600_000), closedAt, status: 'closed',
         expectedPeopleCount: 1, minimumCoveragePercent: 90, createdBy: 'presence-route', closedBy: 'presence-route',
+        verifiedCountAtClose: 1, absenceEvidenceEligible: true,
       })
       await setDoc(doc(db, 'organizations/org-a/products/raiz_e_mesa/presenceChecks/check-absence'), {
         organizationId: 'org-a', congregationId: 'unit-a', sessionId: 'session-absence', personId: 'person-absence',
