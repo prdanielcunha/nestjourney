@@ -229,7 +229,7 @@ export default function PresenceAssistPage() {
     setBusy(true)
     setError('')
     try {
-      await closePresenceSession(access.organizationId, displaySession.id, access.userId)
+      await closePresenceSession(access.organizationId, displaySession, checks, access.userId)
       await refreshScope(access.organizationId, congregationId)
     } catch (cause) { console.error(cause); setError(t.error) }
     finally { setBusy(false) }
