@@ -256,8 +256,8 @@ export default function CareIntegrityPage() {
           {contactBlocked ? <div className="care-contact-blocked"><AlertTriangle size={16}/><div><strong>{t.contactBlocked}</strong><p>{t.contactBlockedHint}</p></div></div> : null}
           {request.status === 'open' && request.careType === 'first_contact' && contactAllowed ? <div className="care-suggested-message">
             <span><MessageSquareText size={15}/><strong>{suggestedMessageLabel(locale).title}</strong></span>
-            <p>{suggestedFirstContact(locale, person.name)}</p>
-            <div><small>{suggestedMessageLabel(locale).hint}</small><button className="care-copy-button" type="button" onClick={()=>void navigator.clipboard?.writeText(suggestedFirstContact(locale, person.name))}><Copy size={14}/>{suggestedMessageLabel(locale).copy}</button></div>
+            <p>{suggestedFirstContact(locale, person?.name ?? t.unknownPerson)}</p>
+            <div><small>{suggestedMessageLabel(locale).hint}</small><button className="care-copy-button" type="button" onClick={()=>void navigator.clipboard?.writeText(suggestedFirstContact(locale, person?.name ?? t.unknownPerson))}><Copy size={14}/>{suggestedMessageLabel(locale).copy}</button></div>
           </div> : null}
           <div className="care-card-actions">
             {!request.ownerRef && request.status === 'open' ? <button className="care-button" disabled={busy} onClick={() => void claim(request)}>{t.claim}</button> : null}
