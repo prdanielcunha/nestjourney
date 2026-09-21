@@ -329,7 +329,8 @@ service cloud.firestore {
         );
     }
     function validPrivacyResolutionAudit(orgId, requestId, personId, congregationId, requestType, resolutionCode) {
-      let auditPath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/audit/privacy-resolution-$(requestId);
+      let auditId = 'privacy-resolution-' + requestId;
+      let auditPath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/audit/$(auditId);
       return existsAfter(auditPath)
         && getAfter(auditPath).data.get('organizationId', '') == orgId
         && getAfter(auditPath).data.get('congregationId', '') == congregationId
