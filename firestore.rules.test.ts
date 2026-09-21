@@ -646,6 +646,14 @@ describe('Care Integrity persistence and scope', () => {
       ownerRef: '', assignedAt: null, assignedBy: '', resolvedAt: null, resolvedBy: '', resolutionCode: '', resolutionNote: '',
     })
     create.set(
+      doc(db, `organizations/org-a/products/raiz_e_mesa/absenceCareRoutes/${requestId}`),
+      {
+        organizationId: 'org-a', congregationId: 'unit-a', sessionId: 'session-absence',
+        personId: 'person-absence', careRequestId: requestId, sourcePresenceCheckId: 'check-absence',
+        routedAt: serverTimestamp(), routedBy: 'presence-route',
+      },
+    )
+    create.set(
       doc(db, `organizations/org-a/products/raiz_e_mesa/facts/care-requested-${requestId}`),
       careFact(`care-requested-${requestId}`, 'CARE_REQUESTED', 'presence-route', {
         careRequestId: requestId, personId: 'person-absence', careType: 'absence_check',
@@ -653,6 +661,7 @@ describe('Care Integrity persistence and scope', () => {
       }),
     )
     await assertSucceeds(create.commit())
+    await assertSucceeds(getDoc(doc(db, `organizations/org-a/products/raiz_e_mesa/absenceCareRoutes/${requestId}`)))
 
     const spoof = writeBatch(db)
     spoof.set(doc(db, 'organizations/org-a/products/raiz_e_mesa/careRequests/absence-spoof'), {
