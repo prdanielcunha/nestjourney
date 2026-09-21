@@ -5,7 +5,7 @@ import {
 import { db } from './firebase'
 import { journeyCollectionPath } from './productIdentity'
 import { planFollowupOutcome, type FollowupNextActionCode, type FollowupOutcomeCode } from './followup'
-import { canUseAbsenceEvidence, type CarePromise, type PresenceCheck, type PresenceSession, type PresenceSource, type PresenceVerificationState } from './intelligence'
+import { calculatePresenceCoverage, canUseAbsenceEvidence, type CarePromise, type PresenceCheck, type PresenceSession, type PresenceSource, type PresenceVerificationState } from './intelligence'
 
 const HUB_API_BASE = (import.meta.env.VITE_MILLIONSNEST_URL || 'https://www.millionsnest.com').replace(/\/$/, '')
 const SYSTEM_ROLES = new Set(['ceo', 'global_admin', 'ecosystem_owner', 'founder'])
@@ -192,6 +192,8 @@ export interface PresenceSessionRecord extends PresenceSession {
   status: 'open' | 'closed'
   createdBy: string
   closedBy?: string
+  verifiedCountAtClose?: number
+  absenceEvidenceEligible?: boolean
 }
 
 export interface MesaParticipationRecord {
@@ -1495,6 +1497,8 @@ export async function listPresenceSessions(organizationId: string, congregationI
       status,
       createdBy: asString(data.createdBy),
       closedBy: asString(data.closedBy) || undefined,
+      verifiedCountAtClose: typeof data.verifiedCountAtClose === 'number' ? data.verifiedCountAtClose : undefined,
+      absenceEvidenceEligible: typeof data.absenceEvidenceEligible === 'boolean' ? data.absenceEvidenceEligible : undefined,
     }
   }).sort((a, b) => Date.parse(b.openedAt) - Date.parse(a.openedAt))
 }
@@ -1792,11 +1796,23 @@ export async function recordPresenceCheck(input: {
   return checkRef.id
 }
 
-export async function closePresenceSession(organizationId: string, sessionId: string, actorId: string) {
+export async function closePresenceSession(
+  organizationId: string,
+  session: PresenceSessionRecord,
+  checks: PresenceCheck[],
+  actorId: string,
+) {
   const firestore = requireDb()
-  const ref = doc(firestore, `${journeyCollectionPath(organizationId, 'presenceSessions')}/${sessionId}`)
+  const ref = doc(firestore, `${journeyCollectionPath(organizationId, 'presenceSessions')}/${session.id}`)
+  const coverage = calculatePresenceCoverage(session, checks)
   const batch = writeBatch(firestore)
-  batch.update(ref, { status: 'closed', closedAt: serverTimestamp(), closedBy: actorId })
+  batch.update(ref, {
+    status: 'closed',
+    closedAt: serverTimestamp(),
+    closedBy: actorId,
+    verifiedCountAtClose: coverage.verified,
+    absenceEvidenceEligible: coverage.meetsMinimum,
+  })
   await batch.commit()
 }
 
