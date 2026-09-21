@@ -2087,6 +2087,16 @@ export async function createCareRequest(input: {
     dueAt: Timestamp.fromMillis(Date.now() + promiseHours * 60 * 60 * 1000), ownerRef: input.actorId,
     assignedAt: serverTimestamp(), assignedBy: input.actorId, resolvedAt: null, resolvedBy: '', resolutionCode: '', resolutionNote: '',
   })
+  batch.set(routeRef, {
+    organizationId: input.access.organizationId,
+    congregationId: input.session.congregationId,
+    sessionId: input.session.id,
+    personId: input.person.id,
+    careRequestId: requestId,
+    sourcePresenceCheckId: latest.id,
+    routedAt: serverTimestamp(),
+    routedBy: input.access.userId,
+  })
   batch.set(requestedFactRef, {
     eventId: requestedFactRef.id, eventType: 'CARE_REQUESTED', occurredAt: serverTimestamp(), recordedAt: serverTimestamp(),
     organizationId: input.organizationId, actorId: input.actorId, subjectRef: `person:${input.personId}`, sourceApp: 'nestjourney',
@@ -2105,6 +2115,22 @@ export async function createCareRequest(input: {
 
 export function absenceCareRequestId(sessionId: string, personId: string) {
   return `absence-${sessionId}-${personId}`
+}
+
+export async function listAbsenceCareRoutePersonIds(
+  organizationId: string,
+  congregationId: string,
+  sessionId: string,
+): Promise<string[]> {
+  const firestore = requireDb()
+  const snapshot = await getDocs(query(
+    collection(firestore, journeyCollectionPath(organizationId, 'absenceCareRoutes')),
+    where('congregationId', '==', congregationId),
+    where('sessionId', '==', sessionId),
+  ))
+  return snapshot.docs
+    .map((item) => asString(item.data().personId))
+    .filter(Boolean)
 }
 
 export async function createAbsenceCareRequest(input: {
@@ -2140,6 +2166,7 @@ export async function createAbsenceCareRequest(input: {
   const firestore = requireDb()
   const requestId = absenceCareRequestId(input.session.id, input.person.id)
   const requestRef = doc(firestore, `${journeyCollectionPath(input.access.organizationId, 'careRequests')}/${requestId}`)
+  const routeRef = doc(firestore, `${journeyCollectionPath(input.access.organizationId, 'absenceCareRoutes')}/${requestId}`)
   const requestedFactRef = doc(firestore, `${journeyCollectionPath(input.access.organizationId, 'facts')}/care-requested-${requestId}`)
   const promiseHours = Math.max(1, Math.min(48, Math.floor(input.promiseHours ?? 48)))
   const batch = writeBatch(firestore)
