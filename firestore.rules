@@ -664,6 +664,9 @@ service cloud.firestore {
         && sessionData.get('congregationId', '') == congregationId
         && sessionData.get('status', '') == 'closed'
         && sessionData.get('closedAt', null) is timestamp
+        && sessionData.get('absenceEvidenceEligible', false) == true
+        && sessionData.get('verifiedCountAtClose', -1) is number
+        && sessionData.get('verifiedCountAtClose', -1) >= 0
         && checkData.get('organizationId', '') == orgId
         && checkData.get('congregationId', '') == congregationId
         && checkData.get('sessionId', '') == sessionId
@@ -1397,10 +1400,21 @@ service cloud.firestore {
             && tenantUnchanged(orgId)
             && congregationUnchanged()
             && canAccessCongregation(orgId, resource.data.get('congregationId', ''))
-            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'closedAt', 'closedBy'])
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'status', 'closedAt', 'closedBy', 'verifiedCountAtClose', 'absenceEvidenceEligible'
+            ])
             && request.resource.data.get('status', '') == 'closed'
             && request.resource.data.get('closedAt', null) == request.time
-            && request.resource.data.get('closedBy', '') == request.auth.uid;
+            && request.resource.data.get('closedBy', '') == request.auth.uid
+            && request.resource.data.get('verifiedCountAtClose', -1) is number
+            && request.resource.data.get('verifiedCountAtClose', -1) >= 0
+            && request.resource.data.get('verifiedCountAtClose', -1) <= resource.data.get('expectedPeopleCount', 0)
+            && request.resource.data.get('absenceEvidenceEligible', false) is bool
+            && request.resource.data.get('absenceEvidenceEligible', false) == (
+              resource.data.get('expectedPeopleCount', 0) > 0
+              && request.resource.data.get('verifiedCountAtClose', 0) * 100
+                >= resource.data.get('expectedPeopleCount', 0) * resource.data.get('minimumCoveragePercent', 90)
+            );
           allow delete: if false;
         }
         match /presenceChecks/{checkId} {
