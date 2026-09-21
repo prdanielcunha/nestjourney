@@ -144,6 +144,34 @@ describe('Presence Assist and canonical evidence', () => {
     await assertFails(setDoc(doc(coordDb, 'organizations/org-a/products/raiz_e_mesa/presenceSessions/session-wrong-unit'), { ...base, congregationId: 'unit-b', createdBy: 'coord-a' }))
   })
 
+  it('persists a bounded coverage gate when closing a presence session', async () => {
+    await seedMembership('coord-close', 'org-a', 'coordinator', ['unit-a'])
+    await environment.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore()
+      for (const id of ['session-close-ok', 'session-close-spoof']) {
+        await setDoc(doc(db, `organizations/org-a/products/raiz_e_mesa/presenceSessions/${id}`), {
+          organizationId: 'org-a', congregationId: 'unit-a', eventRef: `event:${id}`, openedAt: new Date(),
+          closedAt: null, status: 'open', expectedPeopleCount: 10, minimumCoveragePercent: 90, createdBy: 'coord-close',
+        })
+      }
+    })
+    const db = environment.authenticatedContext('coord-close').firestore()
+    await assertSucceeds(updateDoc(
+      doc(db, 'organizations/org-a/products/raiz_e_mesa/presenceSessions/session-close-ok'),
+      {
+        status: 'closed', closedAt: serverTimestamp(), closedBy: 'coord-close',
+        verifiedCountAtClose: 9, absenceEvidenceEligible: true,
+      },
+    ))
+    await assertFails(updateDoc(
+      doc(db, 'organizations/org-a/products/raiz_e_mesa/presenceSessions/session-close-spoof'),
+      {
+        status: 'closed', closedAt: serverTimestamp(), closedBy: 'coord-close',
+        verifiedCountAtClose: 8, absenceEvidenceEligible: true,
+      },
+    ))
+  })
+
   it('keeps checks append-only and only accepts canonical facts backed by a scoped person and check', async () => {
     await seedMembership('coord-a', 'org-a', 'coordinator', ['unit-a'])
     await environment.withSecurityRulesDisabled(async (context) => {
