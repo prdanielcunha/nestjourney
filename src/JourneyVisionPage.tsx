@@ -197,7 +197,7 @@ export default function JourneyVisionPage(){
   }
   async function selectUnit(nextUnit:string){
     if(!scopeAccess)return
-    setBusy(true);setUnitId(nextUnit);setError('')
+    setBusy(true);setUnitId(nextUnit);setActiveJourneyCongregationId(scopeAccess.organizationId,nextUnit);setError('')
     try{await loadUnit(scopeAccess,nextUnit)}catch(cause){console.error(cause);setError(t.error)}finally{setBusy(false)}
   }
 
