@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { CalendarCheck, Check, ChevronLeft, House, Play, Plus, Search, Send, ShieldCheck, Square, UserCheck, UserMinus, Users, X } from 'lucide-react'
+import { CalendarCheck, Check, ChevronLeft, House, Play, Search, Send, ShieldCheck, Square, UserCheck, UserMinus, Users, X } from 'lucide-react'
 import { auth } from './firebase'
 import {
   canCreateJourneyGroupEntryRequest,
@@ -34,6 +34,7 @@ import { GuidedEmptyState } from './GuidedEmptyState'
 import { emptyGuidance } from './emptyGuidance'
 import { AccessDeniedState } from './AccessDeniedState'
 import { useJourneyLabels } from './journeyLabels'
+import { JourneyAreaFocus } from './JourneyAreaFocus'
 import './JourneyRuntimePages.css'
 
 export default function GroupsRuntimePage() {
@@ -202,13 +203,58 @@ export default function GroupsRuntimePage() {
 
   const canCreateGroup=Boolean(access&&canCreateJourneyGroupEntryRequest(access))
   const empty=emptyGuidance(locale,canCreateGroup?'groups_none':'groups_unassigned')
+  const activeUnit=congregations.find(item=>item.id===congregationId)
+  const attentionGroups=groups.filter(group=>{
+    const participants=group.participants??0
+    const capacity=Math.max(1,group.capacity??12)
+    return participants/capacity>=.85
+  })
+  const totalParticipants=groups.reduce((sum,group)=>sum+(group.participants??0),0)
+  const focusTitle=!groups.length
+    ?locale==='en'?'No House is connected to this view yet':locale==='es'?'Todavía no hay una Casa conectada a esta vista':'Ainda não há uma Casa conectada a esta visão'
+    :attentionGroups.length>0
+      ?locale==='en'?attentionGroups.length+' House(s) need attention':locale==='es'?attentionGroups.length+' Casa(s) necesitan atención':attentionGroups.length+' Casa(s) precisam de atenção'
+      :locale==='en'?'Your Houses are operating without capacity alerts':locale==='es'?'Tus Casas están operando sin alertas de capacidad':'Suas Casas estão operando sem alertas de capacidade'
+  const focusBody=!groups.length
+    ?locale==='en'?'Start only if this responsibility belongs to you. A group leader should see the House they actually lead, not the whole organization.'
+      :locale==='es'?'Empieza solo si esta responsabilidad te pertenece. Un líder debe ver la Casa que realmente lidera, no toda la organización.'
+      :'Comece somente se esta responsabilidade for sua. Um líder deve enxergar a Casa que realmente lidera, não a organização inteira.'
+    :attentionGroups.length>0
+      ?locale==='en'?'Start with the Houses closest to their recorded capacity. Review participants, entry requests, and the next meeting.'
+        :locale==='es'?'Empieza por las Casas más próximas de su capacidad registrada. Revisa participantes, solicitudes de entrada y próximo encuentro.'
+        :'Comece pelas Casas mais próximas da capacidade registrada. Revise participantes, pedidos de entrada e o próximo encontro.'
+      :locale==='en'?'Open a House only when you need to manage people, requests, attendance, or the next meeting.'
+        :locale==='es'?'Abre una Casa solo cuando necesites gestionar personas, solicitudes, presencia o el próximo encuentro.'
+        :'Abra uma Casa somente quando precisar cuidar de pessoas, pedidos, presença ou do próximo encontro.'
 
   return <main className="journey-runtime"><div className="runtime-shell">
     <header className="runtime-topbar"><div className="runtime-brand"><img src="/icon.svg" alt=""/><span><strong>{t.product}</strong><small>Journey & Care Engine</small></span></div><div className="runtime-actions"><a href="/my-today"><ChevronLeft size={16}/>{t.back}</a><select value={locale} onChange={(e)=>{const next=e.target.value as AppLocale;setLocale(next);persistLocale(next)}}>{(Object.keys(localeLabels) as AppLocale[]).map(id=><option key={id} value={id}>{localeLabels[id]}</option>)}</select></div></header>
-    <section className="runtime-hero"><div><span className="runtime-kicker">Journey / Community</span><h1>{t.title}</h1><p>{t.subtitle}</p></div>{access&&canCreateJourneyGroupEntryRequest(access)?<button className="runtime-button primary" onClick={()=>setShowNew(true)}><Plus size={17}/>{t.newGroup}</button>:null}</section>
+    <section className="runtime-hero"><div><span className="runtime-kicker">Journey / Community</span><h1>{t.title}</h1><p>{t.subtitle}</p></div></section>
     {error ? <div className="runtime-error">{error}</div> : null}
-    <section className="runtime-panel runtime-toolbar"><label><span>{t.congregation}</span><select value={congregationId} disabled={busy} onChange={(e)=>void selectUnit(e.target.value)}>{congregations.map(x=><option key={x.id} value={x.id}>{x.name}{x.city?` · ${x.city}`:''}</option>)}</select></label></section>
-    <section className="runtime-grid">
+
+    <JourneyAreaFocus
+      locale={locale}
+      title={focusTitle}
+      body={focusBody}
+      context={activeUnit?.name}
+      metrics={[
+        {label:locale==='en'?'Houses':locale==='es'?'Casas':'Casas',value:groups.length,tone:groups.length?'good':'muted'},
+        {label:locale==='en'?'Attention':locale==='es'?'Atención':'Atenção',value:attentionGroups.length,tone:attentionGroups.length?'attention':'muted'},
+        {label:t.participants,value:totalParticipants,tone:totalParticipants?'good':'muted'},
+      ]}
+      actions={groups.length
+        ?[
+          {label:attentionGroups.length?(locale==='en'?'Review attention':locale==='es'?'Revisar atención':'Revisar atenção'):(locale==='en'?'Open Houses':locale==='es'?'Abrir Casas':'Abrir Casas'),href:'#groups-list',primary:true},
+          ...(canCreateGroup?[{label:t.newGroup,onClick:()=>setShowNew(true)}]:[]),
+        ]
+        :canCreateGroup
+          ?[{label:t.newGroup,onClick:()=>setShowNew(true),primary:true},{label:locale==='en'?'Implementation':locale==='es'?'Implementación':'Implantação',href:'/implementation-runtime'}]
+          :[{label:locale==='en'?'Return to Today':locale==='es'?'Volver a Hoy':'Voltar para Hoje',href:'/my-today',primary:true}]
+      }
+    />
+
+    {congregations.length>1?<section className="journey-area-toolbar"><label><span>{t.congregation}</span><select value={congregationId} disabled={busy} onChange={(e)=>void selectUnit(e.target.value)}>{congregations.map(x=><option key={x.id} value={x.id}>{x.name}{x.city?` · ${x.city}`:''}</option>)}</select></label></section>:null}
+    <section className="runtime-grid" id="groups-list">
       {groups.map(group=>{
         const participants=group.participants??0, capacity=Math.max(1,group.capacity??12), ratio=participants/capacity
         const canRoster=Boolean(access&&canManageJourneyGroupRoster(access,group))

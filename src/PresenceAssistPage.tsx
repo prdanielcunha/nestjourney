@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Check, ChevronLeft, HeartHandshake, Plus, ShieldCheck, UserCheck, X } from 'lucide-react'
+import { Check, ChevronLeft, HeartHandshake, ShieldCheck, UserCheck, X } from 'lucide-react'
 import { auth } from './firebase'
 import { calculatePresenceCoverage, confirmedAbsencePersonIds, type PresenceCheck, type PresenceVerificationState } from './intelligence'
 import {
@@ -27,6 +27,7 @@ import { useJourneyLabels } from './journeyLabels'
 import { GuidedEmptyState } from './GuidedEmptyState'
 import { emptyGuidance } from './emptyGuidance'
 import { AccessDeniedState } from './AccessDeniedState'
+import { JourneyAreaFocus } from './JourneyAreaFocus'
 import './PresenceAssistPage.css'
 
 function initials(name: string) {
@@ -254,6 +255,24 @@ export default function PresenceAssistPage() {
   const noSessionGuide=emptyGuidance(locale,'presence_no_session')
   const noPeopleGuide=emptyGuidance(locale,'presence_no_people')
   const canAddVisitor=Boolean(access?.canManagePeople&&displaySession?.status==='open')
+  const activeUnit=congregations.find(item=>item.id===congregationId)
+  const unverifiedCount=coverage?.unverified??people.length
+  const focusTitle=displaySession?.status==='open'
+    ?(unverifiedCount>0
+      ?locale==='en'?unverifiedCount+' people still need confirmation':locale==='es'?unverifiedCount+' personas aún necesitan confirmación':unverifiedCount+' pessoas ainda precisam de confirmação'
+      :locale==='en'?'Everyone in this session is confirmed':locale==='es'?'Todas las personas de esta sesión están confirmadas':'Todas as pessoas desta sessão estão confirmadas')
+    :locale==='en'?'Open the service session when the team is ready':locale==='es'?'Abre la sesión del culto cuando el equipo esté listo':'Abra a sessão do culto quando a equipe estiver pronta'
+  const focusBody=displaySession?.status==='open'
+    ?locale==='en'?'Work from the people list. Confirm what actually happened, register visitors, and create a relationship without extra forms.'
+      :locale==='es'?'Trabaja desde la lista de personas. Confirma lo que realmente ocurrió, registra visitantes y crea vínculo sin formularios extras.'
+      :'Trabalhe pela lista de pessoas. Confirme o que realmente aconteceu, registre visitantes e crie vínculo sem formulários extras.'
+    :displaySession?.status==='closed'
+      ?locale==='en'?'The last session is closed. Confirmed absences can follow to Care only when the factual quality rule is met.'
+        :locale==='es'?'La última sesión está cerrada. Las ausencias confirmadas pueden seguir a Cuidado solo cuando se cumple la regla de calidad factual.'
+        :'A última sessão está encerrada. Ausências confirmadas podem seguir para Cuidado somente quando a regra de qualidade factual foi atendida.'
+      :locale==='en'?'One action opens the service workflow. From there the team can confirm attendance and register visitors.'
+        :locale==='es'?'Una acción abre el flujo del culto. Desde allí el equipo confirma presencia y registra visitantes.'
+        :'Uma ação abre o fluxo do culto. A partir daí a equipe confirma presença e registra visitantes.'
 
   if (loading) return <main className="presence-assist"><div className="presence-loading">{t.loading}</div></main>
 
@@ -272,15 +291,33 @@ export default function PresenceAssistPage() {
 
     <section className="presence-hero">
       <div><span className="presence-kicker">Journey / Presence</span><h1>{t.title}</h1><p>{t.subtitle}</p></div>
-      {displaySession?.status === 'open' ? <button className="presence-button" onClick={() => void closeSession()} disabled={busy}>{t.close}</button> : <button className="presence-button primary" onClick={() => setShowSession(true)} disabled={!congregationId || busy}><Plus size={17} /> {t.newSession}</button>}
     </section>
 
     {error ? <div className="presence-error" role="alert">{error}</div> : null}
 
-    <section className="presence-panel presence-toolbar">
-      <label className="presence-field"><span>{t.congregation}</span><select value={congregationId} onChange={(event) => void selectCongregation(event.target.value)} disabled={busy}>{congregations.map((item) => <option value={item.id} key={item.id}>{item.name}{item.city ? ` · ${item.city}` : ''}</option>)}</select></label>
-      <label className="presence-field"><span>{t.search}</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t.search} /></label>
-      {access.canManagePeople && displaySession?.status === 'open' ? <button className="presence-button" onClick={() => setShowVisitor(true)}><Plus size={17} /> {t.newVisitor}</button> : <span />}
+    <JourneyAreaFocus
+      locale={locale}
+      title={focusTitle}
+      body={focusBody}
+      context={displaySession?.eventName||activeUnit?.name}
+      metrics={[
+        {label:t.congregation,value:activeUnit?.name||'—'},
+        {label:t.session,value:displaySession?.status==='open'?(locale==='en'?'Open':locale==='es'?'Abierta':'Aberta'):(displaySession? t.closed:(locale==='en'?'Not opened':locale==='es'?'No abierta':'Não aberta')),tone:displaySession?.status==='open'?'good':'muted'},
+        {label:t.coverage,value:coverage?coverage.percent+'%':'—',tone:coverage?.meetsMinimum?'good':coverage?'attention':'muted'},
+      ]}
+      actions={displaySession?.status==='open'
+        ?[
+          {label:locale==='en'?'Go to people':locale==='es'?'Ir a personas':'Ir para pessoas',href:'#presence-people',primary:true},
+          ...(canAddVisitor?[{label:t.newVisitor,onClick:()=>setShowVisitor(true)}]:[]),
+          {label:t.close,onClick:()=>void closeSession(),disabled:busy},
+        ]
+        :[{label:t.newSession,onClick:()=>setShowSession(true),disabled:!congregationId||busy,primary:true}]
+      }
+    />
+
+    <section className="journey-area-toolbar">
+      {congregations.length>1?<label><span>{t.congregation}</span><select value={congregationId} onChange={(event) => void selectCongregation(event.target.value)} disabled={busy}>{congregations.map((item) => <option value={item.id} key={item.id}>{item.name}{item.city ? ` · ${item.city}` : ''}</option>)}</select></label>:null}
+      <label className="grow"><span>{t.search}</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t.search} /></label>
     </section>
 
     {displaySession ? <section className="presence-panel presence-session-card">
@@ -288,7 +325,7 @@ export default function PresenceAssistPage() {
       {coverage ? <><div className="coverage-wrap"><span className="coverage-number">{coverage.percent}%</span><div className="coverage-track" aria-label={`${t.coverage}: ${coverage.percent}%`}><span style={{ width: `${coverage.percent}%` }} /></div><div className="coverage-meta">{coverage.verified} {t.verified}<br />{coverage.unverified} {t.unverified}</div></div><p className="coverage-note">{coverage.meetsMinimum ? t.qualityReady : t.qualityNotReady}</p>{displaySession.status === 'closed' ? <p className="coverage-note">{coverage.meetsMinimum ? `${t.absenceEvidence}: ${confirmedAbsences.length}` : t.absenceBlocked}</p> : null}</> : null}
     </section> : <div className="presence-panel"><GuidedEmptyState icon={UserCheck} title={noSessionGuide.title} body={noSessionGuide.body} primary={{label:noSessionGuide.primary,onClick:()=>setShowSession(true)}} secondary={{label:noSessionGuide.secondary||t.back,href:'/my-today'}}/></div>}
 
-    <div className="presence-list-head"><h2>{t.people} · {visiblePeople.length}</h2><span className="presence-badge"><ShieldCheck size={14} /> {t.sourceRule}</span></div>
+    <div className="presence-list-head" id="presence-people"><h2>{t.people} · {visiblePeople.length}</h2><span className="presence-badge"><ShieldCheck size={14} /> {t.sourceRule}</span></div>
     <section className="presence-grid">
       {visiblePeople.map((person) => {
         const current = latest.get(person.id)

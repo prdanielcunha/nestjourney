@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, CheckCircle2, ChevronLeft, Clock3, Copy, HeartHandshake, MessageSquareText, Plus, ShieldCheck, X } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, ChevronLeft, Copy, HeartHandshake, MessageSquareText, ShieldCheck, X } from 'lucide-react'
 import { auth } from './firebase'
 import { evaluateCarePromise } from './intelligence'
 import {
@@ -27,6 +27,7 @@ import { useJourneyLabels } from './journeyLabels'
 import { GuidedEmptyState } from './GuidedEmptyState'
 import { emptyGuidance } from './emptyGuidance'
 import { AccessDeniedState } from './AccessDeniedState'
+import { JourneyAreaFocus } from './JourneyAreaFocus'
 import './CareIntegrityPage.css'
 
 type CareTab = 'attention' | 'open' | 'resolved'
@@ -89,6 +90,18 @@ export default function CareIntegrityPage() {
   const dueSoonCount = evaluated.filter((item) => item.evaluation.state === 'due_soon').length
   const unassignedCount = lensRequests.filter((item) => item.status === 'open' && !item.ownerRef).length
   const myOpenCount = lensRequests.filter((item) => item.status === 'open' && item.ownerRef === access?.userId).length
+  const attentionCount = debtCount + dueSoonCount + unassignedCount
+  const activeUnit = congregations.find((item) => item.id === congregationId)
+  const focusTitle = attentionCount > 0
+    ? locale === 'en' ? attentionCount+' care item(s) need attention' : locale === 'es' ? attentionCount+' cuidado(s) necesitan atención' : attentionCount+' cuidado(s) precisam de atenção'
+    : locale === 'en' ? 'No urgent care right now' : locale === 'es' ? 'Ningún cuidado urgente ahora' : 'Nenhum cuidado urgente agora'
+  const focusBody = attentionCount > 0
+    ? locale === 'en' ? 'Start with overdue promises, then what is due soon, then anything without an owner. The list is already ordered for you.'
+      : locale === 'es' ? 'Empieza por las promesas vencidas, después las próximas a vencer y luego lo que todavía no tiene responsable. La lista ya está ordenada.'
+      : 'Comece pelas promessas vencidas, depois pelas que vencem em breve e então pelo que ainda está sem responsável. A lista já está ordenada.'
+    : locale === 'en' ? 'You are caught up. Review your open contacts only if you need to prepare the next step; there is no need to hunt for hidden work.'
+      : locale === 'es' ? 'Estás al día. Revisa tus contactos abiertos solo si necesitas preparar el próximo paso; no hay trabajo oculto para buscar.'
+      : 'Você está em dia. Revise seus contatos abertos apenas se precisar preparar o próximo passo; não há trabalho escondido para procurar.'
 
   const visible = useMemo(() => {
     const needle = query.trim().toLocaleLowerCase(locale)
@@ -213,24 +226,33 @@ export default function CareIntegrityPage() {
 
     <section className="care-hero">
       <div><span className="care-kicker">Journey / Care Integrity</span><h1>{t.title}</h1><p>{t.subtitle}</p></div>
-      <button className="care-button primary" onClick={() => setShowNew(true)} disabled={busy || !people.length}><Plus size={17} /> {t.newRequest}</button>
     </section>
 
     {error ? <div className="care-error" role="alert">{error}</div> : null}
 
-    <section className="care-metrics">
-      <button className="care-panel care-metric debt" onClick={() => setTab('attention')}><AlertTriangle size={18} /><span>{t.debt}</span><strong>{debtCount}</strong><small>{t.debtHint}</small></button>
-      <button className="care-panel care-metric" onClick={() => setTab('attention')}><Clock3 size={18} /><span>{t.dueSoon}</span><strong>{dueSoonCount}</strong><small>{t.dueSoonHint}</small></button>
-      <button className="care-panel care-metric" onClick={() => setTab('attention')}><HeartHandshake size={18} /><span>{t.unassigned}</span><strong>{unassignedCount}</strong><small>{t.unassignedHint}</small></button>
-      <button className="care-panel care-metric" onClick={() => setTab('open')}><CheckCircle2 size={18} /><span>{t.myLoad}</span><strong>{myOpenCount}/10</strong><small>{myOpenCount >= 10 ? t.loadLimit : t.loadHealthy}</small></button>
+    <JourneyAreaFocus
+      locale={locale}
+      title={focusTitle}
+      body={focusBody}
+      context={activeUnit?.name}
+      metrics={[
+        {label:t.debt,value:debtCount,tone:debtCount>0?'attention':'muted'},
+        {label:t.dueSoon,value:dueSoonCount,tone:dueSoonCount>0?'attention':'muted'},
+        {label:t.unassigned,value:unassignedCount,tone:unassignedCount>0?'attention':'muted'},
+        {label:t.myLoad,value:myOpenCount+'/10',tone:myOpenCount>=10?'attention':myOpenCount>0?'good':'muted'},
+      ]}
+      actions={[
+        {label:attentionCount>0?t.attention:t.open,onClick:()=>{setTab(attentionCount>0?'attention':'open');document.getElementById('care-worklist')?.scrollIntoView({behavior:'smooth',block:'start'})},primary:true},
+        {label:t.newRequest,onClick:()=>setShowNew(true),disabled:busy||!people.length},
+      ]}
+    />
+
+    <section className="journey-area-toolbar">
+      {congregations.length>1?<label><span>{t.congregation}</span><select value={congregationId} onChange={(event) => void selectCongregation(event.target.value)} disabled={busy}>{congregations.map((item) => <option value={item.id} key={item.id}>{item.name}{item.city ? ` · ${item.city}` : ''}</option>)}</select></label>:null}
+      <label className="grow"><span>{t.search}</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t.search} /></label>
     </section>
 
-    <section className="care-panel care-toolbar">
-      <label className="care-field"><span>{t.congregation}</span><select value={congregationId} onChange={(event) => void selectCongregation(event.target.value)} disabled={busy}>{congregations.map((item) => <option value={item.id} key={item.id}>{item.name}{item.city ? ` · ${item.city}` : ''}</option>)}</select></label>
-      <label className="care-field"><span>{t.search}</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t.search} /></label>
-    </section>
-
-    <div className="care-tabs">
+    <div className="care-tabs" id="care-worklist">
       <button className={tab === 'attention' ? 'active' : ''} onClick={() => setTab('attention')}>{t.attention} <b>{debtCount + dueSoonCount + unassignedCount}</b></button>
       <button className={tab === 'open' ? 'active' : ''} onClick={() => setTab('open')}>{t.open}</button>
       <button className={tab === 'resolved' ? 'active' : ''} onClick={() => setTab('resolved')}>{t.resolved}</button>
