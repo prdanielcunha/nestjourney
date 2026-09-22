@@ -54,3 +54,22 @@
   .journey-app-content :is(.journey-section-header,.journey-hero,.runtime-hero,.presence-hero,.care-hero,.followup-hero,.implementation-hero,.governance-hero,.pastoral-hero){padding-right:88px}
   .journey-app-content .today-headline{padding-right:88px}
 }
+
+
+/* Final management/settings integration */
+.journey-app-content :is(.team-shell,.settings-shell){width:min(1160px,calc(100% - 40px));padding-top:34px}
+.journey-app-content :is(.team-topbar,.settings-header){margin-bottom:18px!important}
+.journey-app-content :is(.team-topbar,.settings-header)>select{display:none!important}
+.journey-app-content :is(.team-topbar,.settings-header) h1{font-size:clamp(28px,4.3vw,44px)!important;letter-spacing:-.045em!important;margin-bottom:6px!important}
+.journey-app-content :is(.team-topbar,.settings-header) p{max-width:760px!important;color:#8b8f88!important;font-size:10.5px!important;line-height:1.55!important}
+.journey-app-content :is(.team-kicker,.settings-kicker){color:#b99058!important}
+.journey-app-content :is(.team-member-card,.team-front-grid article,.settings-panel,.team-access-card,.team-capabilities){border-color:rgba(255,255,255,.065)!important;background:linear-gradient(180deg,rgba(18,19,17,.78),rgba(13,14,13,.82))!important;box-shadow:none!important}
+.journey-app-content .team-member-avatar{background:rgba(199,154,87,.08)!important;color:#d1aa72!important}
+.journey-app-content :is(.team-role-editor select,.settings-fields input){border-color:rgba(255,255,255,.075)!important;background:#10110f!important;color:#ece9e3!important}
+.journey-app-content :is(.team-role-editor select,.settings-fields input):focus{border-color:rgba(199,154,87,.24)!important;box-shadow:0 0 0 3px rgba(199,154,87,.055)!important}
+.journey-app-content :is(.team-save-button,.settings-actions .primary){border-color:#d7b277!important;background:#e5c493!important;color:#17130e!important}
+.journey-app-content .settings-actions .secondary{border-color:rgba(255,255,255,.075)!important;background:#111210!important;color:#9da19a!important}
+.journey-app-content .team-hub-actions a{border-color:rgba(199,154,87,.16)!important;background:rgba(199,154,87,.05)!important;color:#c7a269!important}
+.journey-app-content .team-org-wide{border-color:rgba(114,179,140,.16)!important;background:rgba(80,153,106,.045)!important}
+.journey-app-content .team-guidance,.journey-app-content .settings-safety{border-color:rgba(199,154,87,.12)!important;background:rgba(199,154,87,.035)!important}
+@media(max-width:680px){.journey-app-content :is(.team-shell,.settings-shell){width:min(100% - 20px,1160px);padding-top:58px}.journey-app-content :is(.team-topbar,.settings-header){padding-right:88px}}
