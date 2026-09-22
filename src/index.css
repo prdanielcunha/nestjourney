@@ -35,3 +35,22 @@
 .journey-app-content :is(input,select,textarea){border-color:rgba(255,255,255,.075)!important;background:#10110f!important;color:#ece9e3!important}
 .journey-app-content :is(.journey-card-icon,.journey-icon,.runtime-icon,.today-icon,.presence-icon,.care-icon,.followup-icon){background:rgba(199,154,87,.08)!important;color:#d1aa72!important}
 @media(max-width:680px){.journey-app-content :is(.journey-shell,.journey-section-shell,.runtime-shell,.today-shell,.presence-shell,.care-shell,.followup-shell,.implementation-shell,.governance-shell,.pastoral-shell){width:min(100% - 20px,1160px);padding-top:58px}}
+
+
+/* Final integrated-shell pass: language and product identity live in the shell, not in every screen. */
+.journey-app-content .journey-section-header>select,
+.journey-app-content .today-language{display:none!important}
+.journey-app-content :is(.journey-section-header,.journey-hero,.runtime-hero,.presence-hero,.care-hero,.followup-hero,.implementation-hero,.governance-hero,.pastoral-hero){margin-bottom:18px!important}
+.journey-app-content :is(.journey-section-header,.journey-hero,.runtime-hero,.presence-hero,.care-hero,.followup-hero,.implementation-hero,.governance-hero,.pastoral-hero) h1{margin-bottom:6px!important}
+.journey-app-content :is(.journey-section-header,.journey-hero,.runtime-hero,.presence-hero,.care-hero,.followup-hero,.implementation-hero,.governance-hero,.pastoral-hero) p{max-width:760px!important;font-size:10.5px!important;line-height:1.55!important}
+.journey-app-content :is(.runtime-progress i,.implementation-progress-track i){background:#c79a57!important}
+.journey-app-content :is(.runtime-badge,.journey-status){border-color:rgba(114,179,140,.2)!important;background:rgba(80,153,106,.08)!important;color:#8fc5a2!important}
+.journey-app-content :is(.runtime-badge.attention,.journey-status.warn){border-color:rgba(211,165,96,.22)!important;background:rgba(211,165,96,.08)!important;color:#d5aa69!important}
+.journey-app-content :is(.journey-list-row.selected,.journey-unit-pulse.selected){border-color:rgba(199,154,87,.28)!important;box-shadow:inset 3px 0 0 rgba(199,154,87,.62)!important}
+.journey-app-content :is(.runtime-facts span,.runtime-count,.followup-facts span,.care-card-grid>div){border-color:rgba(255,255,255,.055)!important;background:#0f100e!important}
+.journey-app-content .runtime-preparation{border-color:rgba(199,154,87,.12)!important;background:rgba(199,154,87,.035)!important}
+.journey-app-content .runtime-preparation>span{color:#caa46d!important}
+@media(max-width:680px){
+  .journey-app-content :is(.journey-section-header,.journey-hero,.runtime-hero,.presence-hero,.care-hero,.followup-hero,.implementation-hero,.governance-hero,.pastoral-hero){padding-right:88px}
+  .journey-app-content .today-headline{padding-right:88px}
+}
