@@ -2160,6 +2160,61 @@ export async function listCareRequests(organizationId: string, congregationId: s
   }).sort((a, b) => Date.parse(a.dueAt) - Date.parse(b.dueAt))
 }
 
+export async function synchronizeCareLifecycleFacts(
+  access: JourneyAccessContext,
+  requests: CareRequestRecord[],
+) {
+  if (!access.canManageCare && !canViewJourneyIntelligence(access)) return
+  const due = requests.filter((item) =>
+    item.status === 'open'
+    && Number.isFinite(Date.parse(item.dueAt))
+    && Date.parse(item.dueAt) < Date.now()
+  )
+  if (!due.length) return
+  const firestore = requireDb()
+
+  for (const request of due) {
+    assertJourneyUnitScope(access, request.congregationId)
+    const careRef = doc(firestore, `${journeyCollectionPath(access.organizationId, 'careRequests')}/${request.id}`)
+    const dueFactRef = doc(firestore, `${journeyCollectionPath(access.organizationId, 'facts')}/care-due-${request.id}`)
+    const debtFactRef = doc(firestore, `${journeyCollectionPath(access.organizationId, 'facts')}/care-debt-${request.id}`)
+    const [careSnapshot, dueSnapshot, debtSnapshot] = await Promise.all([
+      getDoc(careRef),
+      getDoc(dueFactRef),
+      getDoc(debtFactRef),
+    ])
+    if (!careSnapshot.exists()) continue
+    const batch = writeBatch(firestore)
+    let changed = false
+    const common = {
+      occurredAt: serverTimestamp(),
+      recordedAt: serverTimestamp(),
+      organizationId: access.organizationId,
+      actorId: access.userId,
+      subjectRef: `person:${request.personId}`,
+      sourceApp: 'nestjourney' as const,
+      scope: `congregation:${request.congregationId}`,
+      evidenceRef: `careRequest:${request.id}`,
+      sensitivity: 'confidential' as const,
+      version: 1 as const,
+      payload: {
+        careRequestId: request.id,
+        personId: request.personId,
+        dueAt: request.dueAt,
+      },
+    }
+    if (!dueSnapshot.exists()) {
+      batch.set(dueFactRef, { ...common, eventId: dueFactRef.id, eventType: 'CARE_PROMISE_DUE' })
+      changed = true
+    }
+    if (!debtSnapshot.exists()) {
+      batch.set(debtFactRef, { ...common, eventId: debtFactRef.id, eventType: 'CARE_DEBT_OPENED' })
+      changed = true
+    }
+    if (changed) await batch.commit()
+  }
+}
+
 export async function listJourneyFollowups(access: JourneyAccessContext, congregationId: string): Promise<JourneyFollowupRecord[]> {
   if (!access.canManageCare && !access.broadJourneyAccess) return []
   const firestore = requireDb()
