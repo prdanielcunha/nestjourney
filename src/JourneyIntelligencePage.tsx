@@ -28,6 +28,7 @@ import {
   resolveSafeVoiceCase,
   setActiveJourneyCongregationId,
   setJourneyWorkflowEnabled,
+  synchronizeCareLifecycleFacts,
   type CareRequestRecord,
   type JourneyAccessContext,
   type JourneyCongregation,
@@ -142,6 +143,7 @@ export default function JourneyIntelligencePage(){
       safe(listExitFeedback(nextAccess,nextUnit),[] as JourneyExitFeedback[]),
       safe(listJourneyWorkflows(nextAccess,nextUnit),[] as JourneyWorkflowRecord[]),
     ])
+    await synchronizeCareLifecycleFacts(nextAccess,nextCare).catch((cause)=>console.warn('care lifecycle facts',cause))
     setPeople(nextPeople);setCare(nextCare);setGroups(nextGroups);setDiscipleships(nextDiscipleships);setSessions(nextSessions)
     setPulse(nextPulse);setSignals(nextSignals);setSafeVoice(nextVoice);setExitFeedback(nextExit);setWorkflows(nextWorkflows)
     if(nextAccess.canManagePresence&&nextSessions.length){
