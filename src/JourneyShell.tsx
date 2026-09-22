@@ -1,10 +1,16 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import {
-  BarChart3, CircleHelp, CloudOff, Eye, HeartHandshake, House, Leaf, LayoutGrid, ListTodo,
-  MoreHorizontal, Settings2, UserCheck, Users, UsersRound,
+  BarChart3, ChevronDown, CircleHelp, CloudOff, Eye, HeartHandshake, House, Leaf,
+  ListTodo, MoreHorizontal, Settings2, UserCheck, Users, UsersRound, Workflow,
 } from 'lucide-react'
 import { auth } from './firebase'
-import { getActiveJourneyOrganizationId, loadJourneyAccess, type JourneyAccessContext } from './journeyRepository'
+import {
+  getActiveJourneyOrganizationId,
+  loadJourneyAccess,
+  setJourneyViewAsRole,
+  type JourneyAccessContext,
+  type JourneyViewAsRole,
+} from './journeyRepository'
 import { canOpenJourneyArea, canViewJourneyPeople, canViewJourneyVision, resolveJourneyResponsibility } from './journeyExperience'
 import { getInitialLocale, localeLabels, persistLocale, type AppLocale } from './i18n'
 import { useJourneyLabels } from './journeyLabels'
@@ -20,38 +26,63 @@ type NavItem={
 
 const copy={
   'pt-BR':{
-    tagline:'cuidado em cada passo',primary:'Principal',today:'Hoje',todayDesc:'O que depende de você agora',
-    people:'Pessoas',peopleDesc:'Cadastro, busca e jornada permitida',areas:'Áreas',areasDesc:'As cinco frentes operacionais',
-    vision:'Visão',visionDesc:'Coordenação, pastoral, gestão e CEO',more:'Mais',moreDesc:'Gestão, implantação e ajustes',
-    presence:'Presença',presenceDesc:'Cultos, visitantes e vínculo',table:'Mesa Aberta',tableDesc:'Convidados e participação',
+    tagline:'cuidado em cada passo',today:'Hoje',todayDesc:'O que precisa de você agora',
+    people:'Pessoas',peopleDesc:'Pessoas e jornada permitida',journey:'Jornada',journeyDesc:'O caminho de cuidado e suas áreas',
+    vision:'Visão',visionDesc:'Leitura pastoral, operacional e executiva',management:'Gestão',managementDesc:'Equipe, implantação, relatórios e ajustes',
+    areas:'Áreas de cuidado',presence:'Presença',presenceDesc:'Cultos, visitantes e vínculo',table:'Mesa Aberta',tableDesc:'Hospitalidade e participação',
     care:'Cuidado & Conexão',careDesc:'Contato em 24–48h e próximos passos',groups:'Casas de Paz',groupsDesc:'Casas, participantes e operação',
-    root:'Raiz',rootDesc:'Discipulado inicial 1–7',available:'Disponível',restricted:'Sem acesso neste papel',
-    language:'Idioma',role:'Seu acesso',offline:'Sem conexão. As ações serão retomadas quando a internet voltar.',
+    root:'Raiz',rootDesc:'Discipulado inicial 1–7',restricted:'Sem acesso neste papel',
+    language:'Idioma',role:'Seu acesso',realAccess:'Acesso real',viewAs:'Visualizar experiência como',
+    viewing:'Visualizando como',backCeo:'Voltar à visão CEO',offline:'Sem conexão. As ações serão retomadas quando a internet voltar.',
   },
   en:{
-    tagline:'care at every step',primary:'Main',today:'Today',todayDesc:'What depends on you now',
-    people:'People',peopleDesc:'Profile, search, and permitted journey',areas:'Areas',areasDesc:'The five operational fronts',
-    vision:'Vision',visionDesc:'Coordination, pastoral, management, and CEO',more:'More',moreDesc:'Management, implementation, and settings',
-    presence:'Presence',presenceDesc:'Services, visitors, and relationship',table:'Open Table',tableDesc:'Guests and participation',
-    care:'Care & Connection',careDesc:'24–48h contact and next steps',groups:'Peace Houses',groupsDesc:'Houses, participants, and operations',
-    root:'Root',rootDesc:'Initial discipleship 1–7',available:'Available',restricted:'Not available for this role',
-    language:'Language',role:'Your access',offline:'You are offline. Actions will resume when your internet connection returns.',
+    tagline:'care at every step',today:'Today',todayDesc:'What needs you now',
+    people:'People',peopleDesc:'People and permitted journey',journey:'Journey',journeyDesc:'The care path and its areas',
+    vision:'Vision',visionDesc:'Pastoral, operational, and executive read',management:'Management',managementDesc:'Team, rollout, reports, and settings',
+    areas:'Care areas',presence:'Presence',presenceDesc:'Services, visitors, and relationships',table:'Open Table',tableDesc:'Hospitality and participation',
+    care:'Care & Connection',careDesc:'24–48h contact and next steps',groups:'Peace Houses',groupsDesc:'Groups, participants, and operations',
+    root:'Root',rootDesc:'Initial discipleship 1–7',restricted:'Not available for this role',
+    language:'Language',role:'Your access',realAccess:'Real access',viewAs:'View experience as',
+    viewing:'Viewing as',backCeo:'Return to CEO view',offline:'You are offline. Actions will resume when your internet connection returns.',
   },
   es:{
-    tagline:'cuidado en cada paso',primary:'Principal',today:'Hoy',todayDesc:'Lo que depende de ti ahora',
-    people:'Personas',peopleDesc:'Registro, búsqueda y jornada permitida',areas:'Áreas',areasDesc:'Los cinco frentes operativos',
-    vision:'Visión',visionDesc:'Coordinación, pastoral, gestión y CEO',more:'Más',moreDesc:'Gestión, implementación y configuración',
-    presence:'Presencia',presenceDesc:'Cultos, visitantes y vínculo',table:'Mesa Abierta',tableDesc:'Invitados y participación',
+    tagline:'cuidado en cada paso',today:'Hoy',todayDesc:'Lo que necesita de ti ahora',
+    people:'Personas',peopleDesc:'Personas y jornada permitida',journey:'Jornada',journeyDesc:'El camino de cuidado y sus áreas',
+    vision:'Visión',visionDesc:'Lectura pastoral, operativa y ejecutiva',management:'Gestión',managementDesc:'Equipo, implementación, informes y ajustes',
+    areas:'Áreas de cuidado',presence:'Presencia',presenceDesc:'Cultos, visitantes y vínculo',table:'Mesa Abierta',tableDesc:'Hospitalidad y participación',
     care:'Cuidado & Conexión',careDesc:'Contacto en 24–48h y próximos pasos',groups:'Casas de Paz',groupsDesc:'Casas, participantes y operación',
-    root:'Raíz',rootDesc:'Discipulado inicial 1–7',available:'Disponible',restricted:'Sin acceso en este papel',
-    language:'Idioma',role:'Tu acceso',offline:'Sin conexión. Las acciones se reanudarán cuando vuelva internet.',
+    root:'Raíz',rootDesc:'Discipulado inicial 1–7',restricted:'Sin acceso en este rol',
+    language:'Idioma',role:'Tu acceso',realAccess:'Acceso real',viewAs:'Visualizar experiencia como',
+    viewing:'Visualizando como',backCeo:'Volver a la visión CEO',offline:'Sin conexión. Las acciones se reanudarán cuando vuelva internet.',
   },
 } as const
+
+const roleLabels:Record<AppLocale,Record<JourneyViewAsRole,string>>={
+  'pt-BR':{
+    ceo:'CEO MillionsNest',admin:'Dono / Administrador',pastor:'Pastor',coordinator:'Coordenador',
+    presence_host:'Presença',mesa_team:'Mesa Aberta',caregiver:'Cuidado & Conexão',
+    group_leader:'Líder de Casa de Paz',discipler:'Discipulador',
+  },
+  en:{
+    ceo:'MillionsNest CEO',admin:'Owner / Administrator',pastor:'Pastor',coordinator:'Coordinator',
+    presence_host:'Presence',mesa_team:'Open Table',caregiver:'Care & Connection',
+    group_leader:'Peace House Leader',discipler:'Discipler',
+  },
+  es:{
+    ceo:'CEO MillionsNest',admin:'Dueño / Administrador',pastor:'Pastor',coordinator:'Coordinador',
+    presence_host:'Presencia',mesa_team:'Mesa Abierta',caregiver:'Cuidado & Conexión',
+    group_leader:'Líder de Casa de Paz',discipler:'Discipulador',
+  },
+}
+
+const viewAsOptions:JourneyViewAsRole[]=[
+  'ceo','admin','pastor','coordinator','presence_host','mesa_team','caregiver','group_leader','discipler',
+]
 
 function sameRoute(href:string,pathname:string){
   if(href==='/my-today')return pathname==='/'||pathname==='/my-today'
   if(href==='/areas')return pathname==='/areas'||['/presence-assist','/mesa-runtime','/care-integrity','/groups-runtime','/discipleship-runtime'].includes(pathname)
-  if(href==='/more')return pathname==='/more'||['/team-runtime','/implementation-runtime','/reports','/governance-runtime','/settings-runtime','/help'].includes(pathname)
+  if(href==='/more')return pathname==='/more'||['/team-runtime','/implementation-runtime','/reports','/governance-runtime','/settings-runtime','/help','/pastoral-handoff'].includes(pathname)
   return pathname===href
 }
 
@@ -60,11 +91,12 @@ export function JourneyShell({children}:{children:ReactNode}){
   const [locale,setLocale]=useState<AppLocale>(getInitialLocale)
   const [pathname,setPathname]=useState(()=>window.location.pathname)
   const [online,setOnline]=useState(()=>navigator.onLine)
+  const [accessOpen,setAccessOpen]=useState(false)
   const {labels}=useJourneyLabels()
   const t=copy[locale]
 
   useEffect(()=>{
-    const syncPath=()=>setPathname(window.location.pathname)
+    const syncPath=()=>{setPathname(window.location.pathname);setAccessOpen(false)}
     window.addEventListener('popstate',syncPath)
     return()=>window.removeEventListener('popstate',syncPath)
   },[])
@@ -103,6 +135,7 @@ export function JourneyShell({children}:{children:ReactNode}){
   const primary:NavItem[]=[
     {href:'/my-today',label:t.today,description:t.todayDesc,icon:ListTodo},
     {href:'/journey-profile',label:t.people,description:t.peopleDesc,icon:Users,enabled:a=>canViewJourneyPeople(a)},
+    {href:'/areas',label:t.journey,description:t.journeyDesc,icon:Workflow},
     {href:'/vision',label:t.vision,description:t.visionDesc,icon:Eye,enabled:a=>canViewJourneyVision(a)},
   ]
   const areas:NavItem[]=[
@@ -127,9 +160,15 @@ export function JourneyShell({children}:{children:ReactNode}){
   const renderItem=(item:NavItem)=>{
     const Icon=item.icon
     const enabled=!item.enabled||Boolean(access&&item.enabled(access))
-    return <button key={item.href} className={(sameRoute(item.href,pathname)?'active ':'')+(enabled?'':'disabled')} onClick={()=>navigate(item.href,enabled)}>
-      <span className="journey-nav-icon"><Icon size={17}/></span>
-      <span className="journey-nav-copy"><strong>{item.label}</strong><small>{enabled?item.description:t.restricted}</small></span>
+    return <button
+      key={item.href}
+      className={(sameRoute(item.href,pathname)?'active ':'')+(enabled?'':'disabled')}
+      onClick={()=>navigate(item.href,enabled)}
+      title={enabled?item.description:t.restricted}
+      aria-label={item.label}
+    >
+      <Icon size={17}/>
+      <span>{item.label}</span>
     </button>
   }
 
@@ -141,23 +180,41 @@ export function JourneyShell({children}:{children:ReactNode}){
     :responsibility==='group_leader'?{href:'/groups-runtime',label:names.groups,icon:House}
     :responsibility==='discipler'?{href:'/discipleship-runtime',label:names.root,icon:Leaf}
     :{href:'/help',label:locale==='en'?'Help':locale==='es'?'Ayuda':'Ajuda',icon:CircleHelp}
+
   const mobileFourth=access&&canViewJourneyVision(access)
     ?{href:'/vision',label:t.vision,icon:BarChart3}
     :roleShortcut
   const mobileSecond=access&&canViewJourneyPeople(access)
     ?{href:'/journey-profile',label:t.people,icon:Users}
-    :{href:'/help',label:locale==='en'?'Help':locale==='es'?'Ayuda':'Ajuda',icon:CircleHelp}
+    :roleShortcut
   const mobileCandidates=[
     {href:'/my-today',label:t.today,icon:ListTodo},
     mobileSecond,
-    {href:'/areas',label:t.areas,icon:LayoutGrid},
+    {href:'/areas',label:t.journey,icon:Workflow},
     mobileFourth,
-    {href:'/more',label:t.more,icon:MoreHorizontal},
+    {href:'/more',label:t.management,icon:MoreHorizontal},
   ]
   const mobile=mobileCandidates.filter((item,index,items)=>items.findIndex(candidate=>candidate.href===item.href)===index)
 
+  const isRealCeo=Boolean(access&&(access.actualIsSystemAdmin||access.isSystemAdmin))
+  const currentView=(access?.viewAsRole||(access?.isSystemAdmin?'ceo':undefined)) as JourneyViewAsRole|undefined
+  const displayRole=currentView
+    ?roleLabels[locale][currentView]
+    :access?.isOwner?'Owner':access?.role||'member'
+
+  const chooseView=(role:JourneyViewAsRole)=>{
+    setJourneyViewAsRole(role==='ceo'?null:role)
+    setAccessOpen(false)
+    window.location.reload()
+  }
+
   return <div className="journey-app-frame">
     {!online?<div className="journey-network-banner" role="status"><CloudOff size={15}/><span>{t.offline}</span></div>:null}
+    {isRealCeo&&currentView&&currentView!=='ceo'?<div className="journey-view-banner" role="status">
+      <span>{t.viewing} <strong>{roleLabels[locale][currentView]}</strong></span>
+      <button onClick={()=>chooseView('ceo')}>{t.backCeo}</button>
+    </div>:null}
+
     <aside className="journey-side-nav">
       <button className="journey-side-brand" onClick={()=>navigate('/my-today')}>
         <img src="/icon.svg" alt=""/>
@@ -165,29 +222,35 @@ export function JourneyShell({children}:{children:ReactNode}){
       </button>
 
       <nav aria-label="NestJourney">
-        <section className="journey-nav-group">
-          <span className="journey-nav-label">{t.primary}</span>
+        <section className="journey-nav-group journey-nav-primary">
           {visiblePrimary.map(renderItem)}
         </section>
 
-        <section className="journey-nav-group">
-          <button className={sameRoute('/areas',pathname)?'active section-link':''} onClick={()=>navigate('/areas')}>
-            <span className="journey-nav-icon"><LayoutGrid size={17}/></span>
-            <span className="journey-nav-copy"><strong>{t.areas}</strong><small>{t.areasDesc}</small></span>
-          </button>
-          <div className="journey-nav-children">{visibleAreas.map(renderItem)}</div>
-        </section>
+        {visibleAreas.length?<section className="journey-nav-group journey-nav-areas">
+          <span className="journey-nav-label">{t.areas}</span>
+          {visibleAreas.map(renderItem)}
+        </section>:null}
 
-        <section className="journey-nav-group">
-          <button className={sameRoute('/more',pathname)?'active section-link':''} onClick={()=>navigate('/more')}>
-            <span className="journey-nav-icon"><MoreHorizontal size={17}/></span>
-            <span className="journey-nav-copy"><strong>{t.more}</strong><small>{t.moreDesc}</small></span>
-          </button>
+        <section className="journey-nav-group journey-nav-management">
+          {renderItem({href:'/more',label:t.management,description:t.managementDesc,icon:Settings2})}
         </section>
       </nav>
 
       <div className="journey-side-footer">
-        {access?<div className="journey-access-chip"><Settings2 size={14}/><span><small>{t.role}</small><strong>{access.isSystemAdmin?'CEO MillionsNest':access.isOwner?'Owner':access.role||'member'}</strong></span></div>:null}
+        {access?<div className="journey-access-wrap">
+          {isRealCeo?<button className={'journey-access-chip interactive '+(accessOpen?'open':'')} onClick={()=>setAccessOpen(value=>!value)} aria-expanded={accessOpen}>
+            <span><small>{t.role}</small><strong>{displayRole}</strong></span><ChevronDown size={15}/>
+          </button>:<div className="journey-access-chip"><span><small>{t.role}</small><strong>{displayRole}</strong></span></div>}
+          {isRealCeo&&accessOpen?<div className="journey-access-menu">
+            <div className="journey-access-real"><small>{t.realAccess}</small><strong>CEO MillionsNest</strong></div>
+            <div className="journey-access-menu-title">{t.viewAs}</div>
+            <div className="journey-access-options">
+              {viewAsOptions.map(role=><button className={currentView===role?'active':''} key={role} onClick={()=>chooseView(role)}>
+                <span>{roleLabels[locale][role]}</span>{currentView===role?<b>✓</b>:null}
+              </button>)}
+            </div>
+          </div>:null}
+        </div>:null}
         <label className="journey-language"><span>{t.language}</span><select className="journey-locale" value={locale} onChange={event=>{const next=event.target.value as AppLocale;setLocale(next);persistLocale(next)}}>{(Object.keys(localeLabels) as AppLocale[]).map(id=><option value={id} key={id}>{localeLabels[id]}</option>)}</select></label>
       </div>
     </aside>
@@ -197,8 +260,7 @@ export function JourneyShell({children}:{children:ReactNode}){
     <nav className="journey-mobile-bar" aria-label="NestJourney">
       {mobile.map(item=>{
         const Icon=item.icon
-        const directHelp=mobile.some(candidate=>candidate.href==='/help')
-        const active=item.href==='/more'&&directHelp&&pathname==='/help'?false:sameRoute(item.href,pathname)
+        const active=sameRoute(item.href,pathname)
         return <button className={active?'active':''} key={item.href} onClick={()=>navigate(item.href)}><Icon size={19}/><span>{item.label}</span></button>
       })}
     </nav>
