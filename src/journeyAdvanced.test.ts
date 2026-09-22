@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildBelongingSignals, buildJourneyIntelligenceSnapshot, evaluateJourneyWorkflow, parseJourneyWorkflowDraft } from './journeyAdvanced'
+import { buildBelongingGraph, buildBelongingSignals, buildJourneyIntelligenceSnapshot, evaluateJourneyWorkflow, parseJourneyWorkflowDraft } from './journeyAdvanced'
 import type { CareRequestRecord, JourneyWorkflowRecord } from './journeyRepository'
 
 describe('advanced NestJourney intelligence',()=>{
@@ -34,6 +34,27 @@ describe('advanced NestJourney intelligence',()=>{
       people:[{id:'person',organizationId:'o',congregationId:'c',name:'Pessoa',groupId:'g1'}],
       careRequests:[],discipleships:[],sessions,checks,now:new Date('2026-09-20T00:00:00Z'),
     })).toHaveLength(0)
+  })
+
+  it('builds a belonging graph only from explicit recorded relationships',()=>{
+    const graph=buildBelongingGraph({
+      people:[{id:'p1',organizationId:'o',congregationId:'c',name:'Pessoa',groupId:'g1',bondHostRef:'host1'}],
+      groups:[{id:'g1',organizationId:'o',congregationId:'c',name:'Casa Centro'}],
+      careRequests:[{
+        id:'care1',organizationId:'o',congregationId:'c',personId:'p1',careType:'first_contact',source:'manual',
+        status:'open',requestedAt:'2026-09-01T00:00:00Z',requestedBy:'u',promiseHours:48,dueAt:'2026-09-03T00:00:00Z',ownerRef:'caregiver1',
+      }],
+      discipleships:[{
+        id:'d1',organizationId:'o',congregationId:'c',personId:'p1',disciplerId:'discipler1',
+        meeting:2,status:'active',nextMeeting:'Agendar encontro 3',
+      }],
+    })
+    expect(graph.relationshipCounts.belongs_to).toBe(1)
+    expect(graph.relationshipCounts.participates_in).toBe(1)
+    expect(graph.relationshipCounts.cared_by).toBe(1)
+    expect(graph.relationshipCounts.discipled_by).toBe(1)
+    expect(graph.relationshipCounts.welcomed_by).toBe(1)
+    expect(graph.edges.every(edge=>Boolean(edge.evidenceRef))).toBe(true)
   })
 
   it('builds objective workflow metrics from recorded facts',()=>{
