@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, CheckCircle2, ChevronLeft, Clock3, Copy, HeartHandshake, MessageSquareText, Plus, ShieldCheck, X } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, ChevronLeft, Copy, HeartHandshake, MessageSquareText, ShieldCheck, X } from 'lucide-react'
 import { auth } from './firebase'
 import { evaluateCarePromise } from './intelligence'
 import {
