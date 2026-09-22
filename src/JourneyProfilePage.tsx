@@ -4,7 +4,7 @@ import { auth } from './firebase'
 import { buildJourneyProfileSnapshot } from './journeyProfile'
 import {
   canManageJourneyGroupRoster,
-  getActiveJourneyOrganizationId,
+  getActiveJourneyOrganizationId, resolveActiveJourneyCongregationId, setActiveJourneyCongregationId,
   listCareRequests,
   listJourneyCongregations,
   listJourneyDiscipleships,
@@ -110,7 +110,7 @@ export default function JourneyProfilePage() {
       if (!canViewJourneyPeople(nextAccess)) return
       const nextCongregations = await listJourneyCongregations(nextAccess)
       setCongregations(nextCongregations)
-      const unitId = nextCongregations[0]?.id ?? ''
+      const unitId = resolveActiveJourneyCongregationId(nextAccess.organizationId, nextCongregations)
       setCongregationId(unitId)
       if (unitId) await refreshScope(nextAccess, unitId)
     } catch (cause) {
@@ -126,6 +126,7 @@ export default function JourneyProfilePage() {
   async function selectCongregation(unitId: string) {
     if (!access) return
     setCongregationId(unitId)
+    setActiveJourneyCongregationId(access.organizationId,unitId)
     setBusy(true)
     setError('')
     try { await refreshScope(access, unitId) }
