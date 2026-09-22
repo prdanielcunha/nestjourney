@@ -7,7 +7,6 @@ import {
   careRequestToPromise,
   getActiveJourneyOrganizationId,
   listCareRequests,
-  listJourneyAuditEvents,
   listJourneyCongregations,
   listJourneyDiscipleships,
   listJourneyGroups,
@@ -20,7 +19,6 @@ import {
   setJourneyViewAsRole,
   type CareRequestRecord,
   type JourneyAccessContext,
-  type JourneyAuditEvent,
   type JourneyCongregation,
   type JourneyDiscipleshipRecord,
   type JourneyGroupRecord,
@@ -134,7 +132,6 @@ export default function JourneyVisionPage(){
   const [groups,setGroups]=useState<JourneyGroupRecord[]>([])
   const [discipleships,setDiscipleships]=useState<JourneyDiscipleshipRecord[]>([])
   const [pastoral,setPastoral]=useState<JourneyPastoralHandoff[]>([])
-  const [audit,setAudit]=useState<JourneyAuditEvent[]>([])
   const [simulation,setSimulation]=useState<JourneyResponsibility>('coordinator')
   const [loading,setLoading]=useState(true)
   const [busy,setBusy]=useState(false)
@@ -153,16 +150,15 @@ export default function JourneyVisionPage(){
   },[])
 
   const loadUnit=useCallback(async(nextAccess:JourneyAccessContext,nextUnit:string)=>{
-    const [p,c,s,g,d,h,a]=await Promise.all([
+    const [p,c,s,g,d,h]=await Promise.all([
       listJourneyPeople(nextAccess.organizationId,nextUnit),
       (nextAccess.canManageCare||nextAccess.broadJourneyAccess)?listCareRequests(nextAccess.organizationId,nextUnit):Promise.resolve([]),
       (nextAccess.canManagePresence||nextAccess.canManageMesa)?listPresenceSessions(nextAccess.organizationId,nextUnit):Promise.resolve([]),
       (nextAccess.canManageGroups||nextAccess.broadJourneyAccess)?listJourneyGroups(nextAccess.organizationId,nextUnit):Promise.resolve([]),
       (nextAccess.canManageDiscipleship||nextAccess.broadJourneyAccess)?listJourneyDiscipleships(nextAccess,nextUnit):Promise.resolve([]),
       nextAccess.canManagePastoral?listPastoralHandoffs(nextAccess.organizationId,nextUnit):Promise.resolve([]),
-      nextAccess.canViewGovernance?listJourneyAuditEvents(nextAccess.organizationId,nextUnit):Promise.resolve([]),
     ])
-    setPeople(p);setCare(c);setSessions(s);setGroups(g);setDiscipleships(d);setPastoral(h);setAudit(a)
+    setPeople(p);setCare(c);setSessions(s);setGroups(g);setDiscipleships(d);setPastoral(h)
   },[])
 
   const loadOrganization=useCallback(async(userId:string,nextOrgId:string)=>{
@@ -174,7 +170,7 @@ export default function JourneyVisionPage(){
     setUnitPulses(pulses)
     const nextUnit=nextUnits[0]?.id??'';setUnitId(nextUnit)
     if(nextUnit)await loadUnit(nextAccess,nextUnit)
-    else {setPeople([]);setCare([]);setSessions([]);setGroups([]);setDiscipleships([]);setPastoral([]);setAudit([])}
+    else {setPeople([]);setCare([]);setSessions([]);setGroups([]);setDiscipleships([]);setPastoral([])}
   },[loadUnit,loadUnitPulse])
 
   const bootstrap=useCallback(async()=>{
@@ -224,11 +220,10 @@ export default function JourneyVisionPage(){
       withoutNextStep,
       sessions:sessions.filter(x=>x.status==='open').length,
       pastoral:pastoral.filter(x=>x.status==='open').length,
-      audit:audit.length,
       groups:groups.length,
       discipleships:discipleships.filter(x=>x.status==='active').length,
     }
-  },[people,care,sessions,pastoral,audit,groups,discipleships])
+  },[people,care,sessions,pastoral,groups,discipleships])
 
   if(loading)return <main className="journey-section-page"><div className="journey-loading">{t.loading}</div></main>
   if(!access||!canViewJourneyVision(access))return <main className="journey-section-page"><AccessDeniedState locale={locale} title={t.title} body={t.noAccess} /></main>
