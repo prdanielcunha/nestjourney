@@ -43,6 +43,7 @@ import {
   type PresenceSessionRecord,
 } from './journeyRepository'
 import {
+  buildBelongingGraph,
   buildBelongingSignals,
   buildJourneyInsights,
   buildJourneyIntelligenceSnapshot,
@@ -178,6 +179,7 @@ export default function JourneyIntelligencePage(){
     try{await fn();await refresh()}catch(cause){console.error(cause);setError(t.errors)}finally{setBusy('')}
   }
 
+  const belongingGraph=useMemo(()=>buildBelongingGraph({people,careRequests:care,discipleships,groups}),[people,care,discipleships,groups])
   const snapshot=useMemo(()=>buildJourneyIntelligenceSnapshot({careRequests:care,groups,discipleships,pulse,safeVoice,exitFeedback,belonging,memberSignals:signals}),[care,groups,discipleships,pulse,safeVoice,exitFeedback,belonging,signals])
   const insights=useMemo(()=>buildJourneyInsights(snapshot),[snapshot])
   const workflowDraft=useMemo(()=>parseJourneyWorkflowDraft(workflowText),[workflowText])
@@ -219,7 +221,16 @@ export default function JourneyIntelligencePage(){
       <section className="ji-section" id="exit"><header><Leaf size={18}/><div><h2>{t.exit}</h2><p>{t.exitDesc}</p></div></header><div className="ji-stats">{Object.entries(exitCounts).length?Object.entries(exitCounts).map(([reason,count])=><div key={reason}><span>{t.reasons[reason]??reason}</span><strong>{count}</strong></div>):<div><span>{locale==='en'?'Last 90 days':locale==='es'?'Últimos 90 días':'Últimos 90 dias'}</span><strong>0</strong></div>}</div></section>
     </div>
 
-    <section className="ji-section" id="belonging"><header><UsersRound size={18}/><div><h2>{t.belonging}</h2><p>{t.belongingDesc}</p></div></header><div className="ji-list">{belonging.length?belonging.map(item=><article key={item.personId}><span><strong>{item.personName}</strong><small>{item.evidenceRefs.slice(1).join(' · ')}</small></span><b>{item.presentSessions} {t.visits}</b><a href={'/journey-profile?person='+encodeURIComponent(item.personId)}><ArrowRight size={14}/></a></article>):<div className="ji-empty"><CheckCircle2 size={19}/>{t.clear}</div>}</div></section>
+    <section className="ji-section" id="belonging"><header><UsersRound size={18}/><div><h2>{t.belonging}</h2><p>{t.belongingDesc}</p></div></header>
+      <div className="ji-belonging-graph" aria-label={t.belonging}>
+        <div><span>{locale==='en'?'Congregation links':locale==='es'?'Vínculos con sede':'Vínculos com unidade'}</span><strong>{belongingGraph.relationshipCounts.belongs_to}</strong></div>
+        <div><span>{locale==='en'?'House links':locale==='es'?'Vínculos con Casas':'Vínculos com Casas'}</span><strong>{belongingGraph.relationshipCounts.participates_in}</strong></div>
+        <div><span>{locale==='en'?'Care links':locale==='es'?'Vínculos de cuidado':'Vínculos de cuidado'}</span><strong>{belongingGraph.relationshipCounts.cared_by}</strong></div>
+        <div><span>{locale==='en'?'Root links':locale==='es'?'Vínculos de Raíz':'Vínculos de Raiz'}</span><strong>{belongingGraph.relationshipCounts.discipled_by}</strong></div>
+        <div><span>{locale==='en'?'Welcome links':locale==='es'?'Vínculos de recepción':'Vínculos de acolhimento'}</span><strong>{belongingGraph.relationshipCounts.welcomed_by}</strong></div>
+      </div>
+      <div className="ji-list">{belonging.length?belonging.map(item=><article key={item.personId}><span><strong>{item.personName}</strong><small>{item.evidenceRefs.slice(1).join(' · ')}</small></span><b>{item.presentSessions} {t.visits}</b><a href={'/journey-profile?person='+encodeURIComponent(item.personId)}><ArrowRight size={14}/></a></article>):<div className="ji-empty"><CheckCircle2 size={19}/>{t.clear}</div>}</div>
+    </section>
 
     {(access.canManageCare||access.canManagePastoral||access.canManagePrivacy)?<section className="ji-section" id="signals"><header><MessageCircleWarning size={18}/><div><h2>{t.signals}</h2><p>{t.signalsDesc}</p></div></header><div className="ji-list">{openSignals.length?openSignals.map(item=><article key={item.id}><span><strong>{item.kind.replaceAll('_',' ')}</strong><small>{new Date(item.createdAt).toLocaleString(locale)}</small>{privateValues[item.id]?<em>{privateValues[item.id]}</em>:null}</span><div className="ji-row-actions">{item.kind==='contact_update'&&access.canManagePrivacy?<button disabled={Boolean(busy)} onClick={()=>void act('private-'+item.id,async()=>setPrivateValues(current=>({...current,[item.id]:await loadMemberSignalPrivate(access,item.id)})))}>{t.showValue}</button>:null}<button disabled={Boolean(busy)} onClick={()=>void act('signal-'+item.id,()=>resolveMemberSignal(access,item))}>{t.resolve}</button></div></article>):<div className="ji-empty"><CheckCircle2 size={19}/>{t.clear}</div>}</div></section>:null}
 
