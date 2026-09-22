@@ -31,6 +31,8 @@ describe('NestJourney route resolver', () => {
     expect(resolveJourneyRoute('/settings-runtime')).toBe('settings')
     expect(resolveJourneyRoute('/governance-runtime')).toBe('governance')
     expect(resolveJourneyRoute('/pastoral-handoff')).toBe('pastoral')
+    expect(resolveJourneyRoute('/my-journey')).toBe('member')
+    expect(resolveJourneyRoute('/intelligence')).toBe('intelligence')
     expect(resolveJourneyRoute('/journey-overview')).toBe('vision')
   })
 })
