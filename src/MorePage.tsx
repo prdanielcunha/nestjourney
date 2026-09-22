@@ -8,7 +8,7 @@ import './JourneySectionPages.css'
 
 const copy={
   'pt-BR':{
-    title:'Mais',subtitle:'Gestão, implantação e configurações ficam aqui — fora do caminho do cuidado diário.',
+    title:'Gestão',subtitle:'Equipe, implantação, leitura operacional e governança ficam aqui — sem ocupar o caminho do cuidado diário.',
     loading:'Preparando opções…',available:'Disponível',restricted:'Sem acesso neste papel',
     team:'Equipe e papéis',teamDesc:'Frentes, responsabilidades, membros, convites e permissões.',
     implementation:'Implantação',implementationDesc:'Acompanhe a preparação e as sete semanas de implantação.',
@@ -17,9 +17,10 @@ const copy={
     audit:'Auditoria',auditDesc:'Histórico factual de ações e mudanças autorizadas.',
     settings:'Configurações',settingsDesc:'Nomes dos módulos e preferências da organização.',
     help:'Ajuda',helpDesc:'Entenda o que fazer em cada área sem precisar aprender o sistema inteiro.',
+    operate:'Operação',govern:'Governança',support:'Suporte',
   },
   en:{
-    title:'More',subtitle:'Management, implementation, and settings live here — outside the daily care workflow.',
+    title:'Management',subtitle:'Team, implementation, operational insight, and governance live here — outside the daily care workflow.',
     loading:'Preparing options…',available:'Available',restricted:'Not available for this role',
     team:'Team & roles',teamDesc:'Ministry fronts, responsibilities, members, invitations, and permissions.',
     implementation:'Implementation',implementationDesc:'Follow preparation and the seven implementation weeks.',
@@ -28,9 +29,10 @@ const copy={
     audit:'Audit',auditDesc:'Factual history of authorized actions and changes.',
     settings:'Settings',settingsDesc:'Organization module names and preferences.',
     help:'Help',helpDesc:'Understand what to do in each area without learning the whole system.',
+    operate:'Operations',govern:'Governance',support:'Support',
   },
   es:{
-    title:'Más',subtitle:'Gestión, implementación y configuración quedan aquí, fuera del trabajo diario de cuidado.',
+    title:'Gestión',subtitle:'Equipo, implementación, lectura operativa y gobernanza quedan aquí, fuera del trabajo diario de cuidado.',
     loading:'Preparando opciones…',available:'Disponible',restricted:'Sin acceso en este papel',
     team:'Equipo y papeles',teamDesc:'Frentes, responsabilidades, miembros, invitaciones y permisos.',
     implementation:'Implementación',implementationDesc:'Acompaña la preparación y las siete semanas de implementación.',
@@ -39,6 +41,7 @@ const copy={
     audit:'Auditoría',auditDesc:'Historial factual de acciones y cambios autorizados.',
     settings:'Configuración',settingsDesc:'Nombres de módulos y preferencias de la organización.',
     help:'Ayuda',helpDesc:'Entiende qué hacer en cada área sin aprender todo el sistema.',
+    operate:'Operación',govern:'Gobernanza',support:'Soporte',
   }
 } as const
 
@@ -71,9 +74,25 @@ export default function MorePage(){
   ]
 
   const visibleCards=cards.filter(item=>item.allowed)
+  const groups=[
+    {label:t.operate,items:visibleCards.filter(item=>['/team-runtime','/implementation-runtime','/reports'].includes(item.href))},
+    {label:t.govern,items:visibleCards.filter(item=>['/governance-runtime?view=privacy','/governance-runtime?view=audit','/settings-runtime'].includes(item.href))},
+    {label:t.support,items:visibleCards.filter(item=>item.href==='/help')},
+  ].filter(group=>group.items.length)
 
   return <main className="journey-section-page"><div className="journey-section-shell">
-    <header className="journey-section-header"><div><span className="journey-section-kicker">NestJourney / More</span><h1>{t.title}</h1><p>{t.subtitle}</p></div><select value={locale} onChange={e=>{const next=e.target.value as AppLocale;setLocale(next);persistLocale(next)}}>{(Object.keys(localeLabels) as AppLocale[]).map(id=><option key={id} value={id}>{localeLabels[id]}</option>)}</select></header>
-    <section className="journey-card-grid">{visibleCards.map(item=>{const Icon=item.Icon;return <a key={item.title} className="journey-card" href={item.href}><span className="journey-card-icon"><Icon size={20}/></span><span className="journey-card-copy"><small>{t.available}</small><strong>{item.title}</strong><p>{item.desc}</p></span><ArrowRight size={16}/></a>})}</section>
+    <header className="journey-section-header"><div><span className="journey-section-kicker">NestJourney / Management</span><h1>{t.title}</h1><p>{t.subtitle}</p></div><select value={locale} onChange={e=>{const next=e.target.value as AppLocale;setLocale(next);persistLocale(next)}}>{(Object.keys(localeLabels) as AppLocale[]).map(id=><option key={id} value={id}>{localeLabels[id]}</option>)}</select></header>
+    <div className="journey-management-groups">
+      {groups.map(group=><section key={group.label}>
+        <span className="journey-section-kicker">{group.label}</span>
+        <div className="journey-management-list">
+          {group.items.map(item=>{const Icon=item.Icon;return <a key={item.title} href={item.href}>
+            <span className="journey-flow-icon"><Icon size={17}/></span>
+            <span><strong>{item.title}</strong><p>{item.desc}</p></span>
+            <ArrowRight size={15}/>
+          </a>})}
+        </div>
+      </section>)}
+    </div>
   </div></main>
 }
