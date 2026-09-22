@@ -53,7 +53,7 @@ const copy: Record<AppLocale, Copy> = {
     unitSuffix: 'in this campus',
     items: {
       care_debt: { title: 'Resolve overdue care', body: 'A care commitment is overdue. Start there and record the real outcome.', cta: 'Resolve now', href: '/care-integrity' },
-      care_due_soon: { title: 'Care is due soon', body: 'The 24–48h promise is close. Reach out before it becomes cuidado atrasado.', cta: 'Open care', href: '/care-integrity' },
+      care_due_soon: { title: 'Care is due soon', body: 'The 24–48h promise is close. Reach out before it becomes overdue care.', cta: 'Open care', href: '/care-integrity' },
       care_unassigned: { title: 'Assign someone to care', body: 'An open care item has no owner. Assign it before the person loses a clear next step.', cta: 'Assign care', href: '/care-integrity' },
       presence_open: { title: 'Continue the service session', body: 'A presence session is open. Confirm people, visitors, and relationships while the context is fresh.', cta: 'Open Presence', href: '/presence-assist' },
       group_attention: { title: 'A House needs attention', body: 'Recorded capacity is near the limit. Review participants and the next meeting.', cta: 'Open House', href: '/groups-runtime' },
@@ -69,7 +69,7 @@ const copy: Record<AppLocale, Copy> = {
       group_leader: { title: 'Open your House', body: 'Review participants, entry requests, capacity, and the next meeting for the group you lead.', cta: 'Open my House', href: '/groups-runtime' },
       discipler: { title: 'Review your next meetings', body: 'Check who you accompany, current meeting, and next date before closing the day.', cta: 'Open Root', href: '/discipleship-runtime' },
       coordinator: { title: 'Review operations before work becomes debt', body: 'Use Vision to distribute load, find unassigned work, and spot unit bottlenecks.', cta: 'Open Vision', href: '/vision' },
-      pastor: { title: 'See where pastoral decision is needed', body: 'Read cuidado atrasado, handoffs, and journeys without a recorded next step in one concise campus view.', cta: 'Open Vision', href: '/vision' },
+      pastor: { title: 'See where pastoral decision is needed', body: 'Read overdue care, handoffs, and journeys without a recorded next step in one concise campus view.', cta: 'Open Vision', href: '/vision' },
       admin: { title: 'Read organization health in seconds', body: 'Compare campuses, workload, care, and areas without opening every module.', cta: 'Open Vision', href: '/vision' },
       ceo: { title: 'Review the ecosystem pulse', body: 'Home shows what needs attention now. Open Vision when you want a deeper read across organizations, campuses, and operational health.', cta: 'Open detailed Vision', href: '/vision' },
       member: { title: 'Open your journey', body: 'Use Pulse, find a House, update your contact, or access a safe channel voluntarily.', cta: 'Open My Journey', href: '/my-journey' },
