@@ -2449,3 +2449,571 @@ export function latestChecksByPerson(checks: PresenceCheck[]) {
   }
   return latest
 }
+
+// --- Advanced journey roadmap: Pulse, member self-service, Safe Voice, Exit Intelligence, and safe workflows. ---
+
+export type JourneyPulseState = 'well' | 'prayer' | 'talk' | 'help' | 'feedback' | 'prefer_not_now'
+
+export interface JourneyPulseCheckin {
+  id: string
+  organizationId: string
+  congregationId: string
+  state: JourneyPulseState
+  contactAllowed: boolean
+  createdAt: string
+}
+
+export type JourneyMemberSignalKind =
+  | 'prayer'
+  | 'talk'
+  | 'help'
+  | 'feedback'
+  | 'group_interest'
+  | 'contact_update'
+  | 'exit_contact'
+
+export interface JourneyMemberSignal {
+  id: string
+  organizationId: string
+  congregationId: string
+  createdBy: string
+  kind: JourneyMemberSignalKind
+  status: 'open' | 'resolved'
+  groupId?: string
+  createdAt: string
+  resolvedAt?: string
+  resolvedBy?: string
+}
+
+export type JourneySafeVoiceCategory = 'suggestion' | 'negative_experience' | 'safety_concern' | 'sensitive_manifestation'
+export type JourneySafeVoiceReporterMode = 'identified' | 'confidential'
+
+export interface JourneySafeVoiceCase {
+  id: string
+  organizationId: string
+  congregationId: string
+  category: JourneySafeVoiceCategory
+  reporterMode: JourneySafeVoiceReporterMode
+  subjectUserId?: string
+  summary: string
+  status: 'open' | 'resolved'
+  createdAt: string
+  resolvedAt?: string
+  resolvedBy?: string
+}
+
+export type JourneyExitReason =
+  | 'moving'
+  | 'routine'
+  | 'another_church'
+  | 'lack_of_connection'
+  | 'negative_experience'
+  | 'disagreement'
+  | 'other'
+
+export interface JourneyExitFeedback {
+  id: string
+  organizationId: string
+  congregationId: string
+  status: 'paused' | 'left'
+  reason: JourneyExitReason
+  contactAllowed: boolean
+  createdAt: string
+}
+
+export type JourneyWorkflowCondition =
+  | 'care_overdue'
+  | 'care_unassigned'
+  | 'group_near_capacity'
+  | 'discipleship_no_next_meeting'
+  | 'pulse_help_requested'
+  | 'exit_feedback_spike'
+
+export type JourneyWorkflowAction = 'surface_attention' | 'create_review_task' | 'suggest_connect'
+
+export interface JourneyWorkflowRecord {
+  id: string
+  organizationId: string
+  congregationId: string
+  label: string
+  condition: JourneyWorkflowCondition
+  action: JourneyWorkflowAction
+  threshold: number
+  enabled: boolean
+  createdAt: string
+  createdBy: string
+  updatedAt?: string
+  updatedBy?: string
+}
+
+const PULSE_STATES = new Set<JourneyPulseState>(['well','prayer','talk','help','feedback','prefer_not_now'])
+const MEMBER_SIGNAL_KINDS = new Set<JourneyMemberSignalKind>(['prayer','talk','help','feedback','group_interest','contact_update','exit_contact'])
+const SAFE_VOICE_CATEGORIES = new Set<JourneySafeVoiceCategory>(['suggestion','negative_experience','safety_concern','sensitive_manifestation'])
+const EXIT_REASONS = new Set<JourneyExitReason>(['moving','routine','another_church','lack_of_connection','negative_experience','disagreement','other'])
+const WORKFLOW_CONDITIONS = new Set<JourneyWorkflowCondition>(['care_overdue','care_unassigned','group_near_capacity','discipleship_no_next_meeting','pulse_help_requested','exit_feedback_spike'])
+const WORKFLOW_ACTIONS = new Set<JourneyWorkflowAction>(['surface_attention','create_review_task','suggest_connect'])
+
+function assertJourneyUnitScope(access: JourneyAccessContext, congregationId: string) {
+  if (
+    access.isSystemAdmin
+    || access.actualIsSystemAdmin
+    || access.isOwner
+    || access.broadJourneyAccess
+    || access.congregationIds.includes(congregationId)
+  ) return
+  throw new Error('journey_scope_mismatch')
+}
+
+export function canViewJourneyIntelligence(access: JourneyAccessContext) {
+  return access.isSystemAdmin
+    || access.actualIsSystemAdmin
+    || access.isOwner
+    || access.broadJourneyAccess
+    || ['owner','admin','pastor','data_admin'].includes(access.organizationRole)
+    || ['pastor','coordinator'].includes(access.role)
+    || access.permissions.canViewJourneyIntelligence === true
+}
+
+export function canManageJourneyAutomations(access: JourneyAccessContext) {
+  return access.isSystemAdmin
+    || access.actualIsSystemAdmin
+    || access.isOwner
+    || ['owner','admin','pastor'].includes(access.organizationRole)
+    || access.role === 'coordinator'
+    || access.permissions.canManageJourneyAutomations === true
+}
+
+export function canManageSafeVoice(access: JourneyAccessContext) {
+  return access.isSystemAdmin
+    || access.actualIsSystemAdmin
+    || access.permissions.canManageSafeVoice === true
+}
+
+export function canRevealSafeVoiceIdentity(access: JourneyAccessContext) {
+  return access.isSystemAdmin
+    || access.actualIsSystemAdmin
+    || access.permissions.canRevealSafeVoiceIdentity === true
+}
+
+export async function createPulseCheckin(input: {
+  access: JourneyAccessContext
+  congregationId: string
+  state: JourneyPulseState
+  contactAllowed: boolean
+}) {
+  if (!PULSE_STATES.has(input.state)) throw new Error('invalid_pulse_state')
+  assertJourneyUnitScope(input.access, input.congregationId)
+  const firestore = requireDb()
+  const pulseRef = doc(collection(firestore, journeyCollectionPath(input.access.organizationId, 'pulseCheckins')))
+  const identityRef = doc(firestore, `${journeyCollectionPath(input.access.organizationId, 'pulseIdentities')}/${pulseRef.id}`)
+  const batch = writeBatch(firestore)
+  batch.set(pulseRef, {
+    organizationId: input.access.organizationId,
+    congregationId: input.congregationId,
+    state: input.state,
+    contactAllowed: Boolean(input.contactAllowed),
+    createdAt: serverTimestamp(),
+  })
+  batch.set(identityRef, {
+    organizationId: input.access.organizationId,
+    congregationId: input.congregationId,
+    pulseId: pulseRef.id,
+    reporterUid: input.access.userId,
+    createdAt: serverTimestamp(),
+  })
+  if (input.contactAllowed && ['prayer','talk','help','feedback'].includes(input.state)) {
+    const signalRef = doc(firestore, `${journeyCollectionPath(input.access.organizationId, 'memberSignals')}/pulse-${pulseRef.id}`)
+    batch.set(signalRef, {
+      organizationId: input.access.organizationId,
+      congregationId: input.congregationId,
+      createdBy: input.access.userId,
+      kind: input.state,
+      status: 'open',
+      groupId: '',
+      createdAt: serverTimestamp(),
+      resolvedAt: null,
+      resolvedBy: '',
+    })
+  }
+  await batch.commit()
+  return pulseRef.id
+}
+
+export async function listJourneyPulseCheckins(
+  organizationId: string,
+  congregationId: string,
+): Promise<JourneyPulseCheckin[]> {
+  const firestore = requireDb()
+  const snapshot = await getDocs(query(
+    collection(firestore, journeyCollectionPath(organizationId, 'pulseCheckins')),
+    where('congregationId', '==', congregationId),
+  ))
+  return snapshot.docs.map((item): JourneyPulseCheckin => {
+    const data = item.data()
+    const rawState = asString(data.state) as JourneyPulseState
+    return {
+      id: item.id,
+      organizationId,
+      congregationId: asString(data.congregationId),
+      state: PULSE_STATES.has(rawState) ? rawState : 'feedback',
+      contactAllowed: Boolean(data.contactAllowed),
+      createdAt: toIso(data.createdAt),
+    }
+  }).sort((a,b)=>Date.parse(b.createdAt)-Date.parse(a.createdAt))
+}
+
+async function createMemberSignal(input: {
+  access: JourneyAccessContext
+  congregationId: string
+  kind: JourneyMemberSignalKind
+  groupId?: string
+  privateValue?: string
+}) {
+  if (!MEMBER_SIGNAL_KINDS.has(input.kind)) throw new Error('invalid_member_signal')
+  assertJourneyUnitScope(input.access, input.congregationId)
+  const firestore = requireDb()
+  const signalRef = doc(collection(firestore, journeyCollectionPath(input.access.organizationId, 'memberSignals')))
+  const batch = writeBatch(firestore)
+  batch.set(signalRef, {
+    organizationId: input.access.organizationId,
+    congregationId: input.congregationId,
+    createdBy: input.access.userId,
+    kind: input.kind,
+    status: 'open',
+    groupId: String(input.groupId ?? '').trim(),
+    createdAt: serverTimestamp(),
+    resolvedAt: null,
+    resolvedBy: '',
+  })
+  const privateValue = String(input.privateValue ?? '').trim().slice(0, 160)
+  if (privateValue) {
+    const privateRef = doc(firestore, `${journeyCollectionPath(input.access.organizationId, 'memberSignalPrivate')}/${signalRef.id}`)
+    batch.set(privateRef, {
+      organizationId: input.access.organizationId,
+      congregationId: input.congregationId,
+      signalId: signalRef.id,
+      createdBy: input.access.userId,
+      value: privateValue,
+      createdAt: serverTimestamp(),
+    })
+  }
+  await batch.commit()
+  return signalRef.id
+}
+
+export async function createGroupInterestSignal(access: JourneyAccessContext, congregationId: string, groupId: string) {
+  return createMemberSignal({ access, congregationId, kind:'group_interest', groupId })
+}
+
+export async function createContactUpdateSignal(access: JourneyAccessContext, congregationId: string, phone: string) {
+  const clean = phone.trim().slice(0, 80)
+  if (clean.length < 6) throw new Error('invalid_contact_update')
+  return createMemberSignal({ access, congregationId, kind:'contact_update', privateValue:clean })
+}
+
+export async function listMemberSignals(access: JourneyAccessContext, congregationId: string): Promise<JourneyMemberSignal[]> {
+  assertJourneyUnitScope(access, congregationId)
+  const firestore = requireDb()
+  const snapshot = await getDocs(query(
+    collection(firestore, journeyCollectionPath(access.organizationId, 'memberSignals')),
+    where('congregationId', '==', congregationId),
+  ))
+  return snapshot.docs.map((item): JourneyMemberSignal => {
+    const data = item.data()
+    const rawKind = asString(data.kind) as JourneyMemberSignalKind
+    return {
+      id:item.id,
+      organizationId:access.organizationId,
+      congregationId:asString(data.congregationId),
+      createdBy:asString(data.createdBy),
+      kind:MEMBER_SIGNAL_KINDS.has(rawKind)?rawKind:'feedback',
+      status:data.status==='resolved'?'resolved':'open',
+      groupId:asString(data.groupId)||undefined,
+      createdAt:toIso(data.createdAt),
+      resolvedAt:data.resolvedAt?toIso(data.resolvedAt):undefined,
+      resolvedBy:asString(data.resolvedBy)||undefined,
+    }
+  }).sort((a,b)=>Date.parse(b.createdAt)-Date.parse(a.createdAt))
+}
+
+export async function listMyMemberSignals(access: JourneyAccessContext): Promise<JourneyMemberSignal[]> {
+  const firestore = requireDb()
+  const snapshot = await getDocs(query(
+    collection(firestore, journeyCollectionPath(access.organizationId, 'memberSignals')),
+    where('createdBy', '==', access.userId),
+  ))
+  return snapshot.docs.map((item): JourneyMemberSignal => {
+    const data = item.data()
+    const rawKind = asString(data.kind) as JourneyMemberSignalKind
+    return {
+      id:item.id,
+      organizationId:access.organizationId,
+      congregationId:asString(data.congregationId),
+      createdBy:asString(data.createdBy),
+      kind:MEMBER_SIGNAL_KINDS.has(rawKind)?rawKind:'feedback',
+      status:data.status==='resolved'?'resolved':'open',
+      groupId:asString(data.groupId)||undefined,
+      createdAt:toIso(data.createdAt),
+      resolvedAt:data.resolvedAt?toIso(data.resolvedAt):undefined,
+      resolvedBy:asString(data.resolvedBy)||undefined,
+    }
+  }).sort((a,b)=>Date.parse(b.createdAt)-Date.parse(a.createdAt))
+}
+
+export async function loadMemberSignalPrivate(access: JourneyAccessContext, signalId: string) {
+  const firestore = requireDb()
+  const snapshot = await getDoc(doc(firestore, `${journeyCollectionPath(access.organizationId, 'memberSignalPrivate')}/${signalId}`))
+  if (!snapshot.exists()) return ''
+  return asString(snapshot.data().value)
+}
+
+export async function resolveMemberSignal(access: JourneyAccessContext, signal: JourneyMemberSignal) {
+  if (signal.status !== 'open') return
+  const firestore = requireDb()
+  await updateDoc(doc(firestore, `${journeyCollectionPath(access.organizationId, 'memberSignals')}/${signal.id}`), {
+    status:'resolved',
+    resolvedAt:serverTimestamp(),
+    resolvedBy:access.userId,
+  })
+}
+
+export async function createSafeVoiceCase(input: {
+  access: JourneyAccessContext
+  congregationId: string
+  category: JourneySafeVoiceCategory
+  reporterMode: JourneySafeVoiceReporterMode
+  summary: string
+  subjectUserId?: string
+}) {
+  if (!SAFE_VOICE_CATEGORIES.has(input.category)) throw new Error('invalid_safe_voice_category')
+  assertJourneyUnitScope(input.access, input.congregationId)
+  const summary = input.summary.trim().slice(0, 600)
+  if (summary.length < 8) throw new Error('safe_voice_summary_required')
+  const firestore = requireDb()
+  const caseRef = doc(collection(firestore, journeyCollectionPath(input.access.organizationId, 'safeVoiceCases')))
+  const identityRef = doc(firestore, `${journeyCollectionPath(input.access.organizationId, 'safeVoiceIdentities')}/${caseRef.id}`)
+  const batch = writeBatch(firestore)
+  batch.set(caseRef, {
+    organizationId:input.access.organizationId,
+    congregationId:input.congregationId,
+    category:input.category,
+    reporterMode:input.reporterMode,
+    subjectUserId:String(input.subjectUserId??'').trim(),
+    summary,
+    status:'open',
+    createdAt:serverTimestamp(),
+    resolvedAt:null,
+    resolvedBy:'',
+  })
+  batch.set(identityRef, {
+    organizationId:input.access.organizationId,
+    congregationId:input.congregationId,
+    caseId:caseRef.id,
+    reporterUid:input.access.userId,
+    createdAt:serverTimestamp(),
+  })
+  await batch.commit()
+  return caseRef.id
+}
+
+export async function listSafeVoiceCases(access: JourneyAccessContext, congregationId: string): Promise<JourneySafeVoiceCase[]> {
+  if (!canManageSafeVoice(access)) return []
+  assertJourneyUnitScope(access, congregationId)
+  const firestore = requireDb()
+  const snapshot = await getDocs(query(
+    collection(firestore, journeyCollectionPath(access.organizationId, 'safeVoiceCases')),
+    where('congregationId', '==', congregationId),
+  ))
+  return snapshot.docs.map((item): JourneySafeVoiceCase => {
+    const data=item.data()
+    const rawCategory=asString(data.category) as JourneySafeVoiceCategory
+    return {
+      id:item.id,
+      organizationId:access.organizationId,
+      congregationId:asString(data.congregationId),
+      category:SAFE_VOICE_CATEGORIES.has(rawCategory)?rawCategory:'suggestion',
+      reporterMode:data.reporterMode==='identified'?'identified':'confidential',
+      subjectUserId:asString(data.subjectUserId)||undefined,
+      summary:asString(data.summary),
+      status:data.status==='resolved'?'resolved':'open',
+      createdAt:toIso(data.createdAt),
+      resolvedAt:data.resolvedAt?toIso(data.resolvedAt):undefined,
+      resolvedBy:asString(data.resolvedBy)||undefined,
+    }
+  }).filter(item=>access.isSystemAdmin||access.actualIsSystemAdmin||item.subjectUserId!==access.userId)
+    .sort((a,b)=>Date.parse(b.createdAt)-Date.parse(a.createdAt))
+}
+
+export async function loadSafeVoiceReporterUid(access: JourneyAccessContext, caseId: string) {
+  if (!canRevealSafeVoiceIdentity(access)) return ''
+  const firestore=requireDb()
+  const snapshot=await getDoc(doc(firestore, `${journeyCollectionPath(access.organizationId, 'safeVoiceIdentities')}/${caseId}`))
+  return snapshot.exists()?asString(snapshot.data().reporterUid):''
+}
+
+export async function resolveSafeVoiceCase(access: JourneyAccessContext, item: JourneySafeVoiceCase) {
+  if (!canManageSafeVoice(access) || item.status !== 'open') throw new Error('safe_voice_forbidden')
+  if (!access.isSystemAdmin && !access.actualIsSystemAdmin && item.subjectUserId === access.userId) throw new Error('safe_voice_conflict')
+  const firestore=requireDb()
+  await updateDoc(doc(firestore, `${journeyCollectionPath(access.organizationId, 'safeVoiceCases')}/${item.id}`), {
+    status:'resolved',
+    resolvedAt:serverTimestamp(),
+    resolvedBy:access.userId,
+  })
+}
+
+export async function createExitFeedback(input: {
+  access: JourneyAccessContext
+  congregationId: string
+  status: 'paused' | 'left'
+  reason: JourneyExitReason
+  contactAllowed: boolean
+}) {
+  if (!EXIT_REASONS.has(input.reason)) throw new Error('invalid_exit_reason')
+  assertJourneyUnitScope(input.access, input.congregationId)
+  const firestore=requireDb()
+  const feedbackRef=doc(collection(firestore, journeyCollectionPath(input.access.organizationId, 'exitFeedback')))
+  const identityRef=doc(firestore, `${journeyCollectionPath(input.access.organizationId, 'exitFeedbackIdentities')}/${feedbackRef.id}`)
+  const factRef=doc(firestore, `${journeyCollectionPath(input.access.organizationId, 'facts')}/exit-feedback-${feedbackRef.id}`)
+  const batch=writeBatch(firestore)
+  batch.set(feedbackRef,{
+    organizationId:input.access.organizationId,
+    congregationId:input.congregationId,
+    status:input.status,
+    reason:input.reason,
+    contactAllowed:Boolean(input.contactAllowed),
+    createdAt:serverTimestamp(),
+  })
+  batch.set(identityRef,{
+    organizationId:input.access.organizationId,
+    congregationId:input.congregationId,
+    feedbackId:feedbackRef.id,
+    reporterUid:input.access.userId,
+    createdAt:serverTimestamp(),
+  })
+  if(input.contactAllowed){
+    const signalRef=doc(firestore, `${journeyCollectionPath(input.access.organizationId, 'memberSignals')}/exit-${feedbackRef.id}`)
+    batch.set(signalRef,{
+      organizationId:input.access.organizationId,
+      congregationId:input.congregationId,
+      createdBy:input.access.userId,
+      kind:'exit_contact',
+      status:'open',
+      groupId:'',
+      createdAt:serverTimestamp(),
+      resolvedAt:null,
+      resolvedBy:'',
+    })
+  }
+  batch.set(factRef,{
+    eventId:factRef.id,
+    eventType:'EXIT_FEEDBACK_SUBMITTED',
+    occurredAt:serverTimestamp(),
+    recordedAt:serverTimestamp(),
+    organizationId:input.access.organizationId,
+    actorId:'member-self-service',
+    subjectRef:`exitFeedback:${feedbackRef.id}`,
+    sourceApp:'nestjourney',
+    scope:`congregation:${input.congregationId}`,
+    evidenceRef:`exitFeedback:${feedbackRef.id}`,
+    sensitivity:'confidential',
+    version:1,
+    payload:{feedbackId:feedbackRef.id,status:input.status,reason:input.reason,contactAllowed:Boolean(input.contactAllowed)},
+  })
+  await batch.commit()
+  return feedbackRef.id
+}
+
+export async function listExitFeedback(access: JourneyAccessContext, congregationId: string): Promise<JourneyExitFeedback[]> {
+  if (!canViewJourneyIntelligence(access)) return []
+  assertJourneyUnitScope(access, congregationId)
+  const firestore=requireDb()
+  const snapshot=await getDocs(query(
+    collection(firestore, journeyCollectionPath(access.organizationId, 'exitFeedback')),
+    where('congregationId','==',congregationId),
+  ))
+  return snapshot.docs.map((item):JourneyExitFeedback=>{
+    const data=item.data()
+    const rawReason=asString(data.reason) as JourneyExitReason
+    return {
+      id:item.id,
+      organizationId:access.organizationId,
+      congregationId:asString(data.congregationId),
+      status:data.status==='paused'?'paused':'left',
+      reason:EXIT_REASONS.has(rawReason)?rawReason:'other',
+      contactAllowed:Boolean(data.contactAllowed),
+      createdAt:toIso(data.createdAt),
+    }
+  }).sort((a,b)=>Date.parse(b.createdAt)-Date.parse(a.createdAt))
+}
+
+export async function listJourneyWorkflows(access: JourneyAccessContext, congregationId: string): Promise<JourneyWorkflowRecord[]> {
+  if (!canViewJourneyIntelligence(access)) return []
+  assertJourneyUnitScope(access, congregationId)
+  const firestore=requireDb()
+  const snapshot=await getDocs(query(
+    collection(firestore, journeyCollectionPath(access.organizationId,'workflows')),
+    where('congregationId','==',congregationId),
+  ))
+  return snapshot.docs.map((item):JourneyWorkflowRecord=>{
+    const data=item.data()
+    const rawCondition=asString(data.condition) as JourneyWorkflowCondition
+    const rawAction=asString(data.action) as JourneyWorkflowAction
+    return {
+      id:item.id,
+      organizationId:access.organizationId,
+      congregationId:asString(data.congregationId),
+      label:asString(data.label)||'Workflow',
+      condition:WORKFLOW_CONDITIONS.has(rawCondition)?rawCondition:'care_overdue',
+      action:WORKFLOW_ACTIONS.has(rawAction)?rawAction:'surface_attention',
+      threshold:typeof data.threshold==='number'?Math.max(1,Math.floor(data.threshold)):1,
+      enabled:data.enabled!==false,
+      createdAt:toIso(data.createdAt),
+      createdBy:asString(data.createdBy),
+      updatedAt:data.updatedAt?toIso(data.updatedAt):undefined,
+      updatedBy:asString(data.updatedBy)||undefined,
+    }
+  }).sort((a,b)=>a.label.localeCompare(b.label))
+}
+
+export async function createJourneyWorkflow(input:{
+  access:JourneyAccessContext
+  congregationId:string
+  label:string
+  condition:JourneyWorkflowCondition
+  action:JourneyWorkflowAction
+  threshold?:number
+}) {
+  if(!canManageJourneyAutomations(input.access))throw new Error('workflow_forbidden')
+  if(!WORKFLOW_CONDITIONS.has(input.condition)||!WORKFLOW_ACTIONS.has(input.action))throw new Error('invalid_workflow')
+  assertJourneyUnitScope(input.access,input.congregationId)
+  const label=input.label.trim().slice(0,80)
+  if(!label)throw new Error('workflow_label_required')
+  const firestore=requireDb()
+  const ref=doc(collection(firestore,journeyCollectionPath(input.access.organizationId,'workflows')))
+  await writeBatch(firestore).set(ref,{
+    organizationId:input.access.organizationId,
+    congregationId:input.congregationId,
+    label,
+    condition:input.condition,
+    action:input.action,
+    threshold:Math.max(1,Math.min(99,Math.floor(input.threshold??1))),
+    enabled:true,
+    createdAt:serverTimestamp(),
+    createdBy:input.access.userId,
+    updatedAt:null,
+    updatedBy:'',
+  }).commit()
+  return ref.id
+}
+
+export async function setJourneyWorkflowEnabled(access:JourneyAccessContext,workflow:JourneyWorkflowRecord,enabled:boolean){
+  if(!canManageJourneyAutomations(access))throw new Error('workflow_forbidden')
+  const firestore=requireDb()
+  await updateDoc(doc(firestore,`${journeyCollectionPath(access.organizationId,'workflows')}/${workflow.id}`),{
+    enabled:Boolean(enabled),
+    updatedAt:serverTimestamp(),
+    updatedBy:access.userId,
+  })
+}
+
