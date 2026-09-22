@@ -582,6 +582,10 @@ service cloud.firestore {
     }
     function validMemberSignalCreate(orgId) {
       let congregationId = request.resource.data.get('congregationId', '');
+      let kind = request.resource.data.get('kind', '');
+      let groupId = request.resource.data.get('groupId', '');
+      let groupPath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/groups/$(groupId);
+      let privatePath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/memberSignalPrivate/$(request.resource.id);
       return request.resource.data.keys().hasOnly([
           'organizationId', 'congregationId', 'createdBy', 'kind', 'status',
           'groupId', 'createdAt', 'resolvedAt', 'resolvedBy'
@@ -589,11 +593,27 @@ service cloud.firestore {
         && tenantCreate(orgId)
         && canAccessCongregation(orgId, congregationId)
         && request.resource.data.get('createdBy', '') == request.auth.uid
-        && request.resource.data.get('kind', '') in [
+        && kind in [
           'prayer', 'talk', 'help', 'feedback', 'group_interest', 'contact_update', 'exit_contact'
         ]
         && request.resource.data.get('status', '') == 'open'
-        && request.resource.data.get('groupId', '') is string
+        && groupId is string
+        && (
+          kind != 'group_interest'
+          || (
+            groupId.size() > 0
+            && exists(groupPath)
+            && get(groupPath).data.get('congregationId', '') == congregationId
+          )
+        )
+        && (kind == 'group_interest' || groupId == '')
+        && (
+          kind != 'contact_update'
+          || (
+            existsAfter(privatePath)
+            && getAfter(privatePath).data.get('createdBy', '') == request.auth.uid
+          )
+        )
         && request.resource.data.get('createdAt', null) == request.time
         && request.resource.data.get('resolvedAt', null) == null
         && request.resource.data.get('resolvedBy', '') == '';
