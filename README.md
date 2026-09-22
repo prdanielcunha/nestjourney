@@ -10,20 +10,40 @@ O objetivo do NestJourney é impedir que pessoas sejam esquecidas sem transforma
 
 Cada organização possui dados isolados, unidades, nomenclaturas, usuários, papéis e escopos próprios. A OBPC Monte Castelo e Industrial é o tenant piloto; nenhuma igreja é fixada na arquitetura.
 
+
+## Roadmap 2026 completo
+
+A versão `1.0.0-beta.1` fecha o roadmap técnico definido nos blueprints:
+
+- **Minha Jornada** opcional para membro comum, sem abrir o diretório de Pessoas;
+- **Pulse** voluntário com escolhas explícitas e identidade separada da leitura agregada;
+- descoberta de **Casas** e sinalização de interesse sem entrada automática;
+- atualização de contato em coleção privada;
+- **Belonging Graph** construído somente com vínculos registrados;
+- **Safe Voice** com identity split, capability própria e bloqueio de conflito de interesse;
+- **Exit Intelligence** com motivo voluntário, consentimento separado para contato e tendências agregadas;
+- **Inteligência de Cuidado** com sinais determinísticos e evidência rastreável;
+- **Fluxos inteligentes** em linguagem natural, limitados a condições objetivas e ações seguras;
+- Fact Foundation canônica append-only cobrindo cuidado, jornada, grupos e saída.
+
+Safe Voice e Exit Intelligence possuem as proteções técnicas previstas no blueprint. A revisão jurídica/privacidade externa continua sendo um gate humano de governança para uso amplo; o software não pode certificar essa revisão por conta própria.
+
 A experiência é role-first:
 
 - **Hoje** mostra o que depende da pessoa agora;
-- **Pessoas** mostra a jornada factual permitida;
-- **Áreas** contém somente as frentes operacionais relevantes;
-- **Visão** é destinada a coordenação, pastor, admin e CEO;
-- **Mais** concentra gestão, implantação, relatórios, governança, configurações e ajuda conforme permissão.
+- **Minha Jornada** dá ao membro uma experiência voluntária e mínima;
+- **Pessoas** mostra a jornada registrada quando o papel possui acesso;
+- **Jornada** contém somente as frentes operacionais disponíveis;
+- **Visão** concentra leitura pastoral/administrativa/executiva;
+- **Inteligência** mostra sinais explicáveis apenas para papéis autorizados;
+- **Gestão** concentra implantação, equipe, relatórios, governança, configurações e ajuda.
 
 ## Núcleo funcional
 
 - implantação guiada em sete semanas;
 - Presença e registro mínimo de visitantes;
 - Mesa e vínculo;
-- cuidado em 24–48 horas com Care Promise e Care Debt;
+- cuidado em 24–48 horas com compromisso de cuidado e cuidado atrasado;
 - follow-up humano com resultado estruturado;
 - Casas/grupos e pedidos de entrada;
 - Raiz/discipulado inicial em sete encontros;
