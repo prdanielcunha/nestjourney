@@ -3,7 +3,7 @@ import { ArrowRight, CheckCircle2, ChevronLeft, Clock3, HeartHandshake, MessageC
 import { auth } from './firebase'
 import {
   completeJourneyFollowup,
-  getActiveJourneyOrganizationId,
+  getActiveJourneyOrganizationId, resolveActiveJourneyCongregationId, setActiveJourneyCongregationId,
   listCareRequests,
   listJourneyCongregations,
   listJourneyFollowups,
@@ -78,7 +78,7 @@ export default function FollowupRuntimePage() {
       if (!nextAccess.canManageCare) return
       const units = await listJourneyCongregations(nextAccess)
       setCongregations(units)
-      const unitId = units[0]?.id ?? ''
+      const unitId = resolveActiveJourneyCongregationId(nextAccess.organizationId, units)
       setCongregationId(unitId)
       if (unitId) await refresh(nextAccess, unitId)
     } catch (cause) {
@@ -103,7 +103,7 @@ export default function FollowupRuntimePage() {
 
   async function selectUnit(unitId: string) {
     if (!access) return
-    setCongregationId(unitId); setBusy(true); setError('')
+    setCongregationId(unitId); setActiveJourneyCongregationId(access.organizationId,unitId); setBusy(true); setError('')
     try { await refresh(access, unitId) }
     catch (cause) { console.error(cause); setError(t.error) }
     finally { setBusy(false) }
