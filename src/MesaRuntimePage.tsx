@@ -108,7 +108,7 @@ export default function MesaRuntimePage(){
 
   async function changeUnit(unitId:string){
     if(!access)return
-    setBusy(true);setCongregationId(unitId);setError('')
+    setBusy(true);setCongregationId(unitId);setActiveJourneyCongregationId(access.organizationId,unitId);setError('')
     try{await loadScope(access,unitId)}catch(cause){console.error(cause);setError(t.error)}finally{setBusy(false)}
   }
 
