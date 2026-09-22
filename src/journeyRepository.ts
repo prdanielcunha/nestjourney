@@ -1007,7 +1007,9 @@ export async function resolveJourneyGroupEntryRequest(input: {
   const firestore = requireDb()
   const requestRef = doc(firestore, `${journeyCollectionPath(input.access.organizationId, 'groupEntryRequests')}/${input.request.id}`)
   const groupRef = doc(firestore, `${journeyCollectionPath(input.access.organizationId, 'groups')}/${input.group.id}`)
-  const membershipRef = doc(firestore, `${journeyCollectionPath(input.access.organizationId, 'groupMemberships')}/${groupMembershipId(input.group.id, input.request.personId)}`)
+  const membershipId = groupMembershipId(input.group.id, input.request.personId)
+  const membershipRef = doc(firestore, `${journeyCollectionPath(input.access.organizationId, 'groupMemberships')}/${membershipId}`)
+  const joinedFactRef = doc(collection(firestore, journeyCollectionPath(input.access.organizationId, 'facts')))
 
   await runTransaction(firestore, async (transaction) => {
     const [requestSnapshot, groupSnapshot, membershipSnapshot] = await Promise.all([
@@ -1052,6 +1054,25 @@ export async function resolveJourneyGroupEntryRequest(input: {
         updatedAt: serverTimestamp(),
         updatedBy: input.access.userId,
       })
+      transaction.set(joinedFactRef, {
+        eventId: joinedFactRef.id,
+        eventType: 'GROUP_JOINED',
+        occurredAt: serverTimestamp(),
+        recordedAt: serverTimestamp(),
+        organizationId: input.access.organizationId,
+        actorId: input.access.userId,
+        subjectRef: `person:${input.request.personId}`,
+        sourceApp: 'nestjourney',
+        scope: `congregation:${input.group.congregationId}`,
+        evidenceRef: `groupMembership:${membershipId}`,
+        sensitivity: 'confidential',
+        version: 1,
+        payload: {
+          groupId: input.group.id,
+          personId: input.request.personId,
+          membershipId,
+        },
+      })
     }
 
     transaction.update(requestRef, {
@@ -1072,7 +1093,10 @@ export async function setJourneyGroupMembership(input: {
   if (input.person.congregationId !== input.group.congregationId) throw new Error('group_membership_scope_mismatch')
   const firestore = requireDb()
   const groupRef = doc(firestore, `${journeyCollectionPath(input.access.organizationId, 'groups')}/${input.group.id}`)
-  const membershipRef = doc(firestore, `${journeyCollectionPath(input.access.organizationId, 'groupMemberships')}/${groupMembershipId(input.group.id, input.person.id)}`)
+  const membershipId = groupMembershipId(input.group.id, input.person.id)
+  const membershipRef = doc(firestore, `${journeyCollectionPath(input.access.organizationId, 'groupMemberships')}/${membershipId}`)
+  const joinedFactRef = doc(collection(firestore, journeyCollectionPath(input.access.organizationId, 'facts')))
+  const leftFactRef = doc(collection(firestore, journeyCollectionPath(input.access.organizationId, 'facts')))
 
   await runTransaction(firestore, async (transaction) => {
     const [groupSnapshot, membershipSnapshot] = await Promise.all([
@@ -1105,6 +1129,21 @@ export async function setJourneyGroupMembership(input: {
         updatedAt: serverTimestamp(),
         updatedBy: input.access.userId,
       })
+      transaction.set(joinedFactRef, {
+        eventId: joinedFactRef.id,
+        eventType: 'GROUP_JOINED',
+        occurredAt: serverTimestamp(),
+        recordedAt: serverTimestamp(),
+        organizationId: input.access.organizationId,
+        actorId: input.access.userId,
+        subjectRef: `person:${input.person.id}`,
+        sourceApp: 'nestjourney',
+        scope: `congregation:${input.group.congregationId}`,
+        evidenceRef: `groupMembership:${membershipId}`,
+        sensitivity: 'confidential',
+        version: 1,
+        payload: { groupId: input.group.id, personId: input.person.id, membershipId },
+      })
       return
     }
 
@@ -1118,6 +1157,21 @@ export async function setJourneyGroupMembership(input: {
       participants: Math.max(0, currentCount - 1),
       updatedAt: serverTimestamp(),
       updatedBy: input.access.userId,
+    })
+    transaction.set(leftFactRef, {
+      eventId: leftFactRef.id,
+      eventType: 'GROUP_LEFT',
+      occurredAt: serverTimestamp(),
+      recordedAt: serverTimestamp(),
+      organizationId: input.access.organizationId,
+      actorId: input.access.userId,
+      subjectRef: `person:${input.person.id}`,
+      sourceApp: 'nestjourney',
+      scope: `congregation:${input.group.congregationId}`,
+      evidenceRef: `groupMembership:${membershipId}`,
+      sensitivity: 'confidential',
+      version: 1,
+      payload: { groupId: input.group.id, personId: input.person.id, membershipId },
     })
   })
 }
