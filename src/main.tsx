@@ -25,6 +25,8 @@ const TeamSetupPage = lazy(() => import('./TeamSetupPage.tsx'))
 const JourneySettingsPage = lazy(() => import('./JourneySettingsPage.tsx'))
 const GovernanceRuntimePage = lazy(() => import('./GovernanceRuntimePage.tsx'))
 const PastoralHandoffPage = lazy(() => import('./PastoralHandoffPage.tsx'))
+const MemberJourneyPage = lazy(() => import('./MemberJourneyPage.tsx'))
+const JourneyIntelligencePage = lazy(() => import('./JourneyIntelligencePage.tsx'))
 
 if ('serviceWorker' in navigator && import.meta.env.PROD) {
   window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js'))
@@ -106,6 +108,10 @@ function JourneyRoute() {
       return <GovernanceRuntimePage />
     case 'pastoral':
       return <PastoralHandoffPage />
+    case 'member':
+      return <MemberJourneyPage />
+    case 'intelligence':
+      return <JourneyIntelligencePage />
     default:
       return <MyTodayPage />
   }

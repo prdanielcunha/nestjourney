@@ -14,6 +14,7 @@ import {
   listPresencePeople,
   loadJourneyAccess,
   resolveCareRequest,
+  synchronizeCareLifecycleFacts,
   type CareRequestRecord,
   type CareResolutionCode,
   type CareType,
@@ -126,6 +127,7 @@ export default function CareIntegrityPage() {
       listCareRequests(nextAccess.organizationId, unitId),
       listJourneyFollowups(nextAccess, unitId),
     ])
+    await synchronizeCareLifecycleFacts(nextAccess,nextRequests).catch((cause)=>console.warn('care lifecycle facts',cause))
     setPeople(nextPeople)
     setRequests(nextRequests)
     setFollowups(nextFollowups)

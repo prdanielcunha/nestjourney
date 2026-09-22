@@ -1396,3 +1396,157 @@ describe('Pastoral Handoff Runtime rules', () => {
     )))
   })
 })
+
+describe('Advanced roadmap privacy and intelligence', () => {
+  it('lets members discover Houses without exposing the people directory', async () => {
+    await seedMembership('member-a', 'org-a', 'member', ['unit-a'])
+    await environment.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore()
+      await setDoc(doc(db, 'organizations/org-a/products/raiz_e_mesa/groups/group-a'), {
+        organizationId:'org-a', congregationId:'unit-a', name:'Casa Centro', leaderId:'leader-a',
+        leader:'Leader', host:'Host', apprentice:'', neighborhood:'Centro', weekday:'Monday',
+        time:'20:00', capacity:12, participants:5, createdAt:new Date(), createdBy:'leader-a',
+      })
+      await setDoc(doc(db, 'organizations/org-a/products/raiz_e_mesa/people/person-a'), {
+        organizationId:'org-a', congregationId:'unit-a', name:'Private Person',
+      })
+    })
+    const db=environment.authenticatedContext('member-a').firestore()
+    await assertSucceeds(getDoc(doc(db,'organizations/org-a/products/raiz_e_mesa/groups/group-a')))
+    await assertFails(getDoc(doc(db,'organizations/org-a/products/raiz_e_mesa/people/person-a')))
+  })
+
+  it('stores Pulse identity separately from leadership aggregates', async () => {
+    await seedMembership('member-a','org-a','member',['unit-a'])
+    await seedMembership('coord-a','org-a','coordinator',['unit-a'])
+    const db=environment.authenticatedContext('member-a').firestore()
+    const pulse=doc(db,'organizations/org-a/products/raiz_e_mesa/pulseCheckins/pulse-a')
+    const identity=doc(db,'organizations/org-a/products/raiz_e_mesa/pulseIdentities/pulse-a')
+    const batch=writeBatch(db)
+    batch.set(pulse,{
+      organizationId:'org-a',congregationId:'unit-a',state:'help',contactAllowed:false,createdAt:serverTimestamp(),
+    })
+    batch.set(identity,{
+      organizationId:'org-a',congregationId:'unit-a',pulseId:'pulse-a',reporterUid:'member-a',createdAt:serverTimestamp(),
+    })
+    await assertSucceeds(batch.commit())
+    await assertSucceeds(getDoc(identity))
+    const coordDb=environment.authenticatedContext('coord-a').firestore()
+    await assertSucceeds(getDoc(doc(coordDb,'organizations/org-a/products/raiz_e_mesa/pulseCheckins/pulse-a')))
+    await assertFails(getDoc(doc(coordDb,'organizations/org-a/products/raiz_e_mesa/pulseIdentities/pulse-a')))
+  })
+
+  it('keeps contact updates private while exposing the actionable signal', async () => {
+    await seedMembership('member-a','org-a','member',['unit-a'])
+    await seedMembership('care-a','org-a','care',['unit-a'])
+    await seedMembership('data-a','org-a','data_admin',['unit-a'])
+    const db=environment.authenticatedContext('member-a').firestore()
+    const signal=doc(db,'organizations/org-a/products/raiz_e_mesa/memberSignals/signal-a')
+    const privateRef=doc(db,'organizations/org-a/products/raiz_e_mesa/memberSignalPrivate/signal-a')
+    const batch=writeBatch(db)
+    batch.set(signal,{
+      organizationId:'org-a',congregationId:'unit-a',createdBy:'member-a',kind:'contact_update',
+      status:'open',groupId:'',createdAt:serverTimestamp(),resolvedAt:null,resolvedBy:'',
+    })
+    batch.set(privateRef,{
+      organizationId:'org-a',congregationId:'unit-a',signalId:'signal-a',createdBy:'member-a',
+      value:'+55 43 99999-0000',createdAt:serverTimestamp(),
+    })
+    await assertSucceeds(batch.commit())
+    const careDb=environment.authenticatedContext('care-a').firestore()
+    await assertSucceeds(getDoc(doc(careDb,'organizations/org-a/products/raiz_e_mesa/memberSignals/signal-a')))
+    await assertFails(getDoc(doc(careDb,'organizations/org-a/products/raiz_e_mesa/memberSignalPrivate/signal-a')))
+    const dataDb=environment.authenticatedContext('data-a').firestore()
+    await assertSucceeds(getDoc(doc(dataDb,'organizations/org-a/products/raiz_e_mesa/memberSignalPrivate/signal-a')))
+  })
+
+  it('keeps Safe Voice reporter identity behind a separate explicit capability', async () => {
+    await seedMembership('member-a','org-a','member',['unit-a'])
+    await seedMembership('reviewer-a','org-a','member',['unit-a'],{canManageSafeVoice:true})
+    await seedMembership('identity-a','org-a','member',['unit-a'],{canRevealSafeVoiceIdentity:true})
+    const db=environment.authenticatedContext('member-a').firestore()
+    const caseRef=doc(db,'organizations/org-a/products/raiz_e_mesa/safeVoiceCases/case-a')
+    const identityRef=doc(db,'organizations/org-a/products/raiz_e_mesa/safeVoiceIdentities/case-a')
+    const batch=writeBatch(db)
+    batch.set(caseRef,{
+      organizationId:'org-a',congregationId:'unit-a',category:'negative_experience',reporterMode:'confidential',
+      subjectUserId:'',summary:'Quero registrar uma experiência negativa com segurança.',
+      status:'open',createdAt:serverTimestamp(),resolvedAt:null,resolvedBy:'',
+    })
+    batch.set(identityRef,{
+      organizationId:'org-a',congregationId:'unit-a',caseId:'case-a',reporterUid:'member-a',createdAt:serverTimestamp(),
+    })
+    await assertSucceeds(batch.commit())
+    const reviewerDb=environment.authenticatedContext('reviewer-a').firestore()
+    await assertSucceeds(getDoc(doc(reviewerDb,'organizations/org-a/products/raiz_e_mesa/safeVoiceCases/case-a')))
+    await assertFails(getDoc(doc(reviewerDb,'organizations/org-a/products/raiz_e_mesa/safeVoiceIdentities/case-a')))
+    const identityDb=environment.authenticatedContext('identity-a').firestore()
+    await assertSucceeds(getDoc(doc(identityDb,'organizations/org-a/products/raiz_e_mesa/safeVoiceIdentities/case-a')))
+  })
+
+  it('prevents a cited Safe Voice reviewer from controlling the case', async () => {
+    await seedMembership('member-a','org-a','member',['unit-a'])
+    await seedMembership('reviewer-a','org-a','member',['unit-a'],{canManageSafeVoice:true})
+    await environment.withSecurityRulesDisabled(async (context)=>{
+      const db=context.firestore()
+      await setDoc(doc(db,'organizations/org-a/products/raiz_e_mesa/safeVoiceCases/case-conflict'),{
+        organizationId:'org-a',congregationId:'unit-a',category:'safety_concern',reporterMode:'confidential',
+        subjectUserId:'reviewer-a',summary:'Relato protegido que precisa de revisão independente.',
+        status:'open',createdAt:new Date(),resolvedAt:null,resolvedBy:'',
+      })
+      await setDoc(doc(db,'organizations/org-a/products/raiz_e_mesa/safeVoiceIdentities/case-conflict'),{
+        organizationId:'org-a',congregationId:'unit-a',caseId:'case-conflict',reporterUid:'member-a',createdAt:new Date(),
+      })
+    })
+    const db=environment.authenticatedContext('reviewer-a').firestore()
+    const ref=doc(db,'organizations/org-a/products/raiz_e_mesa/safeVoiceCases/case-conflict')
+    await assertFails(getDoc(ref))
+    await assertFails(updateDoc(ref,{status:'resolved',resolvedAt:serverTimestamp(),resolvedBy:'reviewer-a'}))
+  })
+
+  it('records exit feedback as aggregate evidence without exposing identity to normal leadership', async () => {
+    await seedMembership('member-a','org-a','member',['unit-a'])
+    await seedMembership('admin-a','org-a','admin',['unit-a'])
+    const db=environment.authenticatedContext('member-a').firestore()
+    const feedback=doc(db,'organizations/org-a/products/raiz_e_mesa/exitFeedback/exit-a')
+    const identity=doc(db,'organizations/org-a/products/raiz_e_mesa/exitFeedbackIdentities/exit-a')
+    const fact=doc(db,'organizations/org-a/products/raiz_e_mesa/facts/exit-feedback-exit-a')
+    const batch=writeBatch(db)
+    batch.set(feedback,{
+      organizationId:'org-a',congregationId:'unit-a',status:'left',reason:'moving',contactAllowed:false,createdAt:serverTimestamp(),
+    })
+    batch.set(identity,{
+      organizationId:'org-a',congregationId:'unit-a',feedbackId:'exit-a',reporterUid:'member-a',createdAt:serverTimestamp(),
+    })
+    batch.set(fact,{
+      eventId:'exit-feedback-exit-a',eventType:'EXIT_FEEDBACK_SUBMITTED',occurredAt:serverTimestamp(),recordedAt:serverTimestamp(),
+      organizationId:'org-a',actorId:'member-self-service',subjectRef:'exitFeedback:exit-a',sourceApp:'nestjourney',
+      scope:'congregation:unit-a',evidenceRef:'exitFeedback:exit-a',sensitivity:'confidential',version:1,
+      payload:{feedbackId:'exit-a',status:'left',reason:'moving',contactAllowed:false},
+    })
+    await assertSucceeds(batch.commit())
+    const adminDb=environment.authenticatedContext('admin-a').firestore()
+    await assertSucceeds(getDoc(doc(adminDb,'organizations/org-a/products/raiz_e_mesa/exitFeedback/exit-a')))
+    await assertFails(getDoc(doc(adminDb,'organizations/org-a/products/raiz_e_mesa/exitFeedbackIdentities/exit-a')))
+  })
+
+  it('allows only authorized leaders to create and toggle safe workflows', async () => {
+    await seedMembership('admin-a','org-a','admin',['unit-a'])
+    await seedMembership('member-a','org-a','member',['unit-a'])
+    const adminDb=environment.authenticatedContext('admin-a').firestore()
+    const ref=doc(adminDb,'organizations/org-a/products/raiz_e_mesa/workflows/workflow-a')
+    await assertSucceeds(setDoc(ref,{
+      organizationId:'org-a',congregationId:'unit-a',label:'Cuidado atrasado',condition:'care_overdue',
+      action:'create_review_task',threshold:2,enabled:true,createdAt:serverTimestamp(),createdBy:'admin-a',
+      updatedAt:null,updatedBy:'',
+    }))
+    await assertSucceeds(updateDoc(ref,{enabled:false,updatedAt:serverTimestamp(),updatedBy:'admin-a'}))
+    const memberDb=environment.authenticatedContext('member-a').firestore()
+    await assertFails(setDoc(doc(memberDb,'organizations/org-a/products/raiz_e_mesa/workflows/workflow-b'),{
+      organizationId:'org-a',congregationId:'unit-a',label:'Not allowed',condition:'care_overdue',
+      action:'surface_attention',threshold:1,enabled:true,createdAt:serverTimestamp(),createdBy:'member-a',
+      updatedAt:null,updatedBy:'',
+    }))
+  })
+})
+

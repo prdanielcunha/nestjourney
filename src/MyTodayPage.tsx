@@ -32,7 +32,7 @@ import {
   type MesaPreparationRecord,
   type PresenceSessionRecord,
 } from './journeyRepository'
-import { resolveJourneyResponsibility, type JourneyResponsibility } from './journeyExperience'
+import { canViewJourneyPeople, resolveJourneyResponsibility, type JourneyResponsibility } from './journeyExperience'
 import { getInitialLocale, localeLabels, myTodayCopy, persistLocale, type AppLocale } from './i18n'
 import { useJourneyLabels } from './journeyLabels'
 import './MyTodayPage.css'
@@ -58,7 +58,7 @@ const focusCopy:Record<AppLocale,Record<JourneyResponsibility,{title:string;body
     pastor:{title:'Cuidado pastoral',body:'Veja apenas o que pede decisão pastoral, sem transformar histórias em prontuário.'},
     admin:{title:'Organização',body:'Acompanhe operação, equipe e cada área sem precisar abrir módulo por módulo.'},
     ceo:{title:'Visão CEO',body:'Leia o ecossistema, escolha organização e unidade e entre somente onde existe atenção real.'},
-    member:{title:'Sua jornada',body:'Quando uma responsabilidade for atribuída, o NestJourney mostra o que precisa ser feito.'},
+    member:{title:'Minha Jornada',body:'Pulse voluntário, Casas, atualização de contato e canais seguros ficam disponíveis sem exigir uma função operacional.'},
   },
   en:{
     presence_host:{title:'Presence',body:'Welcome, confirm, and record only the relationship needed for the next step.'},
@@ -70,7 +70,7 @@ const focusCopy:Record<AppLocale,Record<JourneyResponsibility,{title:string;body
     pastor:{title:'Pastoral care',body:'See only what needs pastoral decision without turning stories into case files.'},
     admin:{title:'Organization',body:'Follow operations, team, and every area without opening modules one by one.'},
     ceo:{title:'CEO view',body:'Read the ecosystem, choose organization and campus, and enter only where attention is real.'},
-    member:{title:'Your journey',body:'When a responsibility is assigned, NestJourney shows what needs to be done.'},
+    member:{title:'My Journey',body:'Voluntary Pulse, Houses, contact updates, and safe channels stay available without requiring an operational role.'},
   },
   es:{
     presence_host:{title:'Presencia',body:'Recibe, confirma y registra solo el vínculo necesario para el próximo paso.'},
@@ -82,7 +82,7 @@ const focusCopy:Record<AppLocale,Record<JourneyResponsibility,{title:string;body
     pastor:{title:'Cuidado pastoral',body:'Ve solo lo que requiere decisión pastoral sin convertir historias en expediente.'},
     admin:{title:'Organización',body:'Acompaña operación, equipo y cada área sin abrir módulo por módulo.'},
     ceo:{title:'Visión CEO',body:'Lee el ecosistema, elige organización y sede y entra solo donde haya atención real.'},
-    member:{title:'Tu jornada',body:'Cuando se asigne una responsabilidad, NestJourney muestra lo que necesita hacerse.'},
+    member:{title:'Mi Jornada',body:'Pulse voluntario, Casas, actualización de contacto y canales seguros están disponibles sin exigir un papel operativo.'},
   },
 }
 
@@ -159,7 +159,7 @@ export default function MyTodayPage(){
 
   const refreshScope=useCallback(async(nextAccess:JourneyAccessContext,unitId:string)=>{
     const [nextPeople,nextCare,nextSessions,nextGroups,nextDiscipleships,nextPastoral]=await Promise.all([
-      listJourneyPeople(nextAccess.organizationId,unitId),
+      canViewJourneyPeople(nextAccess)?listJourneyPeople(nextAccess.organizationId,unitId):Promise.resolve([]),
       nextAccess.canManageCare||nextAccess.broadJourneyAccess?listCareRequests(nextAccess.organizationId,unitId):Promise.resolve([]),
       nextAccess.canManagePresence||nextAccess.canManageMesa?listPresenceSessions(nextAccess.organizationId,unitId):Promise.resolve([]),
       nextAccess.canManageGroups||nextAccess.broadJourneyAccess?listJourneyGroups(nextAccess.organizationId,unitId):Promise.resolve([]),

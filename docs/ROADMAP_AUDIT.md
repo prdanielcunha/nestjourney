@@ -1,7 +1,7 @@
 # Auditoria de produto e roadmap — NestJourney
 
-Data da revisão: **20 de setembro de 2026**  
-Estado: **núcleo em produção; refinamento premium consolidado**.
+Data da revisão: **22 de setembro de 2026**  
+Estado: **roadmap técnico 2026 consolidado; beta 1.0 em validação de release**.
 
 ## Escopo revisado
 
@@ -22,23 +22,31 @@ O princípio permanece: tecnologia deve desaparecer atrás do cuidado. O softwar
 | Presença | visita, retorno e vínculo | sessão, presença/ausência explicitamente confirmadas, visitante mínimo, vínculo governado, correção auditável e cobertura registrada no encerramento | Implementado |
 | Ausência → Cuidado | transformar evidência factual em responsabilidade humana sem inferência | ausência confirmada + sessão encerrada/elegível + contato autorizado → Care Promise única, sem responsável até alguém assumir | Implementado |
 | Mesa | preparação, convite e participação | checklist, convidados e registro factual de participação | Implementado |
-| Pessoas | cadastro mínimo e jornada factual | consentimento, visitas, vínculos, cuidado, grupos e discipulado conforme Lens | Implementado |
-| Cuidado | contato em ~24h, máximo 48h | Care Promise, responsável, prazo, resultado e Care Debt | Implementado |
+| Pessoas | cadastro mínimo e jornada registrada | consentimento, visitas, vínculos, cuidado, grupos e discipulado conforme permissão | Implementado |
+| Cuidado | contato em ~24h, máximo 48h | compromisso de cuidado, responsável, prazo, resultado e cuidado atrasado | Implementado |
 | Follow-up | contato humano com resultado | Resolve Loop, integração segura com Connect e próximo passo estruturado | Implementado |
 | Segurança humana | risco exige encaminhamento | marcador pastoral, aviso explícito e ausência de notas íntimas | Implementado |
 | Casas | líder, anfitrião, aprendiz, bairro, horário e capacidade | gestão da Casa, roster explícito, pedidos de entrada e encontros | Implementado |
 | Casas | ideal 6–10, máximo 12 | política de capacidade e atenção operacional | Implementado |
 | Raiz | relação pessoal, sete encontros | discipulador, encontro 1–7, próxima data, pausa/conclusão | Implementado |
 | Pastoral | decisão sem prontuário | fila restrita com marcador factual | Implementado |
-| Gestão | leitura rápida da operação | Vision com métricas objetivas, comparação entre unidades e Care Debt | Implementado |
+| Gestão | leitura rápida da operação | Visão com sinais objetivos, comparação entre unidades e cuidado atrasado | Implementado |
 | CEO | leitura entre organizações | seletor de organizações habilitadas e inspeção das unidades sem trocar de login | Implementado |
-| Simulação | entender experiências por papel | preview somente leitura das responsabilidades na Vision | Implementado |
+| Experiência por papel | entender experiências por responsabilidade | view-as seguro de interface sem alterar RBAC persistente | Implementado |
 | Equipe | responsabilidade e escopo | papéis NestJourney sobre membership canônica; membros/convites ficam no Hub | Implementado |
 | LGPD | minimização e consentimento | contato opcional, revogação/correção, governança e limites explícitos; revogação bloqueia Connect e encerra contato pendente de forma factual | Implementado |
 | Operações de privacidade | tratar solicitações sem edição destrutiva livre | correção e revogação auditadas; exclusão/retenção encaminhadas para execução protegida | Implementado |
 | Auditoria | mudanças operacionais rastreáveis | eventos append-only e regras testadas | Implementado |
 | Relatórios | indicadores objetivos | pessoas, cuidado, sessões, grupos, Raiz e pastoral sem score espiritual | Implementado |
 | Customização | nomes locais | nomes de Recepção, Mesa, Cuidado, Casas e Raiz configuráveis | Implementado |
+| Minha Jornada | opção segura para membro sem papel operacional | Pulse voluntário, Casas, atualização protegida de contato, canal seguro e decisão de pausar/sair | Implementado |
+| Pulse | check-in voluntário sem inferência emocional | escolhas explícitas, identidade separada da leitura agregada e contato apenas quando autorizado | Implementado |
+| Belonging Graph | enxergar vínculos registrados sem diagnosticar pessoas | relações com unidade, Casa, cuidador, discipulador e acolhimento; sinal de presença recorrente sem vínculo registrado é apenas observação operacional | Implementado |
+| Safe Voice | canal sensível separado da operação comum | caso e identidade em coleções separadas, capability própria e bloqueio de conflito de interesse | Implementado tecnicamente; revisão jurídica/privacidade externa é gate operacional |
+| Exit Intelligence | aprender com pausas e saídas sem perseguição | motivo voluntário, consentimento separado para contato, identidade separada e tendências agregadas | Implementado tecnicamente; revisão jurídica/privacidade externa é gate operacional |
+| Inteligência de Cuidado | insights somente quando existe evidência | sinais determinísticos, evidence refs, Pulse/saídas/vínculos e ausência de score espiritual | Implementado |
+| Fluxos inteligentes | automação segura baseada em fatos | builder em linguagem natural restrito a condições objetivas; nenhuma mensagem é enviada automaticamente | Implementado |
+| Fact Foundation avançada | eventos canônicos append-only do roadmap | eventos de cuidado, grupos, jornada e saída materializados com evidenceRef e regras específicas | Implementado |
 | PWA | mobile-first | manifest, service worker, Firebase Hosting e navegação com safe area | Em produção |
 | Idiomas | PT/EN/ES | interface e orientação contextual nos três idiomas | Implementado |
 | Qualidade | gates antes de produção | lint, testes, TypeScript, build, Rules e smoke de Hosting | Automatizado |
@@ -57,7 +65,7 @@ A tela não é um dashboard genérico. Ela responde primeiro **o que fazer agora
 Exemplos:
 
 - cuidado vencido → resolver;
-- Care Promise próximo do prazo → contatar;
+- compromisso de cuidado próximo do prazo → contatar;
 - sessão aberta → continuar Presença;
 - Mesa não preparada → preparar;
 - Casa próxima da capacidade → revisar;
@@ -78,10 +86,10 @@ Admin, pastor e CEO conseguem mudar de unidade e ler rapidamente:
 
 - pessoas;
 - cuidados abertos;
-- Care Debt;
+- cuidado atrasado;
 - cuidados sem responsável;
 - maior carga;
-- jornadas sem próximo passo factual;
+- jornadas sem próximo passo registrado;
 - sessões abertas;
 - grupos;
 - relações ativas do Raiz;
@@ -89,6 +97,20 @@ Admin, pastor e CEO conseguem mudar de unidade e ler rapidamente:
 - auditoria disponível.
 
 CEO pode trocar de organização habilitada e inspecionar suas unidades sem simular membership local.
+
+## Roadmap avançado 2026 — cobertura
+
+A sequência definida nos blueprints foi fechada desta forma:
+
+1. consolidação de visitantes, jornada e grupos — concluída;
+2. Presence Assist, auditoria e cobertura — concluída;
+3. cuidado, compromisso, atraso e filas — concluído;
+4. Resolve Loop com MillionsNest Connect — concluído;
+5. Pulse + Belonging Graph — implementado;
+6. Safe Voice + Exit Intelligence — implementação técnica concluída com minimização, separação de identidade e controles de conflito; a **revisão jurídica/privacidade externa continua sendo um gate humano**, não algo que o código possa certificar;
+7. workflow builder + Intelligence somente sobre fatos consolidados — implementado com parser restrito, evidências rastreáveis e sem aconselhamento pastoral autônomo.
+
+A camada avançada não transforma probabilidade em verdade sobre pessoas. “Presença recorrente sem vínculo registrado”, por exemplo, é apenas um sinal de ausência de registro relacional; não significa solidão, desinteresse, frieza espiritual ou risco de saída.
 
 ## Deliberações preservadas
 
