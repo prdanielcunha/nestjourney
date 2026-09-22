@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { BookOpen, CheckCircle2, ChevronLeft, Leaf, Pause, Play, Plus, ShieldCheck, X } from 'lucide-react'
+import { BookOpen, CheckCircle2, ChevronLeft, Leaf, Pause, Play, ShieldCheck, X } from 'lucide-react'
 import { auth } from './firebase'
 import {
   createJourneyDiscipleship,
