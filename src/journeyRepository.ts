@@ -2164,7 +2164,11 @@ export async function synchronizeCareLifecycleFacts(
   access: JourneyAccessContext,
   requests: CareRequestRecord[],
 ) {
-  if (!access.canManageCare && !canViewJourneyIntelligence(access)) return
+  const canReadCanonicalFacts = access.isSystemAdmin
+    || access.actualIsSystemAdmin
+    || access.isOwner
+    || ['owner','admin','pastor','data_admin'].includes(access.organizationRole)
+  if (!canReadCanonicalFacts) return
   const due = requests.filter((item) =>
     item.status === 'open'
     && Number.isFinite(Date.parse(item.dueAt))
