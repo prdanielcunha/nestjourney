@@ -42,6 +42,6 @@ describe('buildTodayPrimaryAction', () => {
     })
     expect(action.kind).toBe('role_home')
     expect(action.href).toBe('/vision')
-    expect(action.title).toContain('Compare')
+    expect(action.title).toContain('pulso do ecossistema')
   })
 })

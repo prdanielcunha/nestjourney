@@ -25,6 +25,7 @@ import { canViewJourneyPeople } from './journeyExperience'
 import { GuidedEmptyState } from './GuidedEmptyState'
 import { emptyGuidance } from './emptyGuidance'
 import { AccessDeniedState } from './AccessDeniedState'
+import { JourneyPath, inferJourneyStep } from './JourneyPath'
 import './JourneyProfilePage.css'
 
 function initials(name: string) {
@@ -181,6 +182,15 @@ export default function JourneyProfilePage() {
               <div><span>{t.source}</span><strong>{t.peopleSource}</strong></div>
             </div>
           </article>
+
+          <JourneyPath
+            locale={locale}
+            currentStep={inferJourneyStep({
+              stage:snapshot.person.stage,
+              hasGroup:snapshot.groups.length>0,
+              hasDiscipleship:Boolean(snapshot.discipleship),
+            })}
+          />
 
           <div className="journey-card-grid">
             <article className="journey-panel journey-domain-card">

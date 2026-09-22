@@ -1,28 +1,31 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
-  AlertTriangle, ArrowRight, Clock3, HeartHandshake, House, Leaf, ShieldAlert,
-  ShieldCheck, UserCheck, UserRound, UsersRound,
+  AlertTriangle, ArrowRight, Building2, CheckCircle2, Clock3, HeartHandshake, House, Leaf,
+  ShieldAlert, ShieldCheck, UserCheck, UserRound, UsersRound,
 } from 'lucide-react'
 import { auth } from './firebase'
 import { buildMyTodayItems, type MyTodayKind } from './myToday'
-import { buildTodayPrimaryAction, todayActionKicker } from './todayActionCenter'
+import { buildTodayPrimaryAction } from './todayActionCenter'
 import {
   getActiveJourneyOrganizationId,
   listCareRequests,
   listJourneyCongregations,
   listJourneyDiscipleships,
   listJourneyGroups,
+  listJourneyOrganizationsForSystemAdmin,
   listJourneyPeople,
   listMesaParticipationRecords,
   loadMesaPreparation,
   listPastoralHandoffs,
   listPresenceSessions,
   loadJourneyAccess,
+  setActiveJourneyOrganizationId,
   type CareRequestRecord,
   type JourneyAccessContext,
   type JourneyCongregation,
   type JourneyDiscipleshipRecord,
   type JourneyGroupRecord,
+  type JourneyOrganizationSummary,
   type JourneyPastoralHandoff,
   type JourneyPersonRecord,
   type MesaParticipationRecord,
@@ -46,48 +49,80 @@ function filterFor(kind:MyTodayKind):Exclude<Filter,'all'|'mesa'>{
 
 const focusCopy:Record<AppLocale,Record<JourneyResponsibility,{title:string;body:string}>>={
   'pt-BR':{
-    presence_host:{title:'Seu foco: Presença',body:'Próximo culto, abrir ou acompanhar a sessão, confirmar presença, registrar visitante e vínculo.'},
-    mesa_team:{title:'Seu foco: Mesa',body:'Preparação, convidados, participação e continuidade do vínculo depois do culto.'},
-    caregiver:{title:'Seu foco: Cuidado',body:'Comece pelos contatos atribuídos e pelos prazos de 24–48h. Registre resultado e próximo passo.'},
-    group_leader:{title:'Seu foco: Casa de Paz',body:'Veja sua Casa, participantes, convidados, capacidade e o que precisa de atenção operacional.'},
-    discipler:{title:'Seu foco: Raiz',body:'Veja quem você acompanha, o encontro atual de 1 a 7 e a próxima data registrada.'},
-    coordinator:{title:'Seu foco: Coordenação',body:'Resolva pendências, distribua carga e encontre itens sem responsável antes que virem dívida operacional.'},
-    pastor:{title:'Seu foco: cuidado pastoral',body:'Priorize Care Debt, encaminhamentos pastorais e jornadas que precisam de decisão.'},
-    admin:{title:'Seu foco: operação da organização',body:'Você enxerga todas as áreas. Use Hoje para pendências e Visão para acompanhar saúde e carga.'},
-    ceo:{title:'Seu foco: ecossistema',body:'Use Hoje para a organização atual e Visão para acompanhar organizações, acessos, auditoria e simulações.'},
-    member:{title:'Seu foco',body:'Quando uma responsabilidade operacional for atribuída a você, as ações aparecerão aqui automaticamente.'},
+    presence_host:{title:'Presença',body:'Receba, confirme e registre apenas o vínculo necessário para o próximo passo.'},
+    mesa_team:{title:'Mesa Aberta',body:'Prepare o ambiente e ajude a comunhão continuar depois do culto.'},
+    caregiver:{title:'Cuidado & Conexão',body:'Comece por quem tem contato atribuído e promessa de cuidado em 24–48 horas.'},
+    group_leader:{title:'Casa de Paz',body:'Cuide da sua Casa, participantes, capacidade e próximo encontro.'},
+    discipler:{title:'Raiz',body:'Acompanhe encontro, próxima data e continuidade de quem está caminhando com você.'},
+    coordinator:{title:'Coordenação',body:'Distribua carga, resolva pendências e mantenha as áreas simples para a equipe.'},
+    pastor:{title:'Cuidado pastoral',body:'Veja apenas o que pede decisão pastoral, sem transformar histórias em prontuário.'},
+    admin:{title:'Organização',body:'Acompanhe operação, equipe e cada área sem precisar abrir módulo por módulo.'},
+    ceo:{title:'Visão CEO',body:'Leia o ecossistema, escolha organização e unidade e entre somente onde existe atenção real.'},
+    member:{title:'Sua jornada',body:'Quando uma responsabilidade for atribuída, o NestJourney mostra o que precisa ser feito.'},
   },
   en:{
-    presence_host:{title:'Your focus: Presence',body:'Next service, open or follow the session, confirm attendance, register visitors, and relationships.'},
-    mesa_team:{title:'Your focus: Table',body:'Preparation, guests, participation, and relationship continuity after the service.'},
-    caregiver:{title:'Your focus: Care',body:'Start with assigned contacts and 24–48h promises. Record the outcome and next step.'},
-    group_leader:{title:'Your focus: House',body:'See your group, participants, guests, capacity, and operational attention points.'},
-    discipler:{title:'Your focus: Root',body:'See who you accompany, the current meeting from 1 to 7, and the next recorded date.'},
-    coordinator:{title:'Your focus: Coordination',body:'Resolve pending work, distribute workload, and find unassigned items before they become operational debt.'},
-    pastor:{title:'Your focus: pastoral care',body:'Prioritize Care Debt, pastoral handoffs, and journeys that need a decision.'},
-    admin:{title:'Your focus: organization operations',body:'You can see every area. Use Today for pending work and Vision for health and workload.'},
-    ceo:{title:'Your focus: ecosystem',body:'Use Today for the current organization and Vision for organizations, access, audit, and simulations.'},
-    member:{title:'Your focus',body:'When an operational responsibility is assigned to you, its actions will appear here automatically.'},
+    presence_host:{title:'Presence',body:'Welcome, confirm, and record only the relationship needed for the next step.'},
+    mesa_team:{title:'Open Table',body:'Prepare the environment and help community continue after the service.'},
+    caregiver:{title:'Care & Connection',body:'Start with assigned contacts and the 24–48 hour care promise.'},
+    group_leader:{title:'Peace House',body:'Care for your group, participants, capacity, and next meeting.'},
+    discipler:{title:'Root',body:'Follow the meeting, next date, and continuity for the people walking with you.'},
+    coordinator:{title:'Coordination',body:'Distribute workload, resolve pending work, and keep each area simple for the team.'},
+    pastor:{title:'Pastoral care',body:'See only what needs pastoral decision without turning stories into case files.'},
+    admin:{title:'Organization',body:'Follow operations, team, and every area without opening modules one by one.'},
+    ceo:{title:'CEO view',body:'Read the ecosystem, choose organization and campus, and enter only where attention is real.'},
+    member:{title:'Your journey',body:'When a responsibility is assigned, NestJourney shows what needs to be done.'},
   },
   es:{
-    presence_host:{title:'Tu foco: Presencia',body:'Próximo culto, abrir o acompañar la sesión, confirmar presencia, registrar visitantes y vínculos.'},
-    mesa_team:{title:'Tu foco: Mesa',body:'Preparación, invitados, participación y continuidad del vínculo después del culto.'},
-    caregiver:{title:'Tu foco: Cuidado',body:'Empieza por los contactos asignados y plazos de 24–48h. Registra resultado y próximo paso.'},
-    group_leader:{title:'Tu foco: Casa de Paz',body:'Ve tu Casa, participantes, invitados, capacidad y lo que necesita atención operativa.'},
-    discipler:{title:'Tu foco: Raíz',body:'Ve a quién acompañas, el encuentro actual del 1 al 7 y la próxima fecha registrada.'},
-    coordinator:{title:'Tu foco: Coordinación',body:'Resuelve pendientes, distribuye carga y encuentra elementos sin responsable antes de que se conviertan en deuda.'},
-    pastor:{title:'Tu foco: cuidado pastoral',body:'Prioriza Care Debt, derivaciones pastorales y jornadas que necesitan decisión.'},
-    admin:{title:'Tu foco: operación de la organización',body:'Ves todas las áreas. Usa Hoy para pendientes y Visión para salud y carga.'},
-    ceo:{title:'Tu foco: ecosistema',body:'Usa Hoy para la organización actual y Visión para organizaciones, accesos, auditoría y simulaciones.'},
-    member:{title:'Tu foco',body:'Cuando se te asigne una responsabilidad operativa, sus acciones aparecerán aquí automáticamente.'},
+    presence_host:{title:'Presencia',body:'Recibe, confirma y registra solo el vínculo necesario para el próximo paso.'},
+    mesa_team:{title:'Mesa Abierta',body:'Prepara el ambiente y ayuda a que la comunión continúe después del culto.'},
+    caregiver:{title:'Cuidado & Conexión',body:'Empieza por los contactos asignados y la promesa de cuidado en 24–48 horas.'},
+    group_leader:{title:'Casa de Paz',body:'Cuida tu Casa, participantes, capacidad y próximo encuentro.'},
+    discipler:{title:'Raíz',body:'Acompaña encuentro, próxima fecha y continuidad de quienes caminan contigo.'},
+    coordinator:{title:'Coordinación',body:'Distribuye carga, resuelve pendientes y mantén cada área simple para el equipo.'},
+    pastor:{title:'Cuidado pastoral',body:'Ve solo lo que requiere decisión pastoral sin convertir historias en expediente.'},
+    admin:{title:'Organización',body:'Acompaña operación, equipo y cada área sin abrir módulo por módulo.'},
+    ceo:{title:'Visión CEO',body:'Lee el ecosistema, elige organización y sede y entra solo donde haya atención real.'},
+    member:{title:'Tu jornada',body:'Cuando se asigne una responsabilidad, NestJourney muestra lo que necesita hacerse.'},
   },
 }
+
+const uiCopy={
+  'pt-BR':{
+    ecosystem:'Ecossistema',unit:'Unidade',whatNeeds:'O que precisa de você',whatNeedsHint:'Ações reais, em ordem de prioridade.',
+    pulse:'Pulso executivo',upToDate:'Em dia',careAttention:'contato(s) precisam de atenção',presenceOpen:'sessão(ões) aberta(s)',
+    groupsAttention:'Casa(s) precisam de atenção',rootAttention:'acompanhamento(s) com próximo passo',
+    organizations:'organizações',units:'unidades nesta organização',allGood:'Tudo em dia',
+    allGoodBody:'Nenhuma ação precisa da sua atenção nesta unidade agora.',nextMove:'Próximo movimento recomendado',
+    shortcuts:'Atalhos',currentContext:'Contexto atual',selectOrg:'Organização',selectUnit:'Unidade',
+    people:'pessoas acompanhadas',openVision:'Abrir Visão',openTeam:'Equipe & responsabilidades',
+  },
+  en:{
+    ecosystem:'Ecosystem',unit:'Campus',whatNeeds:'What needs you',whatNeedsHint:'Real actions, ordered by priority.',
+    pulse:'Executive pulse',upToDate:'Up to date',careAttention:'care contact(s) need attention',presenceOpen:'open service session(s)',
+    groupsAttention:'House(s) need attention',rootAttention:'follow-up item(s) with a next step',
+    organizations:'organizations',units:'campuses in this organization',allGood:'All caught up',
+    allGoodBody:'No action needs your attention in this campus right now.',nextMove:'Recommended next move',
+    shortcuts:'Shortcuts',currentContext:'Current context',selectOrg:'Organization',selectUnit:'Campus',
+    people:'people in view',openVision:'Open Vision',openTeam:'Team & responsibilities',
+  },
+  es:{
+    ecosystem:'Ecosistema',unit:'Sede',whatNeeds:'Lo que necesita de ti',whatNeedsHint:'Acciones reales, ordenadas por prioridad.',
+    pulse:'Pulso ejecutivo',upToDate:'Al día',careAttention:'contacto(s) necesitan atención',presenceOpen:'sesión(es) abierta(s)',
+    groupsAttention:'Casa(s) necesitan atención',rootAttention:'acompañamiento(s) con próximo paso',
+    organizations:'organizaciones',units:'sedes en esta organización',allGood:'Todo al día',
+    allGoodBody:'Ninguna acción necesita tu atención en esta sede ahora.',nextMove:'Próximo movimiento recomendado',
+    shortcuts:'Atajos',currentContext:'Contexto actual',selectOrg:'Organización',selectUnit:'Sede',
+    people:'personas en vista',openVision:'Abrir Visión',openTeam:'Equipo y responsabilidades',
+  },
+} as const
 
 export default function MyTodayPage(){
   const [locale,setLocale]=useState<AppLocale>(getInitialLocale)
   const t=myTodayCopy[locale]
+  const ui=uiCopy[locale]
   const {labels}=useJourneyLabels()
   const [access,setAccess]=useState<JourneyAccessContext|null>(null)
+  const [organizations,setOrganizations]=useState<JourneyOrganizationSummary[]>([])
   const [congregations,setCongregations]=useState<JourneyCongregation[]>([])
   const [congregationId,setCongregationId]=useState('')
   const [people,setPeople]=useState<JourneyPersonRecord[]>([])
@@ -113,7 +148,6 @@ export default function MyTodayPage(){
 
   const mesaPending=useMemo(()=>mesa.filter(x=>x.status==='invited'),[mesa])
   const mesaPreparationPending=Boolean(access?.canManageMesa&&sessions.find(x=>x.status==='open')&&mesaPreparation?.status!=='ready')
-  const visible=filter==='all'?items:filter==='mesa'?[]:items.filter(item=>filterFor(item.kind)===filter)
   const counts=useMemo(()=>({
     care:items.filter(item=>filterFor(item.kind)==='care').length,
     presence:items.filter(item=>filterFor(item.kind)==='presence').length,
@@ -135,37 +169,60 @@ export default function MyTodayPage(){
     const scopedGroups=nextAccess.role==='group_leader'&&!nextAccess.broadJourneyAccess
       ?nextGroups.filter(group=>group.leaderId===nextAccess.userId||group.createdBy===nextAccess.userId)
       :nextGroups
-    setPeople(nextPeople);setCare(nextCare);setSessions(nextSessions);setGroups(scopedGroups);setDiscipleships(nextDiscipleships);setPastoralHandoffs(nextPastoral)
+    setPeople(nextPeople)
+    setCare(nextCare)
+    setSessions(nextSessions)
+    setGroups(scopedGroups)
+    setDiscipleships(nextDiscipleships)
+    setPastoralHandoffs(nextPastoral)
     const mesaSession=nextSessions.find(x=>x.status==='open')??nextSessions[0]
     if(nextAccess.canManageMesa&&mesaSession){
       const [nextMesa,nextPreparation]=await Promise.all([
         listMesaParticipationRecords(nextAccess.organizationId,unitId,mesaSession.id),
         loadMesaPreparation(nextAccess.organizationId,unitId,mesaSession.id),
       ])
-      setMesa(nextMesa);setMesaPreparation(nextPreparation)
+      setMesa(nextMesa)
+      setMesaPreparation(nextPreparation)
     }else{
-      setMesa([]);setMesaPreparation(null)
+      setMesa([])
+      setMesaPreparation(null)
     }
   },[])
 
   const bootstrap=useCallback(async()=>{
-    setLoading(true);setError('')
+    setLoading(true)
+    setError('')
     try{
       const user=auth?.currentUser,organizationId=getActiveJourneyOrganizationId()
       if(!user||!organizationId)throw new Error('missing_ecosystem_context')
-      const nextAccess=await loadJourneyAccess(user.uid,organizationId);setAccess(nextAccess)
-      const nextCongregations=await listJourneyCongregations(nextAccess);setCongregations(nextCongregations)
-      const unitId=nextCongregations[0]?.id??'';setCongregationId(unitId)
+      const nextAccess=await loadJourneyAccess(user.uid,organizationId)
+      setAccess(nextAccess)
+      setOrganizations(nextAccess.isSystemAdmin?await listJourneyOrganizationsForSystemAdmin(nextAccess):[])
+      const nextCongregations=await listJourneyCongregations(nextAccess)
+      setCongregations(nextCongregations)
+      const unitId=nextCongregations[0]?.id??''
+      setCongregationId(unitId)
       if(unitId)await refreshScope(nextAccess,unitId)
-    }catch(cause){console.error('Today bootstrap failed',cause);setError(t.error)}
-    finally{setLoading(false)}
+    }catch(cause){
+      console.error('Today bootstrap failed',cause)
+      setError(t.error)
+    }finally{
+      setLoading(false)
+    }
   },[refreshScope,t.error])
   useEffect(()=>{void bootstrap()},[bootstrap])
 
   async function selectCongregation(unitId:string){
     if(!access)return
-    setCongregationId(unitId);setBusy(true);setError('')
+    setCongregationId(unitId)
+    setBusy(true)
+    setError('')
     try{await refreshScope(access,unitId)}catch(cause){console.error(cause);setError(t.error)}finally{setBusy(false)}
+  }
+
+  function selectOrganization(organizationId:string){
+    setActiveJourneyOrganizationId(organizationId)
+    window.location.reload()
   }
 
   if(loading)return <main className="today-page"><div className="today-loading">{t.loading}</div></main>
@@ -189,7 +246,17 @@ export default function MyTodayPage(){
     access?.canManagePastoral?{href:'/pastoral-handoff',label:t.pastoral,Icon:ShieldAlert}:null,
   ].filter(Boolean) as Array<{href:string;label:string;Icon:typeof UserCheck}>
 
+  const filters=([
+    ['care',labels.care||t.care,counts.care],
+    ['presence',labels.presence||t.presence,counts.presence],
+    ['mesa',labels.table||(locale==='en'?'Open Table':locale==='es'?'Mesa Abierta':'Mesa Aberta'),counts.mesa],
+    ['groups',labels.groups||t.groups,counts.groups],
+    ['discipleship',labels.discipleship||t.discipleship,counts.discipleship],
+    ['pastoral',t.pastoral,counts.pastoral],
+  ] as Array<[Exclude<Filter,'all'>,string,number]>).filter(([, ,count])=>count>0)
+
   const showMesa=filter==='all'||filter==='mesa'
+  const visible=filter==='all'?items:filter==='mesa'?[]:items.filter(item=>filterFor(item.kind)===filter)
   const hasAnything=visible.length>0||(showMesa&&(mesaPending.length>0||mesaPreparationPending))
   const primaryAction=buildTodayPrimaryAction({
     locale,
@@ -199,73 +266,91 @@ export default function MyTodayPage(){
     mesaPendingCount:mesaPending.length,
   })
   const activeUnit=congregations.find(item=>item.id===congregationId)
+  const activeOrganization=organizations.find(item=>item.id===access?.organizationId)
+  const openSessions=sessions.filter(item=>item.status==='open').length
 
   return <main className="today-page"><div className="today-shell">
-    <header className="today-topbar"><div className="today-brand"><img src="/icon.svg" alt=""/><span><strong>{t.product}</strong><small>{focus.title}</small></span></div><div className="today-actions"><a href="/journey-profile"><UserRound size={16}/>{t.profile}</a><select value={locale} aria-label="Language" onChange={event=>{const next=event.target.value as AppLocale;setLocale(next);persistLocale(next)}}>{(Object.keys(localeLabels) as AppLocale[]).map(id=><option value={id} key={id}>{localeLabels[id]}</option>)}</select></div></header>
+    <header className="today-headline">
+      <div>
+        <span className="today-kicker">NestJourney</span>
+        <h1>{t.title}</h1>
+        <p>{[activeOrganization?.name,activeUnit?.name,activeUnit?.city].filter(Boolean).join(' · ')||focus.title}</p>
+      </div>
+      <div className="today-scope-controls">
+        {responsibility==='ceo'&&organizations.length>0?<label><span>{ui.selectOrg}</span><select value={access?.organizationId||''} onChange={event=>selectOrganization(event.target.value)}>{organizations.map(item=><option key={item.id} value={item.id}>{item.name}</option>)}</select></label>:null}
+        {congregations.length>1?<label><span>{ui.selectUnit}</span><select value={congregationId} onChange={event=>void selectCongregation(event.target.value)} disabled={busy}>{congregations.map(item=><option key={item.id} value={item.id}>{item.name}{item.city?' · '+item.city:''}</option>)}</select></label>:null}
+        <label className="today-language"><span>{locale==='en'?'Language':locale==='es'?'Idioma':'Idioma'}</span><select value={locale} aria-label="Language" onChange={event=>{const next=event.target.value as AppLocale;setLocale(next);persistLocale(next)}}>{(Object.keys(localeLabels) as AppLocale[]).map(id=><option value={id} key={id}>{localeLabels[id]}</option>)}</select></label>
+      </div>
+    </header>
 
-    <section className="today-hero"><div><span className="today-kicker">NestJourney / Today</span><h1>{t.title}</h1><p>{t.subtitle}</p></div></section>
     {error?<div className="today-error" role="alert">{error}</div>:null}
 
-    <section className={'today-primary-action '+(primaryAction.urgent?'urgent':'calm')}>
-      <div className="today-primary-copy">
-        <span className="today-action-kicker">{todayActionKicker(locale)}{activeUnit?' · '+activeUnit.name:''}</span>
-        <h2>{primaryAction.title}</h2>
-        <p>{primaryAction.body}</p>
+    {responsibility==='ceo'?<section className="today-executive-pulse">
+      <div className="today-pulse-head">
+        <div><span className="today-section-label">{ui.pulse}</span><strong>{organizations.length||1} {ui.organizations} · {congregations.length} {ui.units}</strong></div>
+        <a href="/vision">{ui.openVision}<ArrowRight size={14}/></a>
       </div>
-      <a href={primaryAction.href}>{primaryAction.cta}<ArrowRight size={15}/></a>
+      <div className="today-pulse-grid">
+        <article><HeartHandshake size={16}/><span>{labels.care||t.care}</span><strong>{counts.care?counts.care+' '+ui.careAttention:ui.upToDate}</strong></article>
+        <article><UserCheck size={16}/><span>{labels.presence||t.presence}</span><strong>{openSessions?openSessions+' '+ui.presenceOpen:ui.upToDate}</strong></article>
+        <article><House size={16}/><span>{labels.groups||t.groups}</span><strong>{counts.groups?counts.groups+' '+ui.groupsAttention:ui.upToDate}</strong></article>
+        <article><Leaf size={16}/><span>{labels.discipleship||t.discipleship}</span><strong>{counts.discipleship?counts.discipleship+' '+ui.rootAttention:ui.upToDate}</strong></article>
+      </div>
+    </section>:null}
+
+    <section className="today-context">
+      <div><span className="today-section-label">{ui.currentContext}</span><strong>{focus.title}</strong><p>{focus.body}</p></div>
+      <div className="today-context-meta"><span><Building2 size={14}/>{activeUnit?.name||ui.unit}</span><span><UserRound size={14}/>{people.length} {ui.people}</span></div>
     </section>
 
-    <section className="today-focus"><div><strong>{focus.title}</strong><p>{focus.body}</p></div><div className="today-quick-actions">{quickActions.map(item=>{const Icon=item.Icon;return <a href={item.href} key={item.href}><Icon size={15}/>{item.label}<ArrowRight size={13}/></a>})}</div></section>
+    <section className="today-action-center">
+      <header className="today-section-head">
+        <div><span className="today-section-label">{ui.whatNeeds}</span><h2>{ui.whatNeeds}</h2><p>{ui.whatNeedsHint}</p></div>
+        {filters.length>1?<div className="today-filters"><button className={filter==='all'?'active':''} onClick={()=>setFilter('all')}>{t.all}</button>{filters.map(([id,label,count])=><button className={filter===id?'active':''} key={id} onClick={()=>setFilter(id)}>{label}<b>{count}</b></button>)}</div>:null}
+      </header>
 
-    {congregations.length>1?<section className="today-panel today-toolbar"><label><span>{t.congregation}</span><select value={congregationId} onChange={event=>void selectCongregation(event.target.value)} disabled={busy}>{congregations.map(item=><option key={item.id} value={item.id}>{item.name+(item.city?' · '+item.city:'')}</option>)}</select></label></section>:null}
+      <div className="today-list">
+        {showMesa&&mesaPreparationPending?<article className="today-action-row">
+          <span className="today-action-icon warning"><UsersRound size={17}/></span>
+          <div><span>{labels.table||(locale==='en'?'Open Table':locale==='es'?'Mesa Abierta':'Mesa Aberta')} · {locale==='en'?'attention':locale==='es'?'atención':'atenção'}</span><h3>{locale==='en'?'Prepare the next Table':locale==='es'?'Preparar la próxima Mesa':'Preparar a próxima Mesa'}</h3><p>{locale==='en'?'Confirm environment, hosts, welcome, and simple supplies before the service ends.':locale==='es'?'Confirma ambiente, anfitriones, recepción y elementos simples antes de terminar el culto.':'Confirme ambiente, anfitriões, acolhimento e itens simples antes do encerramento do culto.'}</p></div>
+          <a href="/mesa-runtime">{locale==='en'?'Prepare':locale==='es'?'Preparar':'Preparar'}<ArrowRight size={14}/></a>
+        </article>:null}
 
-    <div className="today-filters">
-      {([
-        ['all',t.all,items.length+mesaPending.length+(mesaPreparationPending?1:0)],
-        ['care',labels.care||t.care,counts.care],
-        ['presence',labels.presence||t.presence,counts.presence],
-        ['mesa',labels.table||(locale==='en'?'Open Table':locale==='es'?'Mesa Abierta':'Mesa Aberta'),counts.mesa],
-        ['groups',labels.groups||t.groups,counts.groups],
-        ['discipleship',labels.discipleship||t.discipleship,counts.discipleship],
-        ['pastoral',t.pastoral,counts.pastoral],
-      ] as Array<[Filter,string,number]>).filter(([id])=>{
-        if(id==='all')return true
-        if(id==='care')return Boolean(access&&(access.canManageCare||access.broadJourneyAccess))
-        if(id==='presence')return Boolean(access?.canManagePresence)
-        if(id==='mesa')return Boolean(access?.canManageMesa)
-        if(id==='groups')return Boolean(access&&(access.canManageGroups||access.broadJourneyAccess))
-        if(id==='discipleship')return Boolean(access&&(access.canManageDiscipleship||access.broadJourneyAccess))
-        return Boolean(access?.canManagePastoral)
-      }).map(([id,label,count])=><button className={filter===id?'active':''} key={id} onClick={()=>setFilter(id)}>{label}<b>{count}</b></button>)}
-    </div>
+        {showMesa&&mesaPending.length>0?<article className="today-action-row">
+          <span className="today-action-icon info"><UsersRound size={17}/></span>
+          <div><span>{labels.table||(locale==='en'?'Open Table':locale==='es'?'Mesa Abierta':'Mesa Aberta')}</span><h3>{mesaPending.length} {locale==='en'?'guest(s) need a participation record':locale==='es'?'invitado(s) necesitan registro de participación':'convidado(s) precisam de registro de participação'}</h3><p>{focusCopy[locale].mesa_team.body}</p></div>
+          <a href="/mesa-runtime">{locale==='en'?'Open Table':locale==='es'?'Abrir Mesa':'Abrir Mesa'}<ArrowRight size={14}/></a>
+        </article>:null}
 
-    <section className="today-list">
-      {showMesa&&mesaPreparationPending?<article className="today-panel today-item">
-        <span className="today-icon warning"><UsersRound size={18}/></span>
-        <div className="today-item-body"><span className="today-item-kind">{labels.table||(locale==='en'?'Open Table':locale==='es'?'Mesa Abierta':'Mesa Aberta')}</span><h2>{locale==='en'?'Prepare the next Table':locale==='es'?'Preparar la próxima Mesa':'Preparar a próxima Mesa'}</h2><p>{locale==='en'?'Confirm environment, hosts, welcome, and simple supplies before the service.':locale==='es'?'Confirma ambiente, anfitriones, recepción y elementos simples antes del culto.':'Confirme ambiente, anfitriões, acolhimento e itens simples antes do culto.'}</p></div>
-        <a className="today-button" href="/mesa-runtime">{locale==='en'?'Prepare':locale==='es'?'Preparar':'Preparar'}</a>
-      </article>:null}
+        {visible.map(item=>{
+          const {Icon,label,tone}=meta(item.kind)
+          const actionHref=item.kind.startsWith('care_')?'/care-integrity':item.kind==='presence_open'?'/presence-assist':item.kind==='group_attention'?'/groups-runtime':item.kind==='pastoral_handoff'?'/pastoral-handoff':item.kind==='discipleship_next'?'/discipleship-runtime':item.personId?'/journey-profile?person='+encodeURIComponent(item.personId):'/journey-profile'
+          const detail=item.kind==='care_debt'?t.overdue+': '+(item.dueAt?new Date(item.dueAt).toLocaleString(locale):'—')
+            :item.kind==='care_due_soon'||item.kind==='care_unassigned'?t.due+': '+(item.dueAt?new Date(item.dueAt).toLocaleString(locale):'—')
+            :item.kind==='presence_open'?t.goPresence
+            :item.kind==='group_attention'?t.capacity+': '+Math.round((item.ratio??0)*100)+'%'
+            :item.kind==='pastoral_handoff'?t.pastoralMarker
+            :t.meeting+': '+String(item.meeting??'—')+' · '+item.titleRef
+          return <article className="today-action-row" key={item.id}>
+            <span className={'today-action-icon '+tone}><Icon size={17}/></span>
+            <div><span>{label}</span><h3>{item.personName||item.titleRef}</h3><p>{detail}</p></div>
+            <a href={actionHref}>{item.kind.startsWith('care_')?t.goCare:item.kind==='presence_open'?t.goPresence:item.kind==='group_attention'?(labels.groups||t.groups):item.kind==='pastoral_handoff'?t.goPastoral:item.kind==='discipleship_next'?(labels.discipleship||t.discipleship):item.personId?t.openPerson:t.profile}<ArrowRight size={14}/></a>
+          </article>
+        })}
 
-      {showMesa&&mesaPending.length>0?<article className="today-panel today-item">
-        <span className="today-icon info"><UsersRound size={18}/></span>
-        <div className="today-item-body"><span className="today-item-kind">{labels.table||(locale==='en'?'Open Table':locale==='es'?'Mesa Abierta':'Mesa Aberta')}</span><h2>{mesaPending.length} {locale==='en'?'guest(s) awaiting participation record':locale==='es'?'invitado(s) esperando registro de participación':'convidado(s) aguardando registro de participação'}</h2><p>{focusCopy[locale].mesa_team.body}</p></div>
-        <a className="today-button" href="/mesa-runtime">{locale==='en'?'Open Table':locale==='es'?'Abrir Mesa':'Abrir Mesa'}</a>
-      </article>:null}
-
-      {visible.map(item=>{
-        const {Icon,label,tone}=meta(item.kind)
-        const actionHref=item.kind.startsWith('care_')?'/care-integrity':item.kind==='presence_open'?'/presence-assist':item.kind==='group_attention'?'/groups-runtime':item.kind==='pastoral_handoff'?'/pastoral-handoff':item.kind==='discipleship_next'?'/discipleship-runtime':item.personId?'/journey-profile?person='+encodeURIComponent(item.personId):'/journey-profile'
-        const detail=item.kind==='care_debt'?t.overdue+': '+(item.dueAt?new Date(item.dueAt).toLocaleString(locale):'—')
-          :item.kind==='care_due_soon'||item.kind==='care_unassigned'?t.due+': '+(item.dueAt?new Date(item.dueAt).toLocaleString(locale):'—')
-          :item.kind==='presence_open'?t.goPresence
-          :item.kind==='group_attention'?t.capacity+': '+Math.round((item.ratio??0)*100)+'%'
-          :item.kind==='pastoral_handoff'?t.pastoralMarker
-          :t.meeting+': '+String(item.meeting??'—')+' · '+item.titleRef
-        return <article className="today-panel today-item" key={item.id}><span className={'today-icon '+tone}><Icon size={18}/></span><div className="today-item-body"><span className="today-item-kind">{label}</span><h2>{item.personName||item.titleRef}</h2><p>{detail}</p></div><a className="today-button" href={actionHref}>{item.kind.startsWith('care_')?t.goCare:item.kind==='presence_open'?t.goPresence:item.kind==='group_attention'?(labels.groups||t.groups):item.kind==='pastoral_handoff'?t.goPastoral:item.kind==='discipleship_next'?(labels.discipleship||t.discipleship):item.personId?t.openPerson:t.profile}</a></article>
-      })}
-      {!hasAnything?<div className="today-panel today-empty"><ShieldCheck size={20}/><strong>{locale==='en'?'Nothing urgent right now':locale==='es'?'Nada urgente ahora':'Nada urgente agora'}</strong><span>{locale==='en'?'Your factual queue is clear. Use the suggested action above to keep your responsibility moving without hunting through menus.':locale==='es'?'Tu fila factual está al día. Usa la acción sugerida arriba para mantener tu responsabilidad avanzando sin buscar por menús.':'Sua fila factual está em dia. Use a ação sugerida acima para manter sua responsabilidade andando sem precisar procurar pelos menus.'}</span><div className="today-empty-actions"><a href={primaryAction.href}>{primaryAction.cta}</a><a href="/areas">{locale==='en'?'View Areas':locale==='es'?'Ver Áreas':'Ver Áreas'}</a><a href="/help">{locale==='en'?'Open Help':locale==='es'?'Abrir Ayuda':'Abrir Ajuda'}</a></div></div>:null}
+        {!hasAnything?<div className="today-empty-premium">
+          <CheckCircle2 size={24}/>
+          <div><strong>{ui.allGood}</strong><p>{ui.allGoodBody}</p></div>
+          <div className="today-next-move"><span>{ui.nextMove}</span><b>{primaryAction.title}</b><p>{primaryAction.body}</p><a href={primaryAction.href}>{primaryAction.cta}<ArrowRight size={14}/></a></div>
+        </div>:null}
+      </div>
     </section>
 
-    <p className="today-rule"><ShieldCheck size={15}/>{t.sourceRule}</p>
+    {quickActions.length?<section className="today-shortcuts">
+      <div className="today-shortcuts-head"><span className="today-section-label">{ui.shortcuts}</span>{responsibility==='ceo'?<a href="/team-runtime">{ui.openTeam}<ArrowRight size={13}/></a>:null}</div>
+      <div>{quickActions.map(item=>{const Icon=item.Icon;return <a href={item.href} key={item.href}><Icon size={15}/><span>{item.label}</span><ArrowRight size={12}/></a>})}</div>
+    </section>:null}
+
+    <p className="today-rule"><ShieldCheck size={14}/>{t.sourceRule}</p>
   </div></main>
 }
