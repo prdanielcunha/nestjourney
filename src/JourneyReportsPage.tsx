@@ -4,7 +4,7 @@ import { auth } from './firebase'
 import { evaluateCarePromise } from './intelligence'
 import {
   careRequestToPromise,
-  getActiveJourneyOrganizationId,
+  getActiveJourneyOrganizationId, resolveActiveJourneyCongregationId, setActiveJourneyCongregationId,
   listCareRequests,
   listJourneyCongregations,
   listJourneyDiscipleships,
@@ -95,7 +95,7 @@ export default function JourneyReportsPage(){
       const nextAccess=await loadJourneyAccess(user.uid,organizationId);setAccess(nextAccess)
       if(!canViewJourneyReports(nextAccess))return
       const nextUnits=await listJourneyCongregations(nextAccess);setUnits(nextUnits)
-      const nextUnit=nextUnits[0]?.id??'';setUnitId(nextUnit)
+      const nextUnit=resolveActiveJourneyCongregationId(nextAccess.organizationId,nextUnits);setUnitId(nextUnit)
       if(nextUnit)await loadScope(nextAccess,nextUnit)
     }catch(cause){console.error(cause);setError(t.error)}finally{setLoading(false)}
   },[loadScope,t.error])
@@ -103,7 +103,7 @@ export default function JourneyReportsPage(){
 
   async function selectUnit(nextUnit:string){
     if(!access)return
-    setUnitId(nextUnit);setBusy(true);setError('')
+    setUnitId(nextUnit);setActiveJourneyCongregationId(access.organizationId,nextUnit);setBusy(true);setError('')
     try{await loadScope(access,nextUnit)}catch(cause){console.error(cause);setError(t.error)}finally{setBusy(false)}
   }
 
