@@ -14,6 +14,28 @@ import type {
   PresenceSessionRecord,
 } from './journeyRepository'
 
+export type JourneyBelongingNodeType = 'person' | 'congregation' | 'group' | 'caregiver' | 'discipler' | 'host'
+export type JourneyBelongingEdgeType = 'belongs_to' | 'participates_in' | 'cared_by' | 'discipled_by' | 'welcomed_by'
+
+export interface JourneyBelongingNode {
+  id:string
+  type:JourneyBelongingNodeType
+  label:string
+}
+
+export interface JourneyBelongingEdge {
+  from:string
+  to:string
+  type:JourneyBelongingEdgeType
+  evidenceRef:string
+}
+
+export interface JourneyBelongingGraph {
+  nodes:JourneyBelongingNode[]
+  edges:JourneyBelongingEdge[]
+  relationshipCounts:Record<JourneyBelongingEdgeType,number>
+}
+
 export interface JourneyBelongingSignal {
   personId:string
   personName:string
@@ -43,6 +65,56 @@ export interface JourneyInsight {
 }
 
 const DAY=24*60*60*1000
+
+export function buildBelongingGraph(input:{
+  people:JourneyPersonRecord[]
+  careRequests:CareRequestRecord[]
+  discipleships:JourneyDiscipleshipRecord[]
+  groups:JourneyGroupRecord[]
+}):JourneyBelongingGraph{
+  const nodes=new Map<string,JourneyBelongingNode>()
+  const edges:JourneyBelongingEdge[]=[]
+  const addNode=(node:JourneyBelongingNode)=>{if(!nodes.has(node.id))nodes.set(node.id,node)}
+  const addEdge=(edge:JourneyBelongingEdge)=>{if(!edges.some(item=>item.from===edge.from&&item.to===edge.to&&item.type===edge.type))edges.push(edge)}
+  const groupById=new Map(input.groups.map(group=>[group.id,group]))
+
+  for(const person of input.people){
+    const personId='person:'+person.id
+    const congregationId='congregation:'+person.congregationId
+    addNode({id:personId,type:'person',label:person.name})
+    addNode({id:congregationId,type:'congregation',label:person.congregationId})
+    addEdge({from:personId,to:congregationId,type:'belongs_to',evidenceRef:'person:'+person.id})
+    if(person.groupId){
+      const group=groupById.get(person.groupId)
+      const id='group:'+person.groupId
+      addNode({id,type:'group',label:group?.name||person.groupId})
+      addEdge({from:personId,to:id,type:'participates_in',evidenceRef:'person:'+person.id})
+    }
+    if(person.bondHostRef){
+      const id='host:'+person.bondHostRef
+      addNode({id,type:'host',label:person.bondHostRef})
+      addEdge({from:personId,to:id,type:'welcomed_by',evidenceRef:'person:'+person.id})
+    }
+  }
+
+  for(const care of input.careRequests){
+    if(care.status!=='open'||!care.ownerRef)continue
+    const from='person:'+care.personId,to='caregiver:'+care.ownerRef
+    addNode({id:to,type:'caregiver',label:care.ownerRef})
+    addEdge({from,to,type:'cared_by',evidenceRef:'careRequest:'+care.id})
+  }
+  for(const relation of input.discipleships){
+    if(relation.status!=='active'||!relation.disciplerId)continue
+    const from='person:'+relation.personId,to='discipler:'+relation.disciplerId
+    addNode({id:to,type:'discipler',label:relation.disciplerName||relation.disciplerId})
+    addEdge({from,to,type:'discipled_by',evidenceRef:'discipleship:'+relation.id})
+  }
+  const relationshipCounts:Record<JourneyBelongingEdgeType,number>={
+    belongs_to:0,participates_in:0,cared_by:0,discipled_by:0,welcomed_by:0,
+  }
+  for(const edge of edges)relationshipCounts[edge.type]++
+  return{nodes:[...nodes.values()],edges,relationshipCounts}
+}
 
 export function buildBelongingSignals(input:{
   people:JourneyPersonRecord[]
