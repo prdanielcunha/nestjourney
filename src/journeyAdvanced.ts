@@ -176,7 +176,9 @@ export function buildJourneyIntelligenceSnapshot(input:{
   return{
     careOverdue:input.careRequests.filter(item=>item.status==='open'&&evaluateCarePromise({
       id:item.id,organizationId:item.organizationId,subjectRef:`person:${item.personId}`,
-      careType:item.careType,createdAt:item.requestedAt,dueAt:item.dueAt,ownerRef:item.ownerRef,status:item.status,
+      careType:item.careType,createdAt:item.requestedAt,dueAt:item.dueAt,ownerRef:item.ownerRef,
+      evidenceRef:`careRequest:${item.id}`,resolvedAt:item.resolvedAt,
+      resolutionEvidenceRef:item.resolvedAt?`careRequest:${item.id}`:undefined,
     }).state==='debt').length,
     careUnassigned:input.careRequests.filter(item=>item.status==='open'&&!item.ownerRef).length,
     groupsNearCapacity:input.groups.filter(item=>(item.capacity??0)>0&&(item.participants??0)/(item.capacity??1)>=.85).length,
