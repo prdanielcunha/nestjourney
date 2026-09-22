@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { ArrowLeft, CheckCircle2, ShieldAlert, ShieldCheck, UserRoundCheck } from 'lucide-react'
 import { auth } from './firebase'
 import {
-  getActiveJourneyOrganizationId,
+  getActiveJourneyOrganizationId, resolveActiveJourneyCongregationId, setActiveJourneyCongregationId,
   listJourneyCongregations,
   listJourneyPeople,
   listPastoralHandoffs,
@@ -80,7 +80,7 @@ export default function PastoralHandoffPage() {
       if(!nextAccess.canManagePastoral)return
       const units=await listJourneyCongregations(nextAccess)
       setCongregations(units)
-      const unitId=units[0]?.id??''
+      const unitId=resolveActiveJourneyCongregationId(nextAccess.organizationId,units)
       setCongregationId(unitId)
       if(unitId)await refresh(nextAccess,unitId)
     }catch(cause){console.error(cause);setError(t.error)}finally{setLoading(false)}
@@ -90,7 +90,7 @@ export default function PastoralHandoffPage() {
 
   async function selectUnit(unitId:string){
     if(!access)return
-    setCongregationId(unitId);setBusy(true);setError('')
+    setCongregationId(unitId);setActiveJourneyCongregationId(access.organizationId,unitId);setBusy(true);setError('')
     try{await refresh(access,unitId)}catch(cause){console.error(cause);setError(t.error)}finally{setBusy(false)}
   }
 
