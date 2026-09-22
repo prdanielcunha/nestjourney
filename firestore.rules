@@ -580,12 +580,12 @@ service cloud.firestore {
         && existsAfter(pulsePath)
         && getAfter(pulsePath).data.get('congregationId', '') == congregationId;
     }
-    function validMemberSignalCreate(orgId) {
+    function validMemberSignalCreate(orgId, signalId) {
       let congregationId = request.resource.data.get('congregationId', '');
       let kind = request.resource.data.get('kind', '');
       let groupId = request.resource.data.get('groupId', '');
       let groupPath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/groups/$(groupId);
-      let privatePath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/memberSignalPrivate/$(request.resource.id);
+      let privatePath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/memberSignalPrivate/$(signalId);
       return request.resource.data.keys().hasOnly([
           'organizationId', 'congregationId', 'createdBy', 'kind', 'status',
           'groupId', 'createdAt', 'resolvedAt', 'resolvedBy'
@@ -1964,7 +1964,7 @@ service cloud.firestore {
               || canManageMemberSignals(orgId)
             )
             && canAccessCongregation(orgId, resource.data.get('congregationId', ''));
-          allow create: if validMemberSignalCreate(orgId);
+          allow create: if validMemberSignalCreate(orgId, signalId);
           allow update: if canManageMemberSignals(orgId)
             && canAccessCongregation(orgId, resource.data.get('congregationId', ''))
             && validMemberSignalResolve(orgId);
