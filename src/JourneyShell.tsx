@@ -255,6 +255,21 @@ export function JourneyShell({children}:{children:ReactNode}){
       </div>
     </aside>
 
+    {isRealCeo?<div className="journey-mobile-access-wrap">
+      <button className="journey-mobile-access" onClick={()=>setAccessOpen(value=>!value)} aria-expanded={accessOpen}>
+        <span>{displayRole}</span><ChevronDown size={14}/>
+      </button>
+      {accessOpen?<div className="journey-access-menu mobile">
+        <div className="journey-access-real"><small>{t.realAccess}</small><strong>CEO MillionsNest</strong></div>
+        <div className="journey-access-menu-title">{t.viewAs}</div>
+        <div className="journey-access-options">
+          {viewAsOptions.map(role=><button className={currentView===role?'active':''} key={role} onClick={()=>chooseView(role)}>
+            <span>{roleLabels[locale][role]}</span>{currentView===role?<b>✓</b>:null}
+          </button>)}
+        </div>
+      </div>:null}
+    </div>:null}
+
     <section className="journey-app-content">{children}</section>
 
     <nav className="journey-mobile-bar" aria-label="NestJourney">
