@@ -1383,6 +1383,7 @@ export async function createJourneyDiscipleship(input: {
   const relationRef = doc(collection(firestore, journeyCollectionPath(input.organizationId, 'discipleships')))
   const targetDisciplerId = String(input.disciplerId || input.actorId).trim()
   if (!targetDisciplerId) throw new Error('missing_discipler')
+  const factRef = doc(collection(firestore, journeyCollectionPath(input.organizationId, 'facts')))
   const batch = writeBatch(firestore)
   batch.set(relationRef, {
     organizationId: input.organizationId,
@@ -1401,6 +1402,26 @@ export async function createJourneyDiscipleship(input: {
     updatedAt: serverTimestamp(),
     updatedBy: input.actorId,
   })
+  batch.set(factRef, {
+    eventId: factRef.id,
+    eventType: 'JOURNEY_STARTED',
+    occurredAt: serverTimestamp(),
+    recordedAt: serverTimestamp(),
+    organizationId: input.organizationId,
+    actorId: input.actorId,
+    subjectRef: `person:${input.person.id}`,
+    sourceApp: 'nestjourney',
+    scope: `congregation:${input.congregationId}`,
+    evidenceRef: `discipleship:${relationRef.id}`,
+    sensitivity: 'confidential',
+    version: 1,
+    payload: {
+      discipleshipId: relationRef.id,
+      personId: input.person.id,
+      disciplerId: targetDisciplerId,
+      meeting: 1,
+    },
+  })
   await batch.commit()
   return relationRef.id
 }
@@ -1413,6 +1434,7 @@ export async function updateJourneyDiscipleship(input: {
 }) {
   const firestore = requireDb()
   const relationRef = doc(firestore, `${journeyCollectionPath(input.organizationId, 'discipleships')}/${input.relation.id}`)
+  const stepFactRef = doc(collection(firestore, journeyCollectionPath(input.organizationId, 'facts')))
   const batch = writeBatch(firestore)
   if (input.action === 'advance') {
     const currentMeeting = Math.max(1, Math.min(7, input.relation.meeting || 1))
@@ -1426,6 +1448,27 @@ export async function updateJourneyDiscipleship(input: {
       lastCompletedAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
       updatedBy: input.actorId,
+    })
+    batch.set(stepFactRef, {
+      eventId: stepFactRef.id,
+      eventType: 'JOURNEY_STEP_COMPLETED',
+      occurredAt: serverTimestamp(),
+      recordedAt: serverTimestamp(),
+      organizationId: input.organizationId,
+      actorId: input.actorId,
+      subjectRef: `person:${input.relation.personId}`,
+      sourceApp: 'nestjourney',
+      scope: `congregation:${input.relation.congregationId}`,
+      evidenceRef: `discipleship:${input.relation.id}`,
+      sensitivity: 'confidential',
+      version: 1,
+      payload: {
+        discipleshipId: input.relation.id,
+        personId: input.relation.personId,
+        meetingCompleted: currentMeeting,
+        nextMeeting,
+        completed,
+      },
     })
   } else {
     const status = input.action === 'pause' ? 'paused' : 'active'
