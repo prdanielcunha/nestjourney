@@ -17,10 +17,10 @@ import { getInitialLocale, localeLabels, persistLocale, type AppLocale } from '.
 import { useJourneyLabels } from './journeyLabels'
 import { GuidedEmptyState } from './GuidedEmptyState'
 import { emptyGuidance } from './emptyGuidance'
+import { JourneyAreaFocus } from './JourneyAreaFocus'
 import './TeamSetupPage.css'
 
 const HUB_MEMBERS_URL='https://www.millionsnest.com/dashboard/organization/members'
-const HUB_ROLES_URL='https://www.millionsnest.com/dashboard/organization/roles'
 const HUB_API_BASE=(import.meta.env.VITE_MILLIONSNEST_URL||'https://www.millionsnest.com').replace(/\/$/,'')
 
 type Responsibility='member'|'presence_host'|'mesa_team'|'caregiver'|'group_leader'|'discipler'|'coordinator'|'pastor'
@@ -39,7 +39,7 @@ function responsibilityCopy(locale:AppLocale){
     group_leader:['House Leader','Meetings, participants, guests, capacity, and operations for their house.'],
     discipler:['Discipler','People accompanied, meeting 1–7, preparation, and next step.'],
     coordinator:['Coordinator','Operational pending work, workload distribution, and team quality.'],
-    pastor:['Pastor','Care Debt, pastoral handoffs, and whole-journey pastoral vision.'],
+    pastor:['Pastor','Overdue care, pastoral handoffs, and whole-journey pastoral vision.'],
   } as const
   if(locale==='es')return{
     member:['Sin responsabilidad operativa','Usa solamente lo que está disponible para un miembro regular.'],
@@ -49,7 +49,7 @@ function responsibilityCopy(locale:AppLocale){
     group_leader:['Líder de Casa','Encuentros, participantes, invitados, capacidad y operación de su Casa.'],
     discipler:['Discipulador','Personas acompañadas, encuentro 1–7, preparación y próximo paso.'],
     coordinator:['Coordinador','Pendientes operativos, distribución de carga y calidad del equipo.'],
-    pastor:['Pastor','Care Debt, derivaciones pastorales y visión pastoral de toda la jornada.'],
+    pastor:['Pastor','Cuidado atrasado, derivaciones pastorales y visión pastoral de toda la jornada.'],
   } as const
   return{
     member:['Sem função operacional','Usa apenas o que estiver liberado para um membro comum.'],
@@ -59,7 +59,7 @@ function responsibilityCopy(locale:AppLocale){
     group_leader:['Líder de Casa','Encontros, participantes, convidados, capacidade e operação da sua Casa.'],
     discipler:['Discipulador','Pessoas acompanhadas, encontro 1–7, preparação e próximo passo.'],
     coordinator:['Coordenador','Pendências operacionais, distribuição de carga e qualidade da equipe.'],
-    pastor:['Pastor','Care Debt, encaminhamentos pastorais e visão pastoral de toda a jornada.'],
+    pastor:['Pastor','Cuidado atrasado, encaminhamentos pastorais e visão pastoral de toda a jornada.'],
   } as const
 }
 
@@ -230,6 +230,19 @@ export default function TeamSetupPage(){
   }
 
   const empty=emptyGuidance(locale,'team_no_members')
+  const orgWideMembers=members.filter(member=>['owner','admin'].includes(member.organizationRole)).length
+  const unassignedMembers=members.filter(member=>!['owner','admin'].includes(member.organizationRole)&&(!member.journeyRole||member.journeyRole==='member')).length
+  const assignedMembers=Math.max(0,members.length-orgWideMembers-unassignedMembers)
+  const focusTitle=!canAssign
+    ?(locale==='en'?'Your access is managed by the organization':locale==='es'?'Tu acceso es gestionado por la organización':'Seu acesso é gerenciado pela organização')
+    :unassignedMembers>0
+      ?(locale==='en'?unassignedMembers+' member(s) still need a NestJourney responsibility':locale==='es'?unassignedMembers+' miembro(s) todavía necesitan una responsabilidad en NestJourney':unassignedMembers+' membro(s) ainda precisam de uma responsabilidade no NestJourney')
+      :(locale==='en'?'Every active member has a clear operating context':locale==='es'?'Cada miembro activo tiene un contexto operativo claro':'Cada membro ativo tem um contexto operacional claro')
+  const focusBody=!canAssign
+    ?t.hubNote
+    :unassignedMembers>0
+      ?(locale==='en'?'Assign only the responsibility each person actually serves in. Organization authority remains in MillionsNest Hub.':locale==='es'?'Asigna solamente la responsabilidad en la que cada persona realmente sirve. La autoridad de la organización permanece en MillionsNest Hub.':'Atribua somente a responsabilidade em que cada pessoa realmente serve. A autoridade da organização continua no MillionsNest Hub.')
+      :t.guidanceText
 
   if(loading)return <main className="team-setup"><div className="team-loading">{t.loading}</div></main>
 
@@ -237,14 +250,23 @@ export default function TeamSetupPage(){
     <header className="team-topbar"><div><span className="team-kicker">NestJourney / Team</span><h1>{t.title}</h1><p>{t.subtitle}</p></div><select value={locale} onChange={e=>{const next=e.target.value as AppLocale;setLocale(next);persistLocale(next)}}>{(Object.keys(localeLabels) as AppLocale[]).map(id=><option value={id} key={id}>{localeLabels[id]}</option>)}</select></header>
     {error?<div className="team-error">{error}</div>:null}
 
-    <section className="team-access-card">
-      <div><span className="team-kicker">{t.yourAccess}</span><h2>{access?.isSystemAdmin||access?.isOwner?t.full:(access?.role||'—')}</h2><p>{t.hubNote}</p></div>
-      <div className="team-hub-actions"><a href={HUB_MEMBERS_URL}>{t.members}<ArrowUpRight size={15}/></a><a href={HUB_ROLES_URL}>{t.roles}<ArrowUpRight size={15}/></a></div>
-    </section>
+    <JourneyAreaFocus
+      locale={locale}
+      context={access?.isSystemAdmin||access?.isOwner?t.full:(access?.role||undefined)}
+      title={focusTitle}
+      body={focusBody}
+      metrics={canAssign?[
+        {label:locale==='en'?'Assigned':locale==='es'?'Asignados':'Atribuídos',value:assignedMembers,tone:assignedMembers?'good':'muted'},
+        {label:locale==='en'?'Needs role':locale==='es'?'Sin función':'Sem função',value:unassignedMembers,tone:unassignedMembers?'attention':'muted'},
+        {label:locale==='en'?'Broad access':locale==='es'?'Acceso amplio':'Acesso amplo',value:orgWideMembers,tone:orgWideMembers?'good':'muted'},
+      ]:capabilities.slice(0,3).map(([label,allowed])=>({label:String(label),value:allowed?t.yes:t.no,tone:allowed?'good' as const:'muted' as const}))}
+      actions={canAssign?[
+        {label:unassignedMembers>0?(locale==='en'?'Assign responsibilities':locale==='es'?'Asignar responsabilidades':'Atribuir responsabilidades'):(locale==='en'?'Review team':locale==='es'?'Revisar equipo':'Revisar equipe'),href:'#team-responsibilities',primary:true},
+        {label:t.members,href:HUB_MEMBERS_URL},
+      ]:[{label:t.members,href:HUB_MEMBERS_URL,primary:true}]}
+    />
 
-    <section className="team-capabilities"><div className="team-section-heading"><span className="team-kicker">{t.capabilities}</span></div><div>{capabilities.map(([label,allowed])=><span className={allowed?'allowed':'blocked'} key={String(label)}><b>{String(label)}</b><small>{allowed?t.yes:t.no}</small></span>)}</div></section>
-
-    {canAssign?<section className="team-section team-responsibility-section">
+    {canAssign?<section className="team-section team-responsibility-section" id="team-responsibilities">
       <div className="team-section-heading"><span className="team-kicker">{t.responsibilities}</span><h2>{t.responsibilities}</h2><p>{t.responsibilitiesDesc}</p></div>
       <div className="team-member-list">
         {members.map(member=>{

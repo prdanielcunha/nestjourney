@@ -36,6 +36,6 @@ describe('Care Integrity i18n', () => {
   it('keeps the care privacy and outcome rules in all supported locales', () => {
     expect(careIntegrityCopy['pt-BR'].privacyRule).toContain('Detalhes íntimos')
     expect(careIntegrityCopy.en.outcomeRule).toContain('actual outcome')
-    expect(careIntegrityCopy.es.debt).toBe('Care Debt')
+    expect(careIntegrityCopy.es.debt).toBe('Cuidado atrasado')
   })
 })

@@ -3,3 +3,7 @@
 .journey-group-links>div{border:1px solid #242938;background:#0d1016;border-radius:12px;padding:11px}
 .journey-group-links>div h4{margin:0 0 4px}
 .journey-group-links>div p{margin:0 0 9px}
+
+.journey-search-compact{min-width:220px}.journey-search-inline{display:flex;align-items:center;gap:7px;min-height:38px;padding:0 9px;border:1px solid rgba(255,255,255,.065);border-radius:10px;background:#10110f;color:#6f756e}.journey-search-inline input{min-height:0!important;padding:0!important;border:0!important;background:transparent!important;box-shadow:none!important}.journey-search-inline svg{flex:0 0 auto;color:#777d75}
+.journey-profile-main>.journey-area-focus{margin-top:0}
+@media(max-width:680px){.journey-search-compact{min-width:0}.journey-layout{grid-template-columns:1fr!important}.journey-people{max-height:250px;overflow:auto}.journey-profile-main{min-width:0}}

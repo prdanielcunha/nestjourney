@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Check, ClipboardCheck, ShieldCheck, UsersRound } from 'lucide-react'
 import { auth } from './firebase'
 import {
-  getActiveJourneyOrganizationId,
+  getActiveJourneyOrganizationId, resolveActiveJourneyCongregationId, setActiveJourneyCongregationId,
   listJourneyCongregations,
   listMesaParticipationRecords,
   loadMesaPreparation,
@@ -100,7 +100,7 @@ export default function MesaRuntimePage(){
       const nextAccess=await loadJourneyAccess(user.uid,organizationId);setAccess(nextAccess)
       if(!nextAccess.canManageMesa)return
       const units=await listJourneyCongregations(nextAccess);setCongregations(units)
-      const unitId=units[0]?.id??'';setCongregationId(unitId)
+      const unitId=resolveActiveJourneyCongregationId(nextAccess.organizationId,units);setCongregationId(unitId)
       if(unitId)await loadScope(nextAccess,unitId)
     }catch(cause){console.error(cause);setError(t.error)}finally{setLoading(false)}
   },[loadScope,t.error])
@@ -108,7 +108,7 @@ export default function MesaRuntimePage(){
 
   async function changeUnit(unitId:string){
     if(!access)return
-    setBusy(true);setCongregationId(unitId);setError('')
+    setBusy(true);setCongregationId(unitId);setActiveJourneyCongregationId(access.organizationId,unitId);setError('')
     try{await loadScope(access,unitId)}catch(cause){console.error(cause);setError(t.error)}finally{setBusy(false)}
   }
 

@@ -9,7 +9,7 @@ import {
   createJourneyGroup,
   createJourneyGroupMeeting,
   createJourneyGroupEntryRequest,
-  getActiveJourneyOrganizationId,
+  getActiveJourneyOrganizationId, resolveActiveJourneyCongregationId, setActiveJourneyCongregationId,
   listJourneyCongregations,
   listJourneyGroupAttendance,
   listJourneyGroupEntryRequests,
@@ -81,7 +81,7 @@ export default function GroupsRuntimePage() {
       if (!(nextAccess.canManageGroups || nextAccess.broadJourneyAccess)) return
       const units = await listJourneyCongregations(nextAccess)
       setCongregations(units)
-      const unitId = units[0]?.id ?? ''
+      const unitId = resolveActiveJourneyCongregationId(nextAccess.organizationId, units)
       setCongregationId(unitId)
       if (unitId) await refresh(nextAccess, unitId)
     } catch (cause) { console.error(cause); setError(t.error) }
@@ -92,7 +92,7 @@ export default function GroupsRuntimePage() {
 
   async function selectUnit(unitId: string) {
     if (!access) return
-    setCongregationId(unitId); setBusy(true); setError(''); setRosterGroup(null); setRoster([]); setEntryRequests([]); setMeetings([]); setAttendance([])
+    setCongregationId(unitId); setActiveJourneyCongregationId(access.organizationId,unitId); setBusy(true); setError(''); setRosterGroup(null); setRoster([]); setEntryRequests([]); setMeetings([]); setAttendance([])
     try { await refresh(access, unitId) }
     catch (cause) { console.error(cause); setError(t.error) }
     finally { setBusy(false) }

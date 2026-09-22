@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
-  ArrowLeft, CheckCircle2, ClipboardList, FileClock, LockKeyhole, Search,
+  ArrowLeft, CheckCircle2, ClipboardList, Search,
   ShieldCheck, UserCog, Users,
 } from 'lucide-react'
 import { auth } from './firebase'
 import {
   createPrivacyRequest,
-  getActiveJourneyOrganizationId,
+  getActiveJourneyOrganizationId, resolveActiveJourneyCongregationId, setActiveJourneyCongregationId,
   listJourneyAuditEvents,
   listJourneyCongregations,
   listJourneyPeople,
@@ -23,6 +23,7 @@ import {
 } from './journeyRepository'
 import { getInitialLocale, governanceRuntimeCopy, localeLabels, persistLocale, type AppLocale } from './i18n'
 import { AccessDeniedState } from './AccessDeniedState'
+import { JourneyAreaFocus } from './JourneyAreaFocus'
 import './GovernanceRuntimePage.css'
 
 type Tab = 'privacy' | 'audit' | 'boundaries'
@@ -90,7 +91,7 @@ export default function GovernanceRuntimePage() {
       else if(requestedView==='privacy')setTab('privacy')
       const units=await listJourneyCongregations(nextAccess)
       setCongregations(units)
-      const unitId=units[0]?.id??''
+      const unitId=resolveActiveJourneyCongregationId(nextAccess.organizationId,units)
       setCongregationId(unitId)
       if(unitId)await refresh(nextAccess,unitId)
     }catch(cause){console.error(cause);setError(t.error)}finally{setLoading(false)}
@@ -100,7 +101,7 @@ export default function GovernanceRuntimePage() {
 
   async function selectUnit(unitId:string){
     if(!access)return
-    setCongregationId(unitId);setBusy(true);setError('')
+    setCongregationId(unitId);setActiveJourneyCongregationId(access.organizationId,unitId);setBusy(true);setError('')
     try{await refresh(access,unitId)}catch(cause){console.error(cause);setError(t.error)}finally{setBusy(false)}
   }
 
@@ -145,6 +146,17 @@ export default function GovernanceRuntimePage() {
   if(!canView)return <main className="governance-runtime"><AccessDeniedState locale={locale} title={t.noAccessTitle} body={t.noAccess} retryLabel={t.retry} onRetry={()=>void bootstrap()} /></main>
 
   const requestLabels=t.requestTypes
+  const activeUnit=congregations.find(unit=>unit.id===congregationId)
+  const focusTitle=canManagePrivacy&&activeRequests.length>0
+    ?locale==='en'?activeRequests.length+' privacy request(s) need a decision':locale==='es'?activeRequests.length+' solicitud(es) de privacidad necesitan decisión':activeRequests.length+' solicitação(ões) de privacidade precisam de decisão'
+    :locale==='en'?'No governance action is waiting':locale==='es'?'No hay acción de gobernanza pendiente':'Nenhuma ação de governança aguardando'
+  const focusBody=canManagePrivacy&&activeRequests.length>0
+    ?locale==='en'?'Resolve only the requested action, keep details minimized, and leave organization identity and roles in MillionsNest Hub.'
+      :locale==='es'?'Resuelve solo la acción solicitada, minimiza los detalles y mantén identidad y cargos de la organización en MillionsNest Hub.'
+      :'Resolva somente a ação solicitada, minimize detalhes e mantenha identidade e cargos da organização no MillionsNest Hub.'
+    :locale==='en'?'Governance stays quiet until privacy, audit, or access boundaries need review.'
+      :locale==='es'?'La gobernanza permanece tranquila hasta que privacidad, historial o límites de acceso necesiten revisión.'
+      :'A governança permanece quieta até que privacidade, histórico ou limites de acesso precisem de revisão.'
   return <main className="governance-runtime"><div className="governance-shell">
     <header className="governance-topbar">
       <div className="governance-brand"><img src="/icon.svg" alt=""/><span><strong>{t.product}</strong><small>Journey & Care Engine</small></span></div>
@@ -154,13 +166,23 @@ export default function GovernanceRuntimePage() {
     <section className="governance-hero"><div><span className="governance-kicker">Journey / Governance</span><h1>{t.title}</h1><p>{t.subtitle}</p></div><span className="governance-role"><UserCog size={16}/>{access?.role||t.systemRole}</span></section>
     {error?<div className="governance-error">{error}</div>:null}
 
-    <section className="governance-panel governance-toolbar"><label><span>{t.congregation}</span><select value={congregationId} disabled={busy} onChange={e=>void selectUnit(e.target.value)}>{congregations.map(unit=><option key={unit.id} value={unit.id}>{unit.name}{unit.city?` · ${unit.city}`:''}</option>)}</select></label></section>
+    <JourneyAreaFocus
+      locale={locale}
+      context={activeUnit?.name}
+      title={focusTitle}
+      body={focusBody}
+      metrics={[
+        {label:t.openRequests,value:canManagePrivacy?activeRequests.length:'—',tone:canManagePrivacy&&activeRequests.length?'attention':'muted'},
+        {label:t.auditEvents,value:audit.length,tone:audit.length?'good':'muted'},
+        {label:t.accessBoundary,value:access?.congregationIds.length||congregations.length,tone:'muted'},
+      ]}
+      actions={canManagePrivacy&&activeRequests.length
+        ?[{label:t.privacy,onClick:()=>setTab('privacy'),primary:true},{label:t.audit,onClick:()=>setTab('audit')}]
+        :[{label:t.audit,onClick:()=>setTab('audit'),primary:true}]
+      }
+    />
 
-    <section className="governance-metrics">
-      <article className="governance-panel governance-metric"><span><FileClock size={18}/></span><div><small>{t.openRequests}</small><strong>{canManagePrivacy?activeRequests.length:'—'}</strong><p>{canManagePrivacy?t.openRequestsHint:t.restricted}</p></div></article>
-      <article className="governance-panel governance-metric"><span><ClipboardList size={18}/></span><div><small>{t.auditEvents}</small><strong>{audit.length}</strong><p>{t.auditHint}</p></div></article>
-      <article className="governance-panel governance-metric"><span><LockKeyhole size={18}/></span><div><small>{t.accessBoundary}</small><strong>{access?.congregationIds.length||congregations.length}</strong><p>{t.accessBoundaryHint}</p></div></article>
-    </section>
+    {congregations.length>1?<section className="journey-area-toolbar"><label><span>{t.congregation}</span><select value={congregationId} disabled={busy} onChange={e=>void selectUnit(e.target.value)}>{congregations.map(unit=><option key={unit.id} value={unit.id}>{unit.name}{unit.city?` · ${unit.city}`:''}</option>)}</select></label></section>:null}
 
     <nav className="governance-tabs" aria-label={t.sections}>
       {canManagePrivacy?<button className={tab==='privacy'?'active':''} onClick={()=>setTab('privacy')}>{t.privacy}</button>:null}

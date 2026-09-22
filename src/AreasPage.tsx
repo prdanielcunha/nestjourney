@@ -6,12 +6,13 @@ import { canOpenJourneyArea } from './journeyExperience'
 import { getInitialLocale, localeLabels, persistLocale, type AppLocale } from './i18n'
 import { useJourneyLabels } from './journeyLabels'
 import { GuidedEmptyState } from './GuidedEmptyState'
+import { JourneyPath } from './JourneyPath'
 import { emptyGuidance } from './emptyGuidance'
 import './JourneySectionPages.css'
 
 const copy={
   'pt-BR':{
-    title:'Áreas',subtitle:'As cinco frentes operacionais da jornada. Entre direto na área em que você serve.',
+    title:'Jornada',subtitle:'O cuidado segue um caminho simples. Entre direto na etapa que faz parte da sua responsabilidade.',
     loading:'Preparando suas áreas…', noAccess:'Seu perfil ainda não possui uma área operacional atribuída.',
     available:'Disponível para você', restricted:'Sem acesso neste papel', open:'Abrir área',
     presence:'Presença',presenceDesc:'Próximo culto, sessão, visitantes, confirmação de presença e vínculo.',
@@ -22,7 +23,7 @@ const copy={
     principle:'Você não precisa conhecer o sistema inteiro. O NestJourney mostra somente o que o seu papel pode operar.',
   },
   en:{
-    title:'Areas',subtitle:'The five operational fronts of the journey. Go straight to the area where you serve.',
+    title:'Journey',subtitle:'Care follows a simple path. Go straight to the step that belongs to your responsibility.',
     loading:'Preparing your areas…', noAccess:'Your profile does not have an operational area assigned yet.',
     available:'Available to you', restricted:'Not available for this role', open:'Open area',
     presence:'Presence',presenceDesc:'Next service, session, visitors, attendance confirmation, and relationship.',
@@ -33,7 +34,7 @@ const copy={
     principle:'You do not need to understand the whole system. NestJourney shows only what your role can operate.',
   },
   es:{
-    title:'Áreas',subtitle:'Los cinco frentes operativos de la jornada. Entra directamente en el área donde sirves.',
+    title:'Jornada',subtitle:'El cuidado sigue un camino simple. Entra directamente en la etapa que pertenece a tu responsabilidad.',
     loading:'Preparando tus áreas…', noAccess:'Tu perfil todavía no tiene un área operativa asignada.',
     available:'Disponible para ti', restricted:'Sin acceso en este papel', open:'Abrir área',
     presence:'Presencia',presenceDesc:'Próximo culto, sesión, visitantes, confirmación de presencia y vínculo.',
@@ -86,18 +87,24 @@ export default function AreasPage(){
   const empty=emptyGuidance(locale,'areas_none')
 
   return <main className="journey-section-page"><div className="journey-section-shell">
-    <header className="journey-section-header"><div><span className="journey-section-kicker">NestJourney / Areas</span><h1>{base.title}</h1><p>{base.subtitle}</p></div><select value={locale} onChange={e=>{const next=e.target.value as AppLocale;setLocale(next);persistLocale(next)}}>{(Object.keys(localeLabels) as AppLocale[]).map(id=><option key={id} value={id}>{localeLabels[id]}</option>)}</select></header>
+    <header className="journey-section-header"><div><span className="journey-section-kicker">NestJourney / Journey</span><h1>{base.title}</h1><p>{base.subtitle}</p></div><select value={locale} onChange={e=>{const next=e.target.value as AppLocale;setLocale(next);persistLocale(next)}}>{(Object.keys(localeLabels) as AppLocale[]).map(id=><option key={id} value={id}>{localeLabels[id]}</option>)}</select></header>
+
+    <JourneyPath locale={locale}/>
+
     {!hasOperationalArea?<section className="journey-section-block"><GuidedEmptyState icon={ShieldCheck} title={empty.title} body={empty.body} primary={{label:empty.primary,href:'/help'}} secondary={{label:empty.secondary||base.title,href:'/my-today'}}/></section>:null}
-    <section className="journey-card-grid">
-      {visibleModules.map(item=>{
+
+    {hasOperationalArea?<section className="journey-flow-list" aria-label={base.title}>
+      {visibleModules.map((item,index)=>{
         const Icon=item.Icon
-        return <a key={item.id} className="journey-card" href={item.href}>
-          <span className="journey-card-icon"><Icon size={20}/></span>
-          <span className="journey-card-copy"><small>{base.available}</small><strong>{item.title}</strong><p>{item.description}</p></span>
+        return <a key={item.id} href={item.href}>
+          <span className="journey-flow-step">{String(index+1).padStart(2,'0')}</span>
+          <span className="journey-flow-icon"><Icon size={18}/></span>
+          <span className="journey-flow-copy"><small>{base.available}</small><strong>{item.title}</strong><p>{item.description}</p></span>
           <ArrowRight size={16}/>
         </a>
       })}
-    </section>
+    </section>:null}
+
     <div className="journey-section-note"><ShieldCheck size={18}/><p>{base.principle}</p></div>
   </div></main>
 }

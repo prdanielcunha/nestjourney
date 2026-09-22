@@ -134,6 +134,36 @@ function applyJourneyViewAs(access: JourneyAccessContext): JourneyAccessContext 
   return { ...simulated, role: 'discipler', canManageDiscipleship: true }
 }
 
+const JOURNEY_ACTIVE_UNIT_STORAGE_PREFIX = 'nestjourney_active_unit:'
+
+export function getActiveJourneyCongregationId(organizationId: string): string {
+  try {
+    return localStorage.getItem(JOURNEY_ACTIVE_UNIT_STORAGE_PREFIX + organizationId) ?? ''
+  } catch {
+    return ''
+  }
+}
+
+export function setActiveJourneyCongregationId(organizationId: string, congregationId: string) {
+  try {
+    if (congregationId) localStorage.setItem(JOURNEY_ACTIVE_UNIT_STORAGE_PREFIX + organizationId, congregationId)
+    else localStorage.removeItem(JOURNEY_ACTIVE_UNIT_STORAGE_PREFIX + organizationId)
+    window.dispatchEvent(new CustomEvent('nestjourney:unit', { detail: { organizationId, congregationId } }))
+  } catch {
+    // Unit context is a navigation preference only; storage failure must not affect authorization.
+  }
+}
+
+export function resolveActiveJourneyCongregationId(
+  organizationId: string,
+  congregations: Array<{ id: string }>,
+): string {
+  const preferred = getActiveJourneyCongregationId(organizationId)
+  const resolved = congregations.some((item) => item.id === preferred) ? preferred : congregations[0]?.id ?? ''
+  if (resolved !== preferred) setActiveJourneyCongregationId(organizationId, resolved)
+  return resolved
+}
+
 export interface JourneyAccessContext {
   organizationId: string
   userId: string
