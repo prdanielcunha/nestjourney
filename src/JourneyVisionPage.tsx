@@ -48,7 +48,7 @@ const experienceCopy:Record<AppLocale,Record<JourneyResponsibility,{name:string;
     group_leader:{name:'Líder de Casa',summary:'Operação da Casa sob sua responsabilidade.',items:['Próximo encontro','Participantes e convidados','Capacidade','Pedidos de entrada']},
     discipler:{name:'Discipulador',summary:'Acompanhamento relacional do Raiz.',items:['Pessoas acompanhadas','Encontro atual 1–7','Próxima data','Próximo passo registrado']},
     coordinator:{name:'Coordenador',summary:'Qualidade da operação e distribuição de carga.',items:['Pendências da área','Itens sem responsável','Carga da equipe','Pontos de atenção operacional']},
-    pastor:{name:'Pastor',summary:'Visão de cuidado que realmente pede decisão pastoral.',items:['Care Debt','Encaminhamentos pastorais','Jornadas sem próximo passo factual','Saúde operacional']},
+    pastor:{name:'Pastor',summary:'Visão de cuidado que realmente pede decisão pastoral.',items:['Cuidado atrasado','Encaminhamentos pastorais','Jornadas sem próximo passo factual','Saúde operacional']},
     admin:{name:'Dono / Administrador',summary:'Toda a organização em uma única visão.',items:['Todas as áreas','Equipes e acessos','Implantação','Relatórios e configurações']},
     ceo:{name:'CEO MillionsNest',summary:'Visão entre organizações e leitura segura de cada experiência.',items:['Organizações com NestJourney','Saúde operacional','Acessos e governança','Experiência por responsabilidade']},
     member:{name:'Usuário',summary:'Acesso sem responsabilidade operacional atribuída.',items:['Pessoas permitidas','Ajuda','Aguardar atribuição de área']},
@@ -60,7 +60,7 @@ const experienceCopy:Record<AppLocale,Record<JourneyResponsibility,{name:string;
     group_leader:{name:'House Leader',summary:'Operations for the group under your care.',items:['Next meeting','Participants and guests','Capacity','Entry requests']},
     discipler:{name:'Discipler',summary:'Relational Root follow-up.',items:['People you accompany','Current meeting 1–7','Next date','Recorded next step']},
     coordinator:{name:'Coordinator',summary:'Operational quality and workload distribution.',items:['Area pending work','Unassigned items','Team load','Operational attention points']},
-    pastor:{name:'Pastor',summary:'Care view for what truly needs pastoral decision.',items:['Care Debt','Pastoral handoffs','Journeys without a factual next step','Operational health']},
+    pastor:{name:'Pastor',summary:'Care view for what truly needs pastoral decision.',items:['Overdue care','Pastoral handoffs','Journeys without a factual next step','Operational health']},
     admin:{name:'Owner / Administrator',summary:'The whole organization in one view.',items:['All areas','Teams and access','Implementation','Reports and settings']},
     ceo:{name:'MillionsNest CEO',summary:'Cross-organization view and safe reading of each experience.',items:['Organizations using NestJourney','Operational health','Access and governance','Experience by responsibility']},
     member:{name:'User',summary:'Access without an assigned operational responsibility.',items:['Permitted people','Help','Wait for area assignment']},
@@ -72,7 +72,7 @@ const experienceCopy:Record<AppLocale,Record<JourneyResponsibility,{name:string;
     group_leader:{name:'Líder de Casa',summary:'Operación de la Casa bajo su responsabilidad.',items:['Próximo encuentro','Participantes e invitados','Capacidad','Solicitudes de entrada']},
     discipler:{name:'Discipulador',summary:'Acompañamiento relacional de Raíz.',items:['Personas acompañadas','Encuentro actual 1–7','Próxima fecha','Próximo paso registrado']},
     coordinator:{name:'Coordinador',summary:'Calidad operativa y distribución de carga.',items:['Pendientes del área','Elementos sin responsable','Carga del equipo','Puntos de atención operativa']},
-    pastor:{name:'Pastor',summary:'Visión de cuidado que realmente requiere decisión pastoral.',items:['Care Debt','Derivaciones pastorales','Jornadas sin próximo paso factual','Salud operativa']},
+    pastor:{name:'Pastor',summary:'Visión de cuidado que realmente requiere decisión pastoral.',items:['Cuidado atrasado','Derivaciones pastorales','Jornadas sin próximo paso factual','Salud operativa']},
     admin:{name:'Dueño / Administrador',summary:'Toda la organización en una sola visión.',items:['Todas las áreas','Equipos y accesos','Implementación','Informes y configuración']},
     ceo:{name:'CEO MillionsNest',summary:'Visión entre organizaciones y lectura segura de cada experiencia.',items:['Organizaciones con NestJourney','Salud operativa','Accesos y gobernanza','Experiencia por responsabilidad']},
     member:{name:'Usuario',summary:'Acceso sin una responsabilidad operativa asignada.',items:['Personas permitidas','Ayuda','Esperar asignación de área']},
@@ -83,7 +83,7 @@ const copy={
   'pt-BR':{
     title:'Visão',subtitle:'O painel muda conforme a responsabilidade. Aqui liderança enxerga a operação sem transformar pessoas em métricas de fé.',
     loading:'Montando a visão…',noAccess:'Seu papel não possui uma visão de gestão.',organization:'Organização',unit:'Unidade',ecosystem:'Ecossistema',
-    organizations:'Organizações',activeJourney:'NestJourney ativo',people:'Pessoas',careOpen:'Cuidados abertos',careDebt:'Care Debt',careUnassigned:'Cuidados sem responsável',maxLoad:'Maior carga individual',withoutNextStep:'Sem próximo passo registrado',sessions:'Sessões abertas',pastoral:'Pastoral pendente',audit:'Eventos de auditoria',
+    organizations:'Organizações',activeJourney:'NestJourney ativo',people:'Pessoas',careOpen:'Cuidados abertos',careDebt:'Cuidado atrasado',careUnassigned:'Cuidados sem responsável',maxLoad:'Maior carga individual',withoutNextStep:'Sem próximo passo registrado',sessions:'Sessões abertas',pastoral:'Pastoral pendente',audit:'Eventos de auditoria',
     simulation:'Experiência por papel',simulationDesc:'Veja como o NestJourney se reorganiza para cada responsabilidade. Seu acesso real continua sendo CEO MillionsNest.',
     current:'Sua experiência atual',openArea:'Abrir área',access:'Acessos',accessDesc:'Equipe, cargos e permissões continuam governados pelo MillionsNest Hub.',
     productHealth:'Saúde do produto',productHealthDesc:'Acompanhe organizações habilitadas e abra uma delas para inspecionar a operação.',
@@ -92,7 +92,7 @@ const copy={
   en:{
     title:'Vision',subtitle:'The dashboard changes with responsibility. Leadership sees operations without turning people into faith metrics.',
     loading:'Building vision…',noAccess:'Your role does not have a management view.',organization:'Organization',unit:'Campus',ecosystem:'Ecosystem',
-    organizations:'Organizations',activeJourney:'NestJourney active',people:'People',careOpen:'Open care',careDebt:'Care Debt',careUnassigned:'Care without owner',maxLoad:'Largest individual load',withoutNextStep:'No recorded next step',sessions:'Open sessions',pastoral:'Pastoral pending',audit:'Audit events',
+    organizations:'Organizations',activeJourney:'NestJourney active',people:'People',careOpen:'Open care',careDebt:'Cuidado atrasado',careUnassigned:'Care without owner',maxLoad:'Largest individual load',withoutNextStep:'No recorded next step',sessions:'Open sessions',pastoral:'Pastoral pending',audit:'Audit events',
     simulation:'Experience by role',simulationDesc:'See how NestJourney reorganizes itself for each responsibility. Your real access remains MillionsNest CEO.',
     current:'Your current experience',openArea:'Open area',access:'Access',accessDesc:'Team, roles, and permissions remain governed by MillionsNest Hub.',
     productHealth:'Product health',productHealthDesc:'Follow enabled organizations and open one to inspect operations.',
@@ -101,7 +101,7 @@ const copy={
   es:{
     title:'Visión',subtitle:'El panel cambia según la responsabilidad. Liderazgo ve la operación sin convertir personas en métricas de fe.',
     loading:'Preparando la visión…',noAccess:'Tu papel no tiene una visión de gestión.',organization:'Organización',unit:'Sede',ecosystem:'Ecosistema',
-    organizations:'Organizaciones',activeJourney:'NestJourney activo',people:'Personas',careOpen:'Cuidados abiertos',careDebt:'Care Debt',careUnassigned:'Cuidados sin responsable',maxLoad:'Mayor carga individual',withoutNextStep:'Sin próximo paso registrado',sessions:'Sesiones abiertas',pastoral:'Pastoral pendiente',audit:'Eventos de auditoría',
+    organizations:'Organizaciones',activeJourney:'NestJourney activo',people:'Personas',careOpen:'Cuidados abiertos',careDebt:'Cuidado atrasado',careUnassigned:'Cuidados sin responsable',maxLoad:'Mayor carga individual',withoutNextStep:'Sin próximo paso registrado',sessions:'Sesiones abiertas',pastoral:'Pastoral pendiente',audit:'Eventos de auditoría',
     simulation:'Experiencia por rol',simulationDesc:'Mira cómo NestJourney se reorganiza para cada responsabilidad. Tu acceso real sigue siendo CEO MillionsNest.',
     current:'Tu experiencia actual',openArea:'Abrir área',access:'Accesos',accessDesc:'Equipo, cargos y permisos siguen gobernados por MillionsNest Hub.',
     productHealth:'Salud del producto',productHealthDesc:'Acompaña organizaciones habilitadas y abre una para inspeccionar la operación.',
@@ -110,9 +110,9 @@ const copy={
 } as const
 
 const unitPulseCopy={
-  'pt-BR':{title:'Leitura rápida por unidade',desc:'Troque de unidade sem abrir módulo por módulo. O destaque usa apenas fatos operacionais registrados.',attention:'Precisa de atenção',watch:'Acompanhar',clear:'Sem pendência crítica',people:'Pessoas',debt:'Care Debt',unassigned:'Sem responsável',pastoral:'Pastoral',root:'Raiz ativo'},
-  en:{title:'Quick campus read',desc:'Switch campuses without opening every module. Highlights use only recorded operational facts.',attention:'Needs attention',watch:'Watch',clear:'No critical pending work',people:'People',debt:'Care Debt',unassigned:'Unassigned',pastoral:'Pastoral',root:'Active Root'},
-  es:{title:'Lectura rápida por sede',desc:'Cambia de sede sin abrir módulo por módulo. El destaque usa solo hechos operativos registrados.',attention:'Necesita atención',watch:'Acompañar',clear:'Sin pendiente crítico',people:'Personas',debt:'Care Debt',unassigned:'Sin responsable',pastoral:'Pastoral',root:'Raíz activo'},
+  'pt-BR':{title:'Leitura rápida por unidade',desc:'Troque de unidade sem abrir módulo por módulo. O destaque usa apenas fatos operacionais registrados.',attention:'Precisa de atenção',watch:'Acompanhar',clear:'Sem pendência crítica',people:'Pessoas',debt:'Cuidado atrasado',unassigned:'Sem responsável',pastoral:'Pastoral',root:'Raiz ativo'},
+  en:{title:'Quick campus read',desc:'Switch campuses without opening every module. Highlights use only recorded operational facts.',attention:'Needs attention',watch:'Watch',clear:'No critical pending work',people:'People',debt:'Cuidado atrasado',unassigned:'Unassigned',pastoral:'Pastoral',root:'Active Root'},
+  es:{title:'Lectura rápida por sede',desc:'Cambia de sede sin abrir módulo por módulo. El destaque usa solo hechos operativos registrados.',attention:'Necesita atención',watch:'Acompañar',clear:'Sin pendiente crítico',people:'Personas',debt:'Cuidado atrasado',unassigned:'Sin responsable',pastoral:'Pastoral',root:'Raíz activo'},
 } as const
 
 export default function JourneyVisionPage(){
