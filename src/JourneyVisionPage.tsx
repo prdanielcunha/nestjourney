@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { ArrowRight, Eye, ShieldCheck } from 'lucide-react'
+import { ArrowRight, ShieldCheck } from 'lucide-react'
 import { auth } from './firebase'
 import { evaluateCarePromise } from './intelligence'
 import { buildJourneyUnitPulse, type JourneyUnitPulse } from './journeyExecutive'
@@ -17,6 +17,7 @@ import {
   listPastoralHandoffs,
   listPresenceSessions,
   loadJourneyAccess,
+  setJourneyViewAsRole,
   type CareRequestRecord,
   type JourneyAccessContext,
   type JourneyAuditEvent,
@@ -37,6 +38,7 @@ import {
 } from './journeyExperience'
 import { getInitialLocale, localeLabels, persistLocale, type AppLocale } from './i18n'
 import { AccessDeniedState } from './AccessDeniedState'
+import { JourneyPath } from './JourneyPath'
 import './JourneySectionPages.css'
 
 const experienceCopy:Record<AppLocale,Record<JourneyResponsibility,{name:string;summary:string;items:string[]}>>={
@@ -83,7 +85,7 @@ const copy={
     title:'Visão',subtitle:'O painel muda conforme a responsabilidade. Aqui liderança enxerga a operação sem transformar pessoas em métricas de fé.',
     loading:'Montando a visão…',noAccess:'Seu papel não possui uma visão de gestão.',organization:'Organização',unit:'Unidade',ecosystem:'Ecossistema',
     organizations:'Organizações',activeJourney:'NestJourney ativo',people:'Pessoas',careOpen:'Cuidados abertos',careDebt:'Care Debt',careUnassigned:'Cuidados sem responsável',maxLoad:'Maior carga individual',withoutNextStep:'Sem próximo passo registrado',sessions:'Sessões abertas',pastoral:'Pastoral pendente',audit:'Eventos de auditoria',
-    simulation:'Simular experiência',simulationDesc:'Prévia somente leitura. Não altera seu acesso real nem executa ações como outro usuário.',
+    simulation:'Experiência por papel',simulationDesc:'Veja como o NestJourney se reorganiza para cada responsabilidade. Seu acesso real continua sendo CEO MillionsNest.',
     current:'Sua experiência atual',openArea:'Abrir área',access:'Acessos',accessDesc:'Equipe, cargos e permissões continuam governados pelo MillionsNest Hub.',
     productHealth:'Saúde do produto',productHealthDesc:'Acompanhe organizações habilitadas e abra uma delas para inspecionar a operação.',
     selectOrg:'Ver organização',noUnit:'Nenhuma unidade ativa encontrada.',error:'Não foi possível montar esta visão.',
@@ -92,7 +94,7 @@ const copy={
     title:'Vision',subtitle:'The dashboard changes with responsibility. Leadership sees operations without turning people into faith metrics.',
     loading:'Building vision…',noAccess:'Your role does not have a management view.',organization:'Organization',unit:'Campus',ecosystem:'Ecosystem',
     organizations:'Organizations',activeJourney:'NestJourney active',people:'People',careOpen:'Open care',careDebt:'Care Debt',careUnassigned:'Care without owner',maxLoad:'Largest individual load',withoutNextStep:'No recorded next step',sessions:'Open sessions',pastoral:'Pastoral pending',audit:'Audit events',
-    simulation:'Simulate experience',simulationDesc:'Read-only preview. It does not change your real access or act as another user.',
+    simulation:'Experience by role',simulationDesc:'See how NestJourney reorganizes itself for each responsibility. Your real access remains MillionsNest CEO.',
     current:'Your current experience',openArea:'Open area',access:'Access',accessDesc:'Team, roles, and permissions remain governed by MillionsNest Hub.',
     productHealth:'Product health',productHealthDesc:'Follow enabled organizations and open one to inspect operations.',
     selectOrg:'View organization',noUnit:'No active campus found.',error:'This vision could not be built.',
@@ -101,7 +103,7 @@ const copy={
     title:'Visión',subtitle:'El panel cambia según la responsabilidad. Liderazgo ve la operación sin convertir personas en métricas de fe.',
     loading:'Preparando la visión…',noAccess:'Tu papel no tiene una visión de gestión.',organization:'Organización',unit:'Sede',ecosystem:'Ecosistema',
     organizations:'Organizaciones',activeJourney:'NestJourney activo',people:'Personas',careOpen:'Cuidados abiertos',careDebt:'Care Debt',careUnassigned:'Cuidados sin responsable',maxLoad:'Mayor carga individual',withoutNextStep:'Sin próximo paso registrado',sessions:'Sesiones abiertas',pastoral:'Pastoral pendiente',audit:'Eventos de auditoría',
-    simulation:'Simular experiencia',simulationDesc:'Vista previa de solo lectura. No cambia tu acceso real ni actúa como otro usuario.',
+    simulation:'Experiencia por rol',simulationDesc:'Mira cómo NestJourney se reorganiza para cada responsabilidad. Tu acceso real sigue siendo CEO MillionsNest.',
     current:'Tu experiencia actual',openArea:'Abrir área',access:'Accesos',accessDesc:'Equipo, cargos y permisos siguen gobernados por MillionsNest Hub.',
     productHealth:'Salud del producto',productHealthDesc:'Acompaña organizaciones habilitadas y abre una para inspeccionar la operación.',
     selectOrg:'Ver organización',noUnit:'No se encontró una sede activa.',error:'No se pudo montar esta visión.',
@@ -268,11 +270,13 @@ export default function JourneyVisionPage(){
       </div>}
     </section>
 
+    <JourneyPath locale={locale} />
+
     <section className="journey-section-block"><header><div><span className="journey-section-kicker">{t.current}</span><h2>{currentExperience.name}</h2><p className="journey-section-copy">{currentExperience.summary}</p></div></header><div className="journey-card-grid">{currentExperience.items.map(item=><article className="journey-card" key={item}><span className="journey-card-icon"><ShieldCheck size={18}/></span><span className="journey-card-copy"><strong>{item}</strong></span></article>)}</div></section>
 
-    {access.isSystemAdmin?<section className="journey-section-block"><header><div><span className="journey-section-kicker">{t.simulation}</span><h2>{preview.name}</h2><p className="journey-section-copy">{t.simulationDesc}</p></div></header>
-      <div className="journey-segmented">{responsibilityDefinitions.filter(x=>x.id!=='ceo'&&x.id!=='member').map(x=><button className={simulation===x.id?'active':''} key={x.id} onClick={()=>setSimulation(x.id)}>{experienceCopy[locale][x.id].name}</button>)}</div>
-      <div className="journey-card-grid journey-section-block">{preview.items.map(item=><article className="journey-card" key={item}><span className="journey-card-icon"><Eye size={18}/></span><span className="journey-card-copy"><strong>{item}</strong><p>{preview.summary}</p></span></article>)}</div>
+    {(access.isSystemAdmin||access.actualIsSystemAdmin)?<section className="journey-section-block journey-experience-switch"><header><div><span className="journey-section-kicker">{t.simulation}</span><h2>{preview.name}</h2><p className="journey-section-copy">{t.simulationDesc}</p></div><button className="journey-primary-button" onClick={()=>{setJourneyViewAsRole(simulation==='ceo'?null:simulation as Exclude<JourneyResponsibility,'member'>);window.location.assign('/my-today')}}>{locale==='en'?'View as ':locale==='es'?'Visualizar como ':'Visualizar como '}{preview.name}<ArrowRight size={14}/></button></header>
+      <div className="journey-segmented">{responsibilityDefinitions.filter(x=>x.id!=='member').map(x=><button className={simulation===x.id?'active':''} key={x.id} onClick={()=>setSimulation(x.id)}>{experienceCopy[locale][x.id].name}</button>)}</div>
+      <div className="journey-card-grid journey-section-block">{preview.items.map(item=><article className="journey-card" key={item}><span className="journey-card-copy"><strong>{item}</strong><p>{preview.summary}</p></span></article>)}</div>
     </section>:null}
 
     <section className="journey-section-block"><header><div><span className="journey-section-kicker">{t.access}</span><h2>{t.access}</h2><p className="journey-section-copy">{t.accessDesc}</p></div><a className="journey-primary-button" href="/team-runtime">{t.openArea}<ArrowRight size={14}/></a></header></section>

@@ -49,4 +49,16 @@ describe('journey experience lenses', () => {
     expect(canViewJourneyVision(access({ organizationRole: 'pastor' }))).toBe(true)
     expect(canViewJourneyVision(access({ isSystemAdmin: true }))).toBe(true)
   })
+
+  it('allows a real CEO to preview a scoped role without resolving the UI back to CEO', () => {
+    const caregiverView = access({
+      actualIsSystemAdmin: true,
+      viewAsRole: 'caregiver',
+      role: 'care',
+      canManageCare: true,
+    })
+    expect(resolveJourneyResponsibility(caregiverView)).toBe('caregiver')
+    expect(canViewJourneyVision(caregiverView)).toBe(false)
+    expect(canViewJourneyPeople(caregiverView)).toBe(false)
+  })
 })
