@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Check, ClipboardCheck, Clock3, ShieldCheck, UsersRound } from 'lucide-react'
+import { Check, ClipboardCheck, ShieldCheck, UsersRound } from 'lucide-react'
 import { auth } from './firebase'
 import {
   getActiveJourneyOrganizationId,
