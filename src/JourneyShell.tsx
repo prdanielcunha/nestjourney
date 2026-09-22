@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import {
-  BarChart3, ChevronDown, CircleHelp, CloudOff, Eye, HeartHandshake, House, Languages, Leaf,
+  BarChart3, BrainCircuit, ChevronDown, CircleHelp, CloudOff, Eye, HeartHandshake, House, Languages, Leaf,
   ListTodo, MoreHorizontal, Settings2, UserCheck, Users, UsersRound, Workflow,
 } from 'lucide-react'
 import { auth } from './firebase'
 import {
+  canViewJourneyIntelligence,
   getActiveJourneyOrganizationId,
   loadJourneyAccess,
   setJourneyViewAsRole,
@@ -28,7 +29,7 @@ const copy={
   'pt-BR':{
     tagline:'cuidado em cada passo',today:'Hoje',todayDesc:'O que precisa de você agora',
     people:'Pessoas',peopleDesc:'Pessoas e jornada permitida',journey:'Jornada',journeyDesc:'O caminho de cuidado e suas áreas',
-    vision:'Visão',visionDesc:'Leitura pastoral, operacional e executiva',management:'Gestão',managementDesc:'Equipe, implantação, relatórios e ajustes',
+    vision:'Visão',visionDesc:'Leitura pastoral, operacional e executiva',intelligence:'Inteligência',intelligenceDesc:'Sinais explicáveis, Pulse, vínculos e fluxos seguros',myJourney:'Minha Jornada',myJourneyDesc:'Pulse, Casas, contato e canais voluntários',management:'Gestão',managementDesc:'Equipe, implantação, relatórios e ajustes',
     areas:'Áreas de cuidado',presence:'Presença',presenceDesc:'Cultos, visitantes e vínculo',table:'Mesa Aberta',tableDesc:'Hospitalidade e participação',
     care:'Cuidado & Conexão',careDesc:'Contato em 24–48h e próximos passos',groups:'Casas de Paz',groupsDesc:'Casas, participantes e operação',
     root:'Raiz',rootDesc:'Discipulado inicial 1–7',restricted:'Sem acesso neste papel',
@@ -38,7 +39,7 @@ const copy={
   en:{
     tagline:'care at every step',today:'Today',todayDesc:'What needs you now',
     people:'People',peopleDesc:'People and permitted journey',journey:'Journey',journeyDesc:'The care path and its areas',
-    vision:'Vision',visionDesc:'Pastoral, operational, and executive read',management:'Management',managementDesc:'Team, rollout, reports, and settings',
+    vision:'Vision',visionDesc:'Pastoral, operational, and executive read',intelligence:'Intelligence',intelligenceDesc:'Explainable signals, Pulse, relationships, and safe workflows',myJourney:'My Journey',myJourneyDesc:'Pulse, Houses, contact, and voluntary channels',management:'Management',managementDesc:'Team, rollout, reports, and settings',
     areas:'Care areas',presence:'Presence',presenceDesc:'Services, visitors, and relationships',table:'Open Table',tableDesc:'Hospitality and participation',
     care:'Care & Connection',careDesc:'24–48h contact and next steps',groups:'Peace Houses',groupsDesc:'Groups, participants, and operations',
     root:'Root',rootDesc:'Initial discipleship 1–7',restricted:'Not available for this role',
@@ -48,7 +49,7 @@ const copy={
   es:{
     tagline:'cuidado en cada paso',today:'Hoy',todayDesc:'Lo que necesita de ti ahora',
     people:'Personas',peopleDesc:'Personas y jornada permitida',journey:'Jornada',journeyDesc:'El camino de cuidado y sus áreas',
-    vision:'Visión',visionDesc:'Lectura pastoral, operativa y ejecutiva',management:'Gestión',managementDesc:'Equipo, implementación, informes y ajustes',
+    vision:'Visión',visionDesc:'Lectura pastoral, operativa y ejecutiva',intelligence:'Inteligencia',intelligenceDesc:'Señales explicables, Pulse, vínculos y flujos seguros',myJourney:'Mi Jornada',myJourneyDesc:'Pulse, Casas, contacto y canales voluntarios',management:'Gestión',managementDesc:'Equipo, implementación, informes y ajustes',
     areas:'Áreas de cuidado',presence:'Presencia',presenceDesc:'Cultos, visitantes y vínculo',table:'Mesa Abierta',tableDesc:'Hospitalidad y participación',
     care:'Cuidado & Conexión',careDesc:'Contacto en 24–48h y próximos pasos',groups:'Casas de Paz',groupsDesc:'Casas, participantes y operación',
     root:'Raíz',rootDesc:'Discipulado inicial 1–7',restricted:'Sin acceso en este rol',
@@ -83,6 +84,8 @@ function sameRoute(href:string,pathname:string){
   if(href==='/my-today')return pathname==='/'||pathname==='/my-today'
   if(href==='/areas')return pathname==='/areas'||['/presence-assist','/mesa-runtime','/care-integrity','/groups-runtime','/discipleship-runtime'].includes(pathname)
   if(href==='/more')return pathname==='/more'||['/team-runtime','/implementation-runtime','/reports','/governance-runtime','/settings-runtime','/help','/pastoral-handoff'].includes(pathname)
+  if(href==='/my-journey')return pathname==='/my-journey'
+  if(href==='/intelligence')return pathname==='/intelligence'
   return pathname===href
 }
 
@@ -134,9 +137,11 @@ export function JourneyShell({children}:{children:ReactNode}){
 
   const primary:NavItem[]=[
     {href:'/my-today',label:t.today,description:t.todayDesc,icon:ListTodo},
+    {href:'/my-journey',label:t.myJourney,description:t.myJourneyDesc,icon:HeartHandshake,enabled:a=>resolveJourneyResponsibility(a)==='member'},
     {href:'/journey-profile',label:t.people,description:t.peopleDesc,icon:Users,enabled:a=>canViewJourneyPeople(a)},
-    {href:'/areas',label:t.journey,description:t.journeyDesc,icon:Workflow},
+    {href:'/areas',label:t.journey,description:t.journeyDesc,icon:Workflow,enabled:a=>resolveJourneyResponsibility(a)!=='member'},
     {href:'/vision',label:t.vision,description:t.visionDesc,icon:Eye,enabled:a=>canViewJourneyVision(a)},
+    {href:'/intelligence',label:t.intelligence,description:t.intelligenceDesc,icon:BrainCircuit,enabled:a=>canViewJourneyIntelligence(a)},
   ]
   const areas:NavItem[]=[
     {href:'/presence-assist',label:names.presence,description:t.presenceDesc,icon:UserCheck,enabled:a=>canOpenJourneyArea(a,'presence')},
@@ -179,6 +184,7 @@ export function JourneyShell({children}:{children:ReactNode}){
     :responsibility==='caregiver'?{href:'/care-integrity',label:names.care,icon:HeartHandshake}
     :responsibility==='group_leader'?{href:'/groups-runtime',label:names.groups,icon:House}
     :responsibility==='discipler'?{href:'/discipleship-runtime',label:names.root,icon:Leaf}
+    :responsibility==='member'?{href:'/my-journey',label:t.myJourney,icon:HeartHandshake}
     :{href:'/help',label:locale==='en'?'Help':locale==='es'?'Ayuda':'Ajuda',icon:CircleHelp}
 
   const mobileFourth=access&&canViewJourneyVision(access)
@@ -190,7 +196,7 @@ export function JourneyShell({children}:{children:ReactNode}){
   const mobileCandidates=[
     {href:'/my-today',label:t.today,icon:ListTodo},
     mobileSecond,
-    {href:'/areas',label:t.journey,icon:Workflow},
+    responsibility==='member'?{href:'/my-journey',label:t.myJourney,icon:HeartHandshake}:{href:'/areas',label:t.journey,icon:Workflow},
     mobileFourth,
     {href:'/more',label:t.management,icon:MoreHorizontal},
   ]
