@@ -2722,7 +2722,6 @@ function assertJourneyUnitScope(access: JourneyAccessContext, congregationId: st
 
 export function canViewJourneyIntelligence(access: JourneyAccessContext) {
   return access.isSystemAdmin
-    || access.actualIsSystemAdmin
     || access.isOwner
     || access.broadJourneyAccess
     || ['owner','admin','pastor','data_admin'].includes(access.organizationRole)
@@ -2732,7 +2731,6 @@ export function canViewJourneyIntelligence(access: JourneyAccessContext) {
 
 export function canManageJourneyAutomations(access: JourneyAccessContext) {
   return access.isSystemAdmin
-    || access.actualIsSystemAdmin
     || access.isOwner
     || ['owner','admin','pastor'].includes(access.organizationRole)
     || access.role === 'coordinator'
@@ -2741,13 +2739,11 @@ export function canManageJourneyAutomations(access: JourneyAccessContext) {
 
 export function canManageSafeVoice(access: JourneyAccessContext) {
   return access.isSystemAdmin
-    || access.actualIsSystemAdmin
     || access.permissions.canManageSafeVoice === true
 }
 
 export function canRevealSafeVoiceIdentity(access: JourneyAccessContext) {
   return access.isSystemAdmin
-    || access.actualIsSystemAdmin
     || access.permissions.canRevealSafeVoiceIdentity === true
 }
 
