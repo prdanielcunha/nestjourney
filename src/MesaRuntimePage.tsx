@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Check, ClipboardCheck, Clock3, ShieldCheck, UsersRound } from 'lucide-react'
+import { Check, ClipboardCheck, ShieldCheck, UsersRound } from 'lucide-react'
 import { auth } from './firebase'
 import {
   getActiveJourneyOrganizationId,
@@ -24,6 +24,7 @@ import { useJourneyLabels } from './journeyLabels'
 import { GuidedEmptyState } from './GuidedEmptyState'
 import { emptyGuidance } from './emptyGuidance'
 import { AccessDeniedState } from './AccessDeniedState'
+import { JourneyAreaFocus } from './JourneyAreaFocus'
 import './JourneySectionPages.css'
 
 const copy={
@@ -155,6 +156,25 @@ export default function MesaRuntimePage(){
 
   const noSessionGuide=emptyGuidance(locale,'mesa_no_session')
   const noPeopleGuide=emptyGuidance(locale,'mesa_no_people')
+  const activeUnit=congregations.find(x=>x.id===congregationId)
+  const activeSession=sessions.find(x=>x.id===sessionId)
+  const preparationCount=Object.values(preparation?.items??{}).filter(Boolean).length
+  const focusTitle=!activeSession
+    ?locale==='en'?'Open Presence before operating the Table':locale==='es'?'Abre Presencia antes de operar la Mesa':'Abra Presença antes de operar a Mesa'
+    :activeSession.status==='open'&&preparation?.status!=='ready'
+      ?locale==='en'?'Prepare the Table before the service ends':locale==='es'?'Prepara la Mesa antes de terminar el culto':'Prepare a Mesa antes do encerramento do culto'
+      :invited>0
+        ?locale==='en'?invited+' guest(s) still need a real participation record':locale==='es'?invited+' invitado(s) aún necesitan un registro real de participación':invited+' convidado(s) ainda precisam de registro real de participação'
+        :locale==='en'?'Table flow is ready':locale==='es'?'El flujo de la Mesa está listo':'O fluxo da Mesa está pronto'
+  const focusBody=!activeSession
+    ?locale==='en'?'The Table starts from a factual service session. Do not create a parallel list here.'
+      :locale==='es'?'La Mesa parte de una sesión factual del culto. No crees una lista paralela aquí.'
+      :'A Mesa começa a partir de uma sessão factual do culto. Não crie uma lista paralela aqui.'
+    :preparation?.status!=='ready'
+      ?t.preparationHint
+      :locale==='en'?'Now register invitations and participation only when they actually happened, preserving relationship continuity.'
+        :locale==='es'?'Ahora registra invitaciones y participación solo cuando realmente ocurrieron, preservando la continuidad del vínculo.'
+        :'Agora registre convite e participação somente quando realmente aconteceram, preservando a continuidade do vínculo.'
 
   if(loading)return <main className="journey-section-page"><div className="journey-loading">{t.loading}</div></main>
   if(!access?.canManageMesa)return <main className="journey-section-page"><AccessDeniedState locale={locale} title={t.title} body={t.noAccess} /></main>
@@ -162,14 +182,31 @@ export default function MesaRuntimePage(){
   return <main className="journey-section-page"><div className="journey-section-shell">
     <header className="journey-section-header"><div><span className="journey-section-kicker">NestJourney / Mesa</span><h1>{t.title}</h1><p>{t.subtitle}</p></div><select value={locale} onChange={e=>{const next=e.target.value as AppLocale;setLocale(next);persistLocale(next)}}>{(Object.keys(localeLabels) as AppLocale[]).map(id=><option key={id} value={id}>{localeLabels[id]}</option>)}</select></header>
     {error?<div className="journey-error">{error}</div>:null}
-    <section className="journey-card-grid">
-      <label className="journey-card"><span className="journey-card-icon"><UsersRound size={20}/></span><span className="journey-card-copy"><small>{t.unit}</small><strong>{congregations.find(x=>x.id===congregationId)?.name||'—'}</strong><p>{t.relationshipHint}</p></span><select className="journey-section-select" value={congregationId} disabled={busy} onChange={e=>void changeUnit(e.target.value)}>{congregations.map(x=><option key={x.id} value={x.id}>{x.name}</option>)}</select></label>
-      <label className="journey-card"><span className="journey-card-icon"><Clock3 size={20}/></span><span className="journey-card-copy"><small>{t.service}</small><strong>{sessions.find(x=>x.id===sessionId)?.eventName||sessions.find(x=>x.id===sessionId)?.eventRef||'—'}</strong><p>{sessions.find(x=>x.id===sessionId)?.status==='open'?'Open':'History'}</p></span><select className="journey-section-select" value={sessionId} disabled={busy||!sessions.length} onChange={e=>void changeSession(e.target.value)}><option value="">—</option>{sessions.map(x=><option key={x.id} value={x.id}>{x.eventName||x.eventRef}</option>)}</select></label>
+
+    <JourneyAreaFocus
+      locale={locale}
+      title={focusTitle}
+      body={focusBody}
+      context={[activeUnit?.name,activeSession?.eventName||activeSession?.eventRef].filter(Boolean).join(' · ')||undefined}
+      metrics={[
+        {label:t.guests,value:invited,tone:invited>0?'attention':'muted'},
+        {label:t.joined,value:joined,tone:joined>0?'good':'muted'},
+        {label:t.preparation,value:preparationCount+'/4',tone:preparation?.status==='ready'?'good':'attention'},
+      ]}
+      actions={!activeSession
+        ?[{label:access.canManagePresence?noSessionGuide.primary:(locale==='en'?'Open Help':locale==='es'?'Abrir Ayuda':'Abrir Ajuda'),href:access.canManagePresence?'/presence-assist':'/help',primary:true}]
+        :activeSession.status==='open'&&preparation?.status!=='ready'
+          ?[{label:locale==='en'?'Prepare now':locale==='es'?'Preparar ahora':'Preparar agora',href:'#mesa-preparation',primary:true},{label:locale==='en'?'Go to people':locale==='es'?'Ir a personas':'Ir para pessoas',href:'#mesa-people'}]
+          :[{label:locale==='en'?'Record participation':locale==='es'?'Registrar participación':'Registrar participação',href:'#mesa-people',primary:true}]
+      }
+    />
+
+    <section className="journey-area-toolbar">
+      {congregations.length>1?<label><span>{t.unit}</span><select value={congregationId} disabled={busy} onChange={e=>void changeUnit(e.target.value)}>{congregations.map(x=><option key={x.id} value={x.id}>{x.name}</option>)}</select></label>:null}
+      {sessions.length>1?<label className="grow"><span>{t.service}</span><select value={sessionId} disabled={busy||!sessions.length} onChange={e=>void changeSession(e.target.value)}><option value="">—</option>{sessions.map(x=><option key={x.id} value={x.id}>{x.eventName||x.eventRef}</option>)}</select></label>:null}
     </section>
 
-    <section className="journey-section-block"><div className="journey-stat-grid"><div className="journey-stat"><span>{t.guests}</span><strong>{invited}</strong><small>{t.relationship}</small></div><div className="journey-stat"><span>{t.joined}</span><strong>{joined}</strong><small>{t.participated}</small></div><div className="journey-stat"><span>{t.preparation}</span><strong>{preparation?.status==='ready'?t.ready:t.preparing}</strong><small>{Object.values(preparation?.items??{}).filter(Boolean).length} / 4</small></div></div></section>
-
-    {sessionId&&sessions.find(x=>x.id===sessionId)?.status==='open'?<section className="journey-section-block mesa-preparation">
+    {sessionId&&sessions.find(x=>x.id===sessionId)?.status==='open'?<section className="journey-section-block mesa-preparation" id="mesa-preparation">
       <header><div><span className="journey-section-kicker">{t.preparation}</span><h2>{t.preparation}</h2><p className="journey-section-copy">{t.preparationHint}</p></div><span className={`journey-status ${preparation?.status==='ready'?'':'warn'}`}><ClipboardCheck size={13}/>{preparation?.status==='ready'?t.ready:t.preparing}</span></header>
       <div className="mesa-checklist">
         {([
@@ -188,7 +225,7 @@ export default function MesaRuntimePage(){
       </div>
     </section>:null}
 
-    {!sessionId?<section className="journey-section-block"><GuidedEmptyState icon={UsersRound} title={noSessionGuide.title} body={noSessionGuide.body} primary={{label:access.canManagePresence?noSessionGuide.primary:(locale==='en'?'Open Help':locale==='es'?'Abrir Ayuda':'Abrir Ajuda'),href:access.canManagePresence?'/presence-assist':'/help'}} secondary={{label:noSessionGuide.secondary||t.title,href:'/my-today'}}/></section>:<section className="journey-section-block">
+    {!sessionId?<section className="journey-section-block"><GuidedEmptyState icon={UsersRound} title={noSessionGuide.title} body={noSessionGuide.body} primary={{label:access.canManagePresence?noSessionGuide.primary:(locale==='en'?'Open Help':locale==='es'?'Abrir Ayuda':'Abrir Ajuda'),href:access.canManagePresence?'/presence-assist':'/help'}} secondary={{label:noSessionGuide.secondary||t.title,href:'/my-today'}}/></section>:<section className="journey-section-block" id="mesa-people">
       <header><div><span className="journey-section-kicker">{t.people}</span><h2>{t.people}</h2></div><input className="journey-section-select" value={query} placeholder={t.search} onChange={e=>setQuery(e.target.value)}/></header>
       <div className="journey-list">
         {visible.map(person=>{
