@@ -32,7 +32,7 @@ import {
   type MesaPreparationRecord,
   type PresenceSessionRecord,
 } from './journeyRepository'
-import { resolveJourneyResponsibility, type JourneyResponsibility } from './journeyExperience'
+import { canViewJourneyPeople, resolveJourneyResponsibility, type JourneyResponsibility } from './journeyExperience'
 import { getInitialLocale, localeLabels, myTodayCopy, persistLocale, type AppLocale } from './i18n'
 import { useJourneyLabels } from './journeyLabels'
 import './MyTodayPage.css'
@@ -159,7 +159,7 @@ export default function MyTodayPage(){
 
   const refreshScope=useCallback(async(nextAccess:JourneyAccessContext,unitId:string)=>{
     const [nextPeople,nextCare,nextSessions,nextGroups,nextDiscipleships,nextPastoral]=await Promise.all([
-      listJourneyPeople(nextAccess.organizationId,unitId),
+      canViewJourneyPeople(nextAccess)?listJourneyPeople(nextAccess.organizationId,unitId):Promise.resolve([]),
       nextAccess.canManageCare||nextAccess.broadJourneyAccess?listCareRequests(nextAccess.organizationId,unitId):Promise.resolve([]),
       nextAccess.canManagePresence||nextAccess.canManageMesa?listPresenceSessions(nextAccess.organizationId,unitId):Promise.resolve([]),
       nextAccess.canManageGroups||nextAccess.broadJourneyAccess?listJourneyGroups(nextAccess.organizationId,unitId):Promise.resolve([]),
