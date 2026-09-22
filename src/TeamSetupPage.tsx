@@ -21,7 +21,6 @@ import { JourneyAreaFocus } from './JourneyAreaFocus'
 import './TeamSetupPage.css'
 
 const HUB_MEMBERS_URL='https://www.millionsnest.com/dashboard/organization/members'
-const HUB_ROLES_URL='https://www.millionsnest.com/dashboard/organization/roles'
 const HUB_API_BASE=(import.meta.env.VITE_MILLIONSNEST_URL||'https://www.millionsnest.com').replace(/\/$/,'')
 
 type Responsibility='member'|'presence_host'|'mesa_team'|'caregiver'|'group_leader'|'discipler'|'coordinator'|'pastor'
