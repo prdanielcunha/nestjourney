@@ -116,7 +116,6 @@ export default function JourneyIntelligencePage(){
   const [care,setCare]=useState<CareRequestRecord[]>([])
   const [groups,setGroups]=useState<JourneyGroupRecord[]>([])
   const [discipleships,setDiscipleships]=useState<JourneyDiscipleshipRecord[]>([])
-  const [sessions,setSessions]=useState<PresenceSessionRecord[]>([])
   const [belonging,setBelonging]=useState<JourneyBelongingSignal[]>([])
   const [pulse,setPulse]=useState<JourneyPulseCheckin[]>([])
   const [signals,setSignals]=useState<JourneyMemberSignal[]>([])
@@ -145,7 +144,7 @@ export default function JourneyIntelligencePage(){
       safe(listJourneyWorkflows(nextAccess,nextUnit),[] as JourneyWorkflowRecord[]),
     ])
     await synchronizeCareLifecycleFacts(nextAccess,nextCare).catch((cause)=>console.warn('care lifecycle facts',cause))
-    setPeople(nextPeople);setCare(nextCare);setGroups(nextGroups);setDiscipleships(nextDiscipleships);setSessions(nextSessions)
+    setPeople(nextPeople);setCare(nextCare);setGroups(nextGroups);setDiscipleships(nextDiscipleships)
     setPulse(nextPulse);setSignals(nextSignals);setSafeVoice(nextVoice);setExitFeedback(nextExit);setWorkflows(nextWorkflows)
     if(nextAccess.canManagePresence&&nextSessions.length){
       const recent=nextSessions.filter(item=>item.status==='closed'&&lastDays(item.openedAt,90)).slice(0,16)
