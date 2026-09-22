@@ -492,6 +492,298 @@ service cloud.firestore {
         && request.resource.data.get('bondAssignedAt', null) == resource.data.get('bondAssignedAt', null)
         && request.resource.data.get('bondAssignedBy', '') == resource.data.get('bondAssignedBy', '');
     }
+    function hasExplicitPermission(orgId, permission) {
+      return membershipIsActive(orgId)
+        && membership(orgId).get('permissions', {}).get(permission, false) == true;
+    }
+    function canReadJourneyPeople(orgId) {
+      return isSystemAdmin()
+        || isOwner(orgId)
+        || role(orgId, [
+          'owner', 'admin', 'pastor', 'data_admin', 'coordinator',
+          'presence_host', 'mesa', 'table_host', 'mesa_team',
+          'care', 'caregiver', 'group_leader', 'discipler'
+        ])
+        || hasExplicitPermission(orgId, 'canManagePeople')
+        || hasExplicitPermission(orgId, 'canManagePresence')
+        || hasExplicitPermission(orgId, 'canManageMesa')
+        || hasExplicitPermission(orgId, 'canManageCare')
+        || hasExplicitPermission(orgId, 'canManageGroups')
+        || hasExplicitPermission(orgId, 'canManageDiscipleship')
+        || hasExplicitPermission(orgId, 'canCoordinateJourney');
+    }
+    function canViewJourneyIntelligence(orgId) {
+      return isSystemAdmin()
+        || isOwner(orgId)
+        || role(orgId, ['owner', 'admin', 'pastor', 'data_admin', 'coordinator'])
+        || hasExplicitPermission(orgId, 'canViewJourneyIntelligence')
+        || hasExplicitPermission(orgId, 'canCoordinateJourney');
+    }
+    function canManageJourneyAutomations(orgId) {
+      return isSystemAdmin()
+        || isOwner(orgId)
+        || role(orgId, ['owner', 'admin', 'pastor', 'coordinator'])
+        || hasExplicitPermission(orgId, 'canManageJourneyAutomations');
+    }
+    function canManageMemberSignals(orgId) {
+      return canManageCare(orgId)
+        || canManagePastoral(orgId)
+        || canManagePrivacy(orgId)
+        || hasExplicitPermission(orgId, 'canManageMemberSignals');
+    }
+    function canManageSafeVoice(orgId) {
+      return isSystemAdmin() || hasExplicitPermission(orgId, 'canManageSafeVoice');
+    }
+    function canRevealSafeVoiceIdentity(orgId) {
+      return isSystemAdmin() || hasExplicitPermission(orgId, 'canRevealSafeVoiceIdentity');
+    }
+    function isPulseReporter(orgId, pulseId) {
+      let path = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/pulseIdentities/$(pulseId);
+      return exists(path) && get(path).data.get('reporterUid', '') == request.auth.uid;
+    }
+    function isSafeVoiceReporter(orgId, caseId) {
+      let path = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/safeVoiceIdentities/$(caseId);
+      return exists(path) && get(path).data.get('reporterUid', '') == request.auth.uid;
+    }
+    function isExitFeedbackReporter(orgId, feedbackId) {
+      let path = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/exitFeedbackIdentities/$(feedbackId);
+      return exists(path) && get(path).data.get('reporterUid', '') == request.auth.uid;
+    }
+    function validPulseCreate(orgId, pulseId) {
+      let congregationId = request.resource.data.get('congregationId', '');
+      let identityPath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/pulseIdentities/$(pulseId);
+      return request.resource.data.keys().hasOnly([
+          'organizationId', 'congregationId', 'state', 'contactAllowed', 'createdAt'
+        ])
+        && tenantCreate(orgId)
+        && canAccessCongregation(orgId, congregationId)
+        && request.resource.data.get('state', '') in ['well', 'prayer', 'talk', 'help', 'feedback', 'prefer_not_now']
+        && request.resource.data.get('contactAllowed', false) is bool
+        && request.resource.data.get('createdAt', null) == request.time
+        && existsAfter(identityPath)
+        && getAfter(identityPath).data.get('organizationId', '') == orgId
+        && getAfter(identityPath).data.get('congregationId', '') == congregationId
+        && getAfter(identityPath).data.get('pulseId', '') == pulseId
+        && getAfter(identityPath).data.get('reporterUid', '') == request.auth.uid;
+    }
+    function validPulseIdentityCreate(orgId, pulseId) {
+      let congregationId = request.resource.data.get('congregationId', '');
+      let pulsePath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/pulseCheckins/$(pulseId);
+      return request.resource.data.keys().hasOnly([
+          'organizationId', 'congregationId', 'pulseId', 'reporterUid', 'createdAt'
+        ])
+        && tenantCreate(orgId)
+        && canAccessCongregation(orgId, congregationId)
+        && request.resource.data.get('pulseId', '') == pulseId
+        && request.resource.data.get('reporterUid', '') == request.auth.uid
+        && request.resource.data.get('createdAt', null) == request.time
+        && existsAfter(pulsePath)
+        && getAfter(pulsePath).data.get('congregationId', '') == congregationId;
+    }
+    function validMemberSignalCreate(orgId) {
+      let congregationId = request.resource.data.get('congregationId', '');
+      return request.resource.data.keys().hasOnly([
+          'organizationId', 'congregationId', 'createdBy', 'kind', 'status',
+          'groupId', 'createdAt', 'resolvedAt', 'resolvedBy'
+        ])
+        && tenantCreate(orgId)
+        && canAccessCongregation(orgId, congregationId)
+        && request.resource.data.get('createdBy', '') == request.auth.uid
+        && request.resource.data.get('kind', '') in [
+          'prayer', 'talk', 'help', 'feedback', 'group_interest', 'contact_update', 'exit_contact'
+        ]
+        && request.resource.data.get('status', '') == 'open'
+        && request.resource.data.get('groupId', '') is string
+        && request.resource.data.get('createdAt', null) == request.time
+        && request.resource.data.get('resolvedAt', null) == null
+        && request.resource.data.get('resolvedBy', '') == '';
+    }
+    function validMemberSignalResolve(orgId) {
+      return tenantUnchanged(orgId)
+        && congregationUnchanged()
+        && resource.data.get('status', '') == 'open'
+        && request.resource.data.get('createdBy', '') == resource.data.get('createdBy', '')
+        && request.resource.data.get('kind', '') == resource.data.get('kind', '')
+        && request.resource.data.get('groupId', '') == resource.data.get('groupId', '')
+        && request.resource.data.get('createdAt', null) == resource.data.get('createdAt', null)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'resolvedAt', 'resolvedBy'])
+        && request.resource.data.get('status', '') == 'resolved'
+        && request.resource.data.get('resolvedAt', null) == request.time
+        && request.resource.data.get('resolvedBy', '') == request.auth.uid;
+    }
+    function validMemberSignalPrivateCreate(orgId, signalId) {
+      let signalPath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/memberSignals/$(signalId);
+      let congregationId = request.resource.data.get('congregationId', '');
+      return request.resource.data.keys().hasOnly([
+          'organizationId', 'congregationId', 'signalId', 'createdBy', 'value', 'createdAt'
+        ])
+        && tenantCreate(orgId)
+        && canAccessCongregation(orgId, congregationId)
+        && request.resource.data.get('signalId', '') == signalId
+        && request.resource.data.get('createdBy', '') == request.auth.uid
+        && request.resource.data.get('value', '') is string
+        && request.resource.data.get('value', '').size() > 0
+        && request.resource.data.get('value', '').size() <= 160
+        && request.resource.data.get('createdAt', null) == request.time
+        && existsAfter(signalPath)
+        && getAfter(signalPath).data.get('createdBy', '') == request.auth.uid
+        && getAfter(signalPath).data.get('kind', '') == 'contact_update'
+        && getAfter(signalPath).data.get('congregationId', '') == congregationId;
+    }
+    function validSafeVoiceCreate(orgId, caseId) {
+      let congregationId = request.resource.data.get('congregationId', '');
+      let identityPath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/safeVoiceIdentities/$(caseId);
+      return request.resource.data.keys().hasOnly([
+          'organizationId', 'congregationId', 'category', 'reporterMode', 'subjectUserId',
+          'summary', 'status', 'createdAt', 'resolvedAt', 'resolvedBy'
+        ])
+        && tenantCreate(orgId)
+        && canAccessCongregation(orgId, congregationId)
+        && request.resource.data.get('category', '') in [
+          'suggestion', 'negative_experience', 'safety_concern', 'sensitive_manifestation'
+        ]
+        && request.resource.data.get('reporterMode', '') in ['identified', 'confidential']
+        && request.resource.data.get('subjectUserId', '') is string
+        && request.resource.data.get('summary', '') is string
+        && request.resource.data.get('summary', '').size() >= 8
+        && request.resource.data.get('summary', '').size() <= 600
+        && request.resource.data.get('status', '') == 'open'
+        && request.resource.data.get('createdAt', null) == request.time
+        && request.resource.data.get('resolvedAt', null) == null
+        && request.resource.data.get('resolvedBy', '') == ''
+        && existsAfter(identityPath)
+        && getAfter(identityPath).data.get('reporterUid', '') == request.auth.uid
+        && getAfter(identityPath).data.get('congregationId', '') == congregationId;
+    }
+    function validSafeVoiceIdentityCreate(orgId, caseId) {
+      let congregationId = request.resource.data.get('congregationId', '');
+      let casePath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/safeVoiceCases/$(caseId);
+      return request.resource.data.keys().hasOnly([
+          'organizationId', 'congregationId', 'caseId', 'reporterUid', 'createdAt'
+        ])
+        && tenantCreate(orgId)
+        && canAccessCongregation(orgId, congregationId)
+        && request.resource.data.get('caseId', '') == caseId
+        && request.resource.data.get('reporterUid', '') == request.auth.uid
+        && request.resource.data.get('createdAt', null) == request.time
+        && existsAfter(casePath)
+        && getAfter(casePath).data.get('congregationId', '') == congregationId;
+    }
+    function validSafeVoiceResolve(orgId) {
+      return tenantUnchanged(orgId)
+        && congregationUnchanged()
+        && resource.data.get('status', '') == 'open'
+        && request.resource.data.get('category', '') == resource.data.get('category', '')
+        && request.resource.data.get('reporterMode', '') == resource.data.get('reporterMode', '')
+        && request.resource.data.get('subjectUserId', '') == resource.data.get('subjectUserId', '')
+        && request.resource.data.get('summary', '') == resource.data.get('summary', '')
+        && request.resource.data.get('createdAt', null) == resource.data.get('createdAt', null)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'resolvedAt', 'resolvedBy'])
+        && request.resource.data.get('status', '') == 'resolved'
+        && request.resource.data.get('resolvedAt', null) == request.time
+        && request.resource.data.get('resolvedBy', '') == request.auth.uid;
+    }
+    function validExitFeedbackCreate(orgId, feedbackId) {
+      let congregationId = request.resource.data.get('congregationId', '');
+      let identityPath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/exitFeedbackIdentities/$(feedbackId);
+      return request.resource.data.keys().hasOnly([
+          'organizationId', 'congregationId', 'status', 'reason', 'contactAllowed', 'createdAt'
+        ])
+        && tenantCreate(orgId)
+        && canAccessCongregation(orgId, congregationId)
+        && request.resource.data.get('status', '') in ['paused', 'left']
+        && request.resource.data.get('reason', '') in [
+          'moving', 'routine', 'another_church', 'lack_of_connection',
+          'negative_experience', 'disagreement', 'other'
+        ]
+        && request.resource.data.get('contactAllowed', false) is bool
+        && request.resource.data.get('createdAt', null) == request.time
+        && existsAfter(identityPath)
+        && getAfter(identityPath).data.get('reporterUid', '') == request.auth.uid
+        && getAfter(identityPath).data.get('congregationId', '') == congregationId;
+    }
+    function validExitFeedbackIdentityCreate(orgId, feedbackId) {
+      let congregationId = request.resource.data.get('congregationId', '');
+      let feedbackPath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/exitFeedback/$(feedbackId);
+      return request.resource.data.keys().hasOnly([
+          'organizationId', 'congregationId', 'feedbackId', 'reporterUid', 'createdAt'
+        ])
+        && tenantCreate(orgId)
+        && canAccessCongregation(orgId, congregationId)
+        && request.resource.data.get('feedbackId', '') == feedbackId
+        && request.resource.data.get('reporterUid', '') == request.auth.uid
+        && request.resource.data.get('createdAt', null) == request.time
+        && existsAfter(feedbackPath)
+        && getAfter(feedbackPath).data.get('congregationId', '') == congregationId;
+    }
+    function validJourneyWorkflowCreate(orgId) {
+      let congregationId = request.resource.data.get('congregationId', '');
+      return request.resource.data.keys().hasOnly([
+          'organizationId', 'congregationId', 'label', 'condition', 'action', 'threshold',
+          'enabled', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'
+        ])
+        && tenantCreate(orgId)
+        && canAccessCongregation(orgId, congregationId)
+        && request.resource.data.get('label', '') is string
+        && request.resource.data.get('label', '').size() > 0
+        && request.resource.data.get('label', '').size() <= 80
+        && request.resource.data.get('condition', '') in [
+          'care_overdue', 'care_unassigned', 'group_near_capacity',
+          'discipleship_no_next_meeting', 'pulse_help_requested', 'exit_feedback_spike'
+        ]
+        && request.resource.data.get('action', '') in [
+          'surface_attention', 'create_review_task', 'suggest_connect'
+        ]
+        && request.resource.data.get('threshold', 0) is number
+        && request.resource.data.get('threshold', 0) >= 1
+        && request.resource.data.get('threshold', 0) <= 99
+        && request.resource.data.get('enabled', false) is bool
+        && request.resource.data.get('createdAt', null) == request.time
+        && request.resource.data.get('createdBy', '') == request.auth.uid
+        && request.resource.data.get('updatedAt', null) == null
+        && request.resource.data.get('updatedBy', '') == '';
+    }
+    function validJourneyWorkflowUpdate(orgId) {
+      return tenantUnchanged(orgId)
+        && congregationUnchanged()
+        && request.resource.data.get('label', '') == resource.data.get('label', '')
+        && request.resource.data.get('condition', '') == resource.data.get('condition', '')
+        && request.resource.data.get('action', '') == resource.data.get('action', '')
+        && request.resource.data.get('threshold', 0) == resource.data.get('threshold', 0)
+        && request.resource.data.get('createdAt', null) == resource.data.get('createdAt', null)
+        && request.resource.data.get('createdBy', '') == resource.data.get('createdBy', '')
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['enabled', 'updatedAt', 'updatedBy'])
+        && request.resource.data.get('enabled', false) is bool
+        && request.resource.data.get('updatedAt', null) == request.time
+        && request.resource.data.get('updatedBy', '') == request.auth.uid;
+    }
+    function validExitFeedbackFact(orgId, factId) {
+      let payload = request.resource.data.get('payload', {});
+      let feedbackId = payload.get('feedbackId', '');
+      let feedbackPath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/exitFeedback/$(feedbackId);
+      let feedback = getAfter(feedbackPath).data;
+      return tenantCreate(orgId)
+        && request.resource.data.get('eventId', '') == factId
+        && request.resource.data.get('eventType', '') == 'EXIT_FEEDBACK_SUBMITTED'
+        && request.resource.data.get('actorId', '') == 'member-self-service'
+        && request.resource.data.get('sourceApp', '') == 'nestjourney'
+        && request.resource.data.get('version', 0) == 1
+        && request.resource.data.get('recordedAt', null) == request.time
+        && request.resource.data.get('occurredAt', null) == request.time
+        && request.resource.data.get('sensitivity', '') == 'confidential'
+        && feedbackId is string && feedbackId.size() > 0
+        && factId == 'exit-feedback-' + feedbackId
+        && existsAfter(feedbackPath)
+        && feedback.get('createdAt', null) == request.time
+        && canAccessCongregation(orgId, feedback.get('congregationId', ''))
+        && request.resource.data.get('subjectRef', '') == 'exitFeedback:' + feedbackId
+        && request.resource.data.get('evidenceRef', '') == 'exitFeedback:' + feedbackId
+        && request.resource.data.get('scope', '') == 'congregation:' + feedback.get('congregationId', '')
+        && payload.get('status', '') == feedback.get('status', '')
+        && payload.get('reason', '') == feedback.get('reason', '')
+        && payload.get('contactAllowed', false) == feedback.get('contactAllowed', false);
+    }
+
     function canManageJourneySettings(orgId) {
       return isSystemAdmin() || role(orgId, ['owner', 'admin', 'pastor']);
     }
@@ -1380,7 +1672,8 @@ service cloud.firestore {
           allow delete: if false;
         }
         match /people/{personId} {
-          allow read: if canAccessCongregation(orgId, resource.data.get('congregationId', ''));
+          allow read: if canReadJourneyPeople(orgId)
+            && canAccessCongregation(orgId, resource.data.get('congregationId', ''));
           allow create: if tenantCreate(orgId)
             && request.resource.data.get('deletedAt', null) == null
             && canAccessCongregation(orgId, request.resource.data.get('congregationId', ''))
@@ -1502,9 +1795,91 @@ service cloud.firestore {
                 || request.resource.data.get('eventType', '') in ['CARE_REQUESTED', 'CARE_ASSIGNED']
               )
               && validCanonicalFact(orgId, factId)
+            )
+            || (
+              request.resource.data.get('eventType', '') == 'EXIT_FEEDBACK_SUBMITTED'
+              && validExitFeedbackFact(orgId, factId)
             );
           allow update, delete: if false;
         }
+        match /pulseCheckins/{pulseId} {
+          allow read: if canViewJourneyIntelligence(orgId)
+            && canAccessCongregation(orgId, resource.data.get('congregationId', ''));
+          allow create: if validPulseCreate(orgId, pulseId);
+          allow update, delete: if false;
+        }
+        match /pulseIdentities/{pulseId} {
+          allow read: if isPulseReporter(orgId, pulseId) || isSystemAdmin();
+          allow create: if validPulseIdentityCreate(orgId, pulseId);
+          allow update, delete: if false;
+        }
+        match /memberSignals/{signalId} {
+          allow read: if (
+              resource.data.get('createdBy', '') == request.auth.uid
+              || canManageMemberSignals(orgId)
+            )
+            && canAccessCongregation(orgId, resource.data.get('congregationId', ''));
+          allow create: if validMemberSignalCreate(orgId);
+          allow update: if canManageMemberSignals(orgId)
+            && canAccessCongregation(orgId, resource.data.get('congregationId', ''))
+            && validMemberSignalResolve(orgId);
+          allow delete: if false;
+        }
+        match /memberSignalPrivate/{signalId} {
+          allow read: if (
+              resource.data.get('createdBy', '') == request.auth.uid
+              || canManagePrivacy(orgId)
+            )
+            && canAccessCongregation(orgId, resource.data.get('congregationId', ''));
+          allow create: if validMemberSignalPrivateCreate(orgId, signalId);
+          allow update, delete: if false;
+        }
+        match /safeVoiceCases/{caseId} {
+          allow read: if (
+              isSafeVoiceReporter(orgId, caseId)
+              || (
+                canManageSafeVoice(orgId)
+                && resource.data.get('subjectUserId', '') != request.auth.uid
+              )
+            )
+            && canAccessCongregation(orgId, resource.data.get('congregationId', ''));
+          allow create: if validSafeVoiceCreate(orgId, caseId);
+          allow update: if canManageSafeVoice(orgId)
+            && resource.data.get('subjectUserId', '') != request.auth.uid
+            && canAccessCongregation(orgId, resource.data.get('congregationId', ''))
+            && validSafeVoiceResolve(orgId);
+          allow delete: if false;
+        }
+        match /safeVoiceIdentities/{caseId} {
+          allow read: if isSafeVoiceReporter(orgId, caseId) || canRevealSafeVoiceIdentity(orgId);
+          allow create: if validSafeVoiceIdentityCreate(orgId, caseId);
+          allow update, delete: if false;
+        }
+        match /exitFeedback/{feedbackId} {
+          allow read: if (
+              isExitFeedbackReporter(orgId, feedbackId)
+              || canViewJourneyIntelligence(orgId)
+            )
+            && canAccessCongregation(orgId, resource.data.get('congregationId', ''));
+          allow create: if validExitFeedbackCreate(orgId, feedbackId);
+          allow update, delete: if false;
+        }
+        match /exitFeedbackIdentities/{feedbackId} {
+          allow read: if isExitFeedbackReporter(orgId, feedbackId) || isSystemAdmin();
+          allow create: if validExitFeedbackIdentityCreate(orgId, feedbackId);
+          allow update, delete: if false;
+        }
+        match /workflows/{workflowId} {
+          allow read: if canViewJourneyIntelligence(orgId)
+            && canAccessCongregation(orgId, resource.data.get('congregationId', ''));
+          allow create: if canManageJourneyAutomations(orgId)
+            && validJourneyWorkflowCreate(orgId);
+          allow update: if canManageJourneyAutomations(orgId)
+            && canAccessCongregation(orgId, resource.data.get('congregationId', ''))
+            && validJourneyWorkflowUpdate(orgId);
+          allow delete: if false;
+        }
+
         match /implementationCycles/{cycleId} {
           allow read: if canManageImplementation(orgId)
             && canAccessCongregation(orgId, resource.data.get('congregationId', ''));
