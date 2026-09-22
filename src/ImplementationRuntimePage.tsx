@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { BookOpen, Check, ChevronLeft, CircleCheck, Clock3, Play, ShieldCheck, Sparkles } from 'lucide-react'
 import { auth } from './firebase'
-import { completeImplementationStep, createImplementationCycle, getActiveJourneyOrganizationId, listImplementationCycles, listJourneyCongregations, loadJourneyAccess, type JourneyAccessContext, type JourneyCongregation, type JourneyImplementationCycle } from './journeyRepository'
+import { completeImplementationStep, createImplementationCycle, getActiveJourneyOrganizationId, resolveActiveJourneyCongregationId, setActiveJourneyCongregationId, listImplementationCycles, listJourneyCongregations, loadJourneyAccess, type JourneyAccessContext, type JourneyCongregation, type JourneyImplementationCycle } from './journeyRepository'
 import { IMPLEMENTATION_PREPARATION_KEYS, IMPLEMENTATION_REQUIRED_KEYS, implementationPlaybooks, implementationProgress, implementationWeekForProgress, implementationWeekKeys } from './implementationPlaybook'
 import { getInitialLocale, implementationRuntimeCopy, localeLabels, persistLocale, type AppLocale } from './i18n'
 import { AccessDeniedState } from './AccessDeniedState'
@@ -36,13 +36,13 @@ export default function ImplementationRuntimePage() {
       const nextAccess=await loadJourneyAccess(user.uid,organizationId);setAccess(nextAccess)
       if(!nextAccess.canManageImplementation)return
       const units=await listJourneyCongregations(nextAccess);setCongregations(units)
-      const unitId=units[0]?.id??'';setCongregationId(unitId)
+      const unitId=resolveActiveJourneyCongregationId(nextAccess.organizationId,units);setCongregationId(unitId)
       if(unitId)await refresh(organizationId,unitId)
     }catch(cause){console.error(cause);setError(t.error)}finally{setLoading(false)}
   },[refresh,t.error])
   useEffect(()=>{void bootstrap()},[bootstrap])
 
-  async function selectUnit(unitId:string){if(!access)return;setCongregationId(unitId);setBusy(true);setError('');try{await refresh(access.organizationId,unitId)}catch(cause){console.error(cause);setError(t.error)}finally{setBusy(false)}}
+  async function selectUnit(unitId:string){if(!access)return;setCongregationId(unitId);setActiveJourneyCongregationId(access.organizationId,unitId);setBusy(true);setError('');try{await refresh(access.organizationId,unitId)}catch(cause){console.error(cause);setError(t.error)}finally{setBusy(false)}}
   async function start(){if(!access||!congregationId)return;setBusy(true);setError('');try{await createImplementationCycle({organizationId:access.organizationId,congregationId,actorId:access.userId});await refresh(access.organizationId,congregationId)}catch(cause){console.error(cause);setError(t.error)}finally{setBusy(false)}}
   async function mark(key:string){if(!access||!cycle||completed.has(key)||cycle.status==='completed')return;setBusy(true);setError('');try{await completeImplementationStep({organizationId:access.organizationId,cycle,actorId:access.userId,key,requiredKeys:IMPLEMENTATION_REQUIRED_KEYS});await refresh(access.organizationId,congregationId)}catch(cause){console.error(cause);setError(t.error)}finally{setBusy(false)}}
 
