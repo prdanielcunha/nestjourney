@@ -21,6 +21,119 @@ const GOVERNANCE_ROLES = new Set(['owner', 'admin', 'pastor', 'data_admin'])
 const PRIVACY_ROLES = new Set(['owner', 'admin', 'data_admin'])
 const PASTORAL_ROLES = new Set(['owner', 'pastor'])
 
+export type JourneyViewAsRole =
+  | 'ceo'
+  | 'admin'
+  | 'pastor'
+  | 'coordinator'
+  | 'presence_host'
+  | 'mesa_team'
+  | 'caregiver'
+  | 'group_leader'
+  | 'discipler'
+
+const JOURNEY_VIEW_AS_STORAGE_KEY = 'nestjourney_view_as'
+
+export function getJourneyViewAsRole(): JourneyViewAsRole | null {
+  try {
+    const value = sessionStorage.getItem(JOURNEY_VIEW_AS_STORAGE_KEY)
+    return ['ceo','admin','pastor','coordinator','presence_host','mesa_team','caregiver','group_leader','discipler'].includes(value ?? '')
+      ? value as JourneyViewAsRole
+      : null
+  } catch {
+    return null
+  }
+}
+
+export function setJourneyViewAsRole(role: JourneyViewAsRole | null) {
+  try {
+    if (!role || role === 'ceo') sessionStorage.removeItem(JOURNEY_VIEW_AS_STORAGE_KEY)
+    else sessionStorage.setItem(JOURNEY_VIEW_AS_STORAGE_KEY, role)
+    window.dispatchEvent(new CustomEvent('nestjourney:view-as', { detail: role }))
+  } catch {
+    // View-as is a session-only UX lens. Failure must never affect real authorization.
+  }
+}
+
+function applyJourneyViewAs(access: JourneyAccessContext): JourneyAccessContext {
+  if (!access.isSystemAdmin) return access
+
+  const requested = getJourneyViewAsRole()
+  if (!requested || requested === 'ceo') {
+    return { ...access, actualIsSystemAdmin: true, viewAsRole: 'ceo' }
+  }
+
+  const simulated: JourneyAccessContext = {
+    ...access,
+    actualIsSystemAdmin: true,
+    viewAsRole: requested,
+    isSystemAdmin: false,
+    isOwner: false,
+    organizationRole: 'member',
+    role: 'member',
+    permissions: {},
+    canManagePresence: false,
+    canManageMesa: false,
+    canManagePeople: false,
+    canManageCare: false,
+    canManageGroups: false,
+    canManageDiscipleship: false,
+    canManageImplementation: false,
+    canViewGovernance: false,
+    canManagePrivacy: false,
+    canManagePastoral: false,
+    broadJourneyAccess: false,
+  }
+
+  if (requested === 'admin') return {
+    ...simulated,
+    organizationRole: 'admin',
+    role: 'admin',
+    canManagePresence: true,
+    canManageMesa: true,
+    canManagePeople: true,
+    canManageCare: true,
+    canManageGroups: true,
+    canManageDiscipleship: true,
+    canManageImplementation: true,
+    canViewGovernance: true,
+    canManagePrivacy: true,
+    canManagePastoral: true,
+    broadJourneyAccess: true,
+  }
+  if (requested === 'pastor') return {
+    ...simulated,
+    organizationRole: 'pastor',
+    role: 'pastor',
+    canManagePresence: true,
+    canManageMesa: true,
+    canManagePeople: true,
+    canManageCare: true,
+    canManageGroups: true,
+    canManageDiscipleship: true,
+    canManageImplementation: true,
+    canManagePastoral: true,
+    broadJourneyAccess: true,
+  }
+  if (requested === 'coordinator') return {
+    ...simulated,
+    role: 'coordinator',
+    canManagePresence: true,
+    canManageMesa: true,
+    canManagePeople: true,
+    canManageCare: true,
+    canManageGroups: true,
+    canManageDiscipleship: true,
+    canManageImplementation: true,
+    broadJourneyAccess: true,
+  }
+  if (requested === 'presence_host') return { ...simulated, role: 'presence_host', canManagePresence: true, canManagePeople: true }
+  if (requested === 'mesa_team') return { ...simulated, role: 'mesa', canManageMesa: true }
+  if (requested === 'caregiver') return { ...simulated, role: 'care', canManageCare: true }
+  if (requested === 'group_leader') return { ...simulated, role: 'group_leader', canManageGroups: true }
+  return { ...simulated, role: 'discipler', canManageDiscipleship: true }
+}
+
 export interface JourneyAccessContext {
   organizationId: string
   userId: string
@@ -41,6 +154,8 @@ export interface JourneyAccessContext {
   canManagePrivacy: boolean
   canManagePastoral: boolean
   broadJourneyAccess: boolean
+  actualIsSystemAdmin?: boolean
+  viewAsRole?: JourneyViewAsRole
 }
 
 export interface JourneyCongregation {
@@ -484,7 +599,7 @@ export async function loadJourneyAccess(userId: string, organizationId: string):
   const congregationIds = asStringArray(membership.congregationIds)
   const organizationHasBroadAccess = ['owner', 'admin', 'pastor', 'data_admin'].includes(organizationRole)
 
-  return {
+  const resolved: JourneyAccessContext = {
     organizationId,
     userId,
     role,
@@ -510,6 +625,7 @@ export async function loadJourneyAccess(userId: string, organizationId: string):
       || role === 'coordinator'
       || permissions.canCoordinateJourney === true,
   }
+  return applyJourneyViewAs(resolved)
 }
 
 export async function loadJourneyModuleLabels(organizationId: string): Promise<JourneyModuleLabels> {
@@ -563,7 +679,7 @@ export async function listJourneyCongregations(access: JourneyAccessContext): Pr
   const firestore = requireDb()
   const basePath = journeyCollectionPath(access.organizationId, 'congregations')
 
-  if (access.broadJourneyAccess) {
+  if (access.broadJourneyAccess || access.actualIsSystemAdmin) {
     const snapshot = await getDocs(collection(firestore, basePath))
     return snapshot.docs.map((item) => ({ id: item.id, ...item.data() } as JourneyCongregation)).filter((item) => item.active !== false)
   }
