@@ -5,7 +5,7 @@ import { evaluateCarePromise } from './intelligence'
 import { buildJourneyUnitPulse, type JourneyUnitPulse } from './journeyExecutive'
 import {
   careRequestToPromise,
-  getActiveJourneyOrganizationId,
+  getActiveJourneyOrganizationId, resolveActiveJourneyCongregationId, setActiveJourneyCongregationId, setActiveJourneyOrganizationId,
   listCareRequests,
   listJourneyCongregations,
   listJourneyDiscipleships,
@@ -168,7 +168,7 @@ export default function JourneyVisionPage(){
     const nextUnits=await listJourneyCongregations(nextAccess);setUnits(nextUnits)
     const pulses=await Promise.all(nextUnits.map(unit=>loadUnitPulse(nextAccess,unit)))
     setUnitPulses(pulses)
-    const nextUnit=nextUnits[0]?.id??'';setUnitId(nextUnit)
+    const nextUnit=resolveActiveJourneyCongregationId(nextAccess.organizationId,nextUnits);setUnitId(nextUnit)
     if(nextUnit)await loadUnit(nextAccess,nextUnit)
     else {setPeople([]);setCare([]);setSessions([]);setGroups([]);setDiscipleships([]);setPastoral([])}
   },[loadUnit,loadUnitPulse])
@@ -192,7 +192,7 @@ export default function JourneyVisionPage(){
   async function selectOrganization(nextOrg:string){
     const user=auth?.currentUser
     if(!user)return
-    setBusy(true);setOrganizationId(nextOrg);setError('')
+    setBusy(true);setOrganizationId(nextOrg);setActiveJourneyOrganizationId(nextOrg);setError('')
     try{await loadOrganization(user.uid,nextOrg)}catch(cause){console.error(cause);setError(t.error)}finally{setBusy(false)}
   }
   async function selectUnit(nextUnit:string){
