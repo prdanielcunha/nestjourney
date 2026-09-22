@@ -40,7 +40,7 @@ function responsibilityCopy(locale:AppLocale){
     group_leader:['House Leader','Meetings, participants, guests, capacity, and operations for their house.'],
     discipler:['Discipler','People accompanied, meeting 1–7, preparation, and next step.'],
     coordinator:['Coordinator','Operational pending work, workload distribution, and team quality.'],
-    pastor:['Pastor','Care Debt, pastoral handoffs, and whole-journey pastoral vision.'],
+    pastor:['Pastor','Overdue care, pastoral handoffs, and whole-journey pastoral vision.'],
   } as const
   if(locale==='es')return{
     member:['Sin responsabilidad operativa','Usa solamente lo que está disponible para un miembro regular.'],
@@ -50,7 +50,7 @@ function responsibilityCopy(locale:AppLocale){
     group_leader:['Líder de Casa','Encuentros, participantes, invitados, capacidad y operación de su Casa.'],
     discipler:['Discipulador','Personas acompañadas, encuentro 1–7, preparación y próximo paso.'],
     coordinator:['Coordinador','Pendientes operativos, distribución de carga y calidad del equipo.'],
-    pastor:['Pastor','Care Debt, derivaciones pastorales y visión pastoral de toda la jornada.'],
+    pastor:['Pastor','Cuidado atrasado, derivaciones pastorales y visión pastoral de toda la jornada.'],
   } as const
   return{
     member:['Sem função operacional','Usa apenas o que estiver liberado para um membro comum.'],
@@ -60,7 +60,7 @@ function responsibilityCopy(locale:AppLocale){
     group_leader:['Líder de Casa','Encontros, participantes, convidados, capacidade e operação da sua Casa.'],
     discipler:['Discipulador','Pessoas acompanhadas, encontro 1–7, preparação e próximo passo.'],
     coordinator:['Coordenador','Pendências operacionais, distribuição de carga e qualidade da equipe.'],
-    pastor:['Pastor','Care Debt, encaminhamentos pastorais e visão pastoral de toda a jornada.'],
+    pastor:['Pastor','Cuidado atrasado, encaminhamentos pastorais e visão pastoral de toda a jornada.'],
   } as const
 }
 
