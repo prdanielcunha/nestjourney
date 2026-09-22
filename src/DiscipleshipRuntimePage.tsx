@@ -3,7 +3,7 @@ import { BookOpen, CheckCircle2, ChevronLeft, Leaf, Pause, Play, ShieldCheck, X 
 import { auth } from './firebase'
 import {
   createJourneyDiscipleship,
-  getActiveJourneyOrganizationId,
+  getActiveJourneyOrganizationId, resolveActiveJourneyCongregationId, setActiveJourneyCongregationId,
   listJourneyCongregations,
   listJourneyDiscipleships,
   listJourneyPeople,
@@ -43,12 +43,12 @@ export default function DiscipleshipRuntimePage(){
       if(!user||!organizationId)throw new Error('missing_ecosystem_context')
       const nextAccess=await loadJourneyAccess(user.uid,organizationId);setAccess(nextAccess)
       if(!(nextAccess.canManageDiscipleship||nextAccess.broadJourneyAccess))return
-      const units=await listJourneyCongregations(nextAccess);setCongregations(units);const unitId=units[0]?.id??'';setCongregationId(unitId);if(unitId)await refresh(nextAccess,unitId)
+      const units=await listJourneyCongregations(nextAccess);setCongregations(units);const unitId=resolveActiveJourneyCongregationId(nextAccess.organizationId,units);setCongregationId(unitId);if(unitId)await refresh(nextAccess,unitId)
     }catch(cause){console.error(cause);setError(t.error)}finally{setLoading(false)}
   },[refresh,t.error])
   useEffect(()=>{void bootstrap()},[bootstrap])
 
-  async function selectUnit(unitId:string){if(!access)return;setCongregationId(unitId);setBusy(true);setError('');try{await refresh(access,unitId)}catch(cause){console.error(cause);setError(t.error)}finally{setBusy(false)}}
+  async function selectUnit(unitId:string){if(!access)return;setCongregationId(unitId);setActiveJourneyCongregationId(access.organizationId,unitId);setBusy(true);setError('');try{await refresh(access,unitId)}catch(cause){console.error(cause);setError(t.error)}finally{setBusy(false)}}
   async function act(item:JourneyDiscipleshipRecord,action:'advance'|'pause'|'resume'){if(!access)return;setBusy(true);setError('');try{await updateJourneyDiscipleship({organizationId:access.organizationId,relation:item,actorId:access.userId,action});await refresh(access,congregationId)}catch(cause){console.error(cause);setError(t.error)}finally{setBusy(false)}}
 
   const empty=emptyGuidance(locale,'discipleship_none')

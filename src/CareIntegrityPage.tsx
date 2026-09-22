@@ -7,7 +7,7 @@ import {
   claimCareRequest,
   completeJourneyFollowup,
   createCareRequest,
-  getActiveJourneyOrganizationId,
+  getActiveJourneyOrganizationId, resolveActiveJourneyCongregationId, setActiveJourneyCongregationId,
   listCareRequests,
   listJourneyCongregations,
   listJourneyFollowups,
@@ -143,7 +143,7 @@ export default function CareIntegrityPage() {
       if (!nextAccess.canManageCare) return
       const nextCongregations = await listJourneyCongregations(nextAccess)
       setCongregations(nextCongregations)
-      const unitId = nextCongregations[0]?.id ?? ''
+      const unitId = resolveActiveJourneyCongregationId(nextAccess.organizationId, nextCongregations)
       setCongregationId(unitId)
       if (unitId) await refreshScope(nextAccess, unitId)
     } catch (cause) {
@@ -159,6 +159,7 @@ export default function CareIntegrityPage() {
   async function selectCongregation(unitId: string) {
     if (!access) return
     setCongregationId(unitId)
+    setActiveJourneyCongregationId(access.organizationId,unitId)
     setBusy(true)
     setError('')
     try { await refreshScope(access, unitId) }

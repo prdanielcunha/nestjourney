@@ -8,7 +8,7 @@ import {
   createAbsenceCareRequest,
   createMinimalVisitor,
   createPresenceSession,
-  getActiveJourneyOrganizationId,
+  getActiveJourneyOrganizationId, resolveActiveJourneyCongregationId, setActiveJourneyCongregationId,
   latestChecksByPerson,
   listAbsenceCareRoutePersonIds,
   listJourneyCongregations,
@@ -162,7 +162,7 @@ export default function PresenceAssistPage() {
       if (!nextAccess.canManagePresence) return
       const nextCongregations = await listJourneyCongregations(nextAccess)
       setCongregations(nextCongregations)
-      const unitId = nextCongregations[0]?.id ?? ''
+      const unitId = resolveActiveJourneyCongregationId(nextAccess.organizationId, nextCongregations)
       setCongregationId(unitId)
       if (unitId) await refreshScope(organizationId, unitId)
     } catch (cause) {
@@ -178,6 +178,7 @@ export default function PresenceAssistPage() {
   async function selectCongregation(unitId: string) {
     if (!access) return
     setCongregationId(unitId)
+    setActiveJourneyCongregationId(access.organizationId,unitId)
     setBusy(true)
     setError('')
     try { await refreshScope(access.organizationId, unitId) }

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import {
-  BarChart3, ChevronDown, CircleHelp, CloudOff, Eye, HeartHandshake, House, Leaf,
+  BarChart3, ChevronDown, CircleHelp, CloudOff, Eye, HeartHandshake, House, Languages, Leaf,
   ListTodo, MoreHorizontal, Settings2, UserCheck, Users, UsersRound, Workflow,
 } from 'lucide-react'
 import { auth } from './firebase'
@@ -255,20 +255,30 @@ export function JourneyShell({children}:{children:ReactNode}){
       </div>
     </aside>
 
-    {isRealCeo?<div className="journey-mobile-access-wrap">
-      <button className="journey-mobile-access" onClick={()=>setAccessOpen(value=>!value)} aria-expanded={accessOpen}>
-        <span>{displayRole}</span><ChevronDown size={14}/>
-      </button>
-      {accessOpen?<div className="journey-access-menu mobile">
-        <div className="journey-access-real"><small>{t.realAccess}</small><strong>CEO MillionsNest</strong></div>
-        <div className="journey-access-menu-title">{t.viewAs}</div>
-        <div className="journey-access-options">
-          {viewAsOptions.map(role=><button className={currentView===role?'active':''} key={role} onClick={()=>chooseView(role)}>
-            <span>{roleLabels[locale][role]}</span>{currentView===role?<b>✓</b>:null}
-          </button>)}
-        </div>
+    <div className="journey-mobile-utility">
+      <label className="journey-mobile-locale" aria-label={t.language}>
+        <Languages size={14}/>
+        <select value={locale} onChange={event=>{const next=event.target.value as AppLocale;setLocale(next);persistLocale(next)}}>
+          <option value="pt-BR">PT</option>
+          <option value="en">EN</option>
+          <option value="es">ES</option>
+        </select>
+      </label>
+      {isRealCeo?<div className="journey-mobile-access-wrap">
+        <button className="journey-mobile-access" onClick={()=>setAccessOpen(value=>!value)} aria-expanded={accessOpen}>
+          <span>{displayRole}</span><ChevronDown size={14}/>
+        </button>
+        {accessOpen?<div className="journey-access-menu mobile">
+          <div className="journey-access-real"><small>{t.realAccess}</small><strong>CEO MillionsNest</strong></div>
+          <div className="journey-access-menu-title">{t.viewAs}</div>
+          <div className="journey-access-options">
+            {viewAsOptions.map(role=><button className={currentView===role?'active':''} key={role} onClick={()=>chooseView(role)}>
+              <span>{roleLabels[locale][role]}</span>{currentView===role?<b>✓</b>:null}
+            </button>)}
+          </div>
+        </div>:null}
       </div>:null}
-    </div>:null}
+    </div>
 
     <section className="journey-app-content">{children}</section>
 

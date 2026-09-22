@@ -4,7 +4,7 @@ import { auth } from './firebase'
 import { evaluateCarePromise } from './intelligence'
 import {
   careRequestToPromise,
-  getActiveJourneyOrganizationId,
+  getActiveJourneyOrganizationId, resolveActiveJourneyCongregationId, setActiveJourneyCongregationId,
   listCareRequests,
   listJourneyCongregations,
   listJourneyDiscipleships,
@@ -28,6 +28,7 @@ import { GuidedEmptyState } from './GuidedEmptyState'
 import { emptyGuidance } from './emptyGuidance'
 import { AccessDeniedState } from './AccessDeniedState'
 import { useJourneyLabels } from './journeyLabels'
+import { JourneyAreaFocus } from './JourneyAreaFocus'
 import './JourneySectionPages.css'
 
 const copy={
@@ -94,7 +95,7 @@ export default function JourneyReportsPage(){
       const nextAccess=await loadJourneyAccess(user.uid,organizationId);setAccess(nextAccess)
       if(!canViewJourneyReports(nextAccess))return
       const nextUnits=await listJourneyCongregations(nextAccess);setUnits(nextUnits)
-      const nextUnit=nextUnits[0]?.id??'';setUnitId(nextUnit)
+      const nextUnit=resolveActiveJourneyCongregationId(nextAccess.organizationId,nextUnits);setUnitId(nextUnit)
       if(nextUnit)await loadScope(nextAccess,nextUnit)
     }catch(cause){console.error(cause);setError(t.error)}finally{setLoading(false)}
   },[loadScope,t.error])
@@ -102,7 +103,7 @@ export default function JourneyReportsPage(){
 
   async function selectUnit(nextUnit:string){
     if(!access)return
-    setUnitId(nextUnit);setBusy(true);setError('')
+    setUnitId(nextUnit);setActiveJourneyCongregationId(access.organizationId,nextUnit);setBusy(true);setError('')
     try{await loadScope(access,nextUnit)}catch(cause){console.error(cause);setError(t.error)}finally{setBusy(false)}
   }
 
@@ -125,28 +126,53 @@ export default function JourneyReportsPage(){
   if(loading)return <main className="journey-section-page"><div className="journey-loading">{t.loading}</div></main>
   if(!access||!canViewJourneyReports(access))return <main className="journey-section-page"><AccessDeniedState locale={locale} title={t.title} body={t.noAccess} /></main>
 
-  const stats=[
-    [t.people,metrics.people,Users],
-    [labels.care||t.careOpen,metrics.careOpen,HeartHandshake],
-    [t.careDebt,metrics.careDebt,HeartHandshake],
-    [t.sessions,metrics.sessions,UserCheck],
-    [labels.groups||t.groups,metrics.groups,House],
-    [t.nearCapacity,metrics.near,House],
-    [labels.discipleship||t.root,metrics.discipleships,Leaf],
-    [t.pastoral,metrics.pastoral,ShieldCheck],
-  ] as const
-  const careRatio=metrics.careOpen===0?'0 / 0':String(Math.max(0,metrics.careOpen-metrics.careDebt))+' / '+String(metrics.careOpen)
   const hasReportData=metrics.people+metrics.careOpen+metrics.sessions+metrics.groups+metrics.discipleships+metrics.pastoral>0
   const empty=emptyGuidance(locale,'reports_no_data')
+  const activeUnit=units.find(x=>x.id===unitId)
+  const focusTitle=metrics.careDebt>0
+    ?locale==='en'?metrics.careDebt+' overdue care promise(s)':locale==='es'?metrics.careDebt+' promesa(s) de cuidado vencida(s)':metrics.careDebt+' promessa(s) de cuidado vencida(s)'
+    :metrics.near>0
+      ?locale==='en'?metrics.near+' House(s) near capacity':locale==='es'?metrics.near+' Casa(s) cerca de la capacidad':metrics.near+' Casa(s) perto da capacidade'
+      :metrics.pastoral>0
+        ?locale==='en'?metrics.pastoral+' pastoral handoff(s) open':locale==='es'?metrics.pastoral+' derivación(es) pastoral(es) abiertas':metrics.pastoral+' encaminhamento(s) pastoral(is) aberto(s)'
+        :locale==='en'?'No critical operational signal in this campus':locale==='es'?'Sin señal operativa crítica en esta sede':'Nenhum sinal operacional crítico nesta unidade'
+  const focusBody=locale==='en'
+    ?'These indicators are a care thermometer. They describe recorded operations and never rank people, faith, or spiritual maturity.'
+    :locale==='es'
+      ?'Estos indicadores son un termómetro de cuidado. Describen la operación registrada y nunca clasifican personas, fe o madurez espiritual.'
+      :'Estes indicadores são um termômetro de cuidado. Eles descrevem a operação registrada e nunca classificam pessoas, fé ou maturidade espiritual.'
+  const careOnTime=Math.max(0,metrics.careOpen-metrics.careDebt)
 
   return <main className="journey-section-page"><div className="journey-section-shell">
     <header className="journey-section-header"><div><span className="journey-section-kicker">NestJourney / Reports</span><h1>{t.title}</h1><p>{t.subtitle}</p></div><select value={locale} onChange={e=>{const next=e.target.value as AppLocale;setLocale(next);persistLocale(next)}}>{(Object.keys(localeLabels) as AppLocale[]).map(id=><option key={id} value={id}>{localeLabels[id]}</option>)}</select></header>
     {error?<div className="journey-error">{error}</div>:null}
+
+    {units.length>1?<section className="journey-area-toolbar"><label><span>{t.unit}</span><select value={unitId} disabled={busy} onChange={e=>void selectUnit(e.target.value)}>{units.map(x=><option key={x.id} value={x.id}>{x.name+(x.city?' · '+x.city:'')}</option>)}</select></label></section>:null}
+
+    <JourneyAreaFocus
+      locale={locale}
+      context={activeUnit?.name}
+      title={focusTitle}
+      body={focusBody}
+      metrics={[
+        {label:t.careDebt,value:metrics.careDebt,tone:metrics.careDebt?'attention':'muted'},
+        {label:t.nearCapacity,value:metrics.near,tone:metrics.near?'attention':'muted'},
+        {label:t.pastoral,value:metrics.pastoral,tone:metrics.pastoral?'attention':'muted'},
+      ]}
+      actions={[{label:locale==='en'?'Open Vision':locale==='es'?'Abrir Visión':'Abrir Visão',href:'/vision',primary:true}]}
+    />
+
     {!hasReportData?<section className="journey-section-block"><GuidedEmptyState icon={BarChart3} title={empty.title} body={empty.body} primary={{label:empty.primary,href:'/my-today'}} secondary={{label:empty.secondary||t.title,href:access.canManageImplementation?'/implementation-runtime':'/help'}}/></section>:null}
-    <section className="journey-section-block"><header><div><span className="journey-section-kicker">{t.unit}</span><h2>{units.find(x=>x.id===unitId)?.name||'—'}</h2></div><select className="journey-section-select" value={unitId} disabled={busy} onChange={e=>void selectUnit(e.target.value)}>{units.map(x=><option key={x.id} value={x.id}>{x.name+(x.city?' · '+x.city:'')}</option>)}</select></header>
-      <div className="journey-stat-grid">{stats.map(([label,value,Icon])=><div className="journey-stat" key={label}><span>{label}</span><strong>{value}</strong><small><Icon size={13}/></small></div>)}</div>
-    </section>
-    <section className="journey-card-grid journey-section-block"><article className="journey-card"><span className="journey-card-icon"><HeartHandshake size={20}/></span><span className="journey-card-copy"><small>{t.careHealth}</small><strong>{careRatio}</strong><p>{t.careHealthDesc}</p></span></article><article className="journey-card"><span className="journey-card-icon"><BarChart3 size={20}/></span><span className="journey-card-copy"><small>{t.journeyHealth}</small><strong>{metrics.people||t.noData}</strong><p>{t.journeyHealthDesc}</p></span></article></section>
+
+    {hasReportData?<section className="journey-report-lanes">
+      <div><span><Users size={16}/><strong>{t.people}</strong><p>{locale==='en'?'People recorded in this campus.':locale==='es'?'Personas registradas en esta sede.':'Pessoas registradas nesta unidade.'}</p></span><b>{metrics.people}</b></div>
+      <div><span><HeartHandshake size={16}/><strong>{labels.care||t.careOpen}</strong><p>{t.careHealthDesc}</p></span><b>{careOnTime} / {metrics.careOpen}</b></div>
+      <div><span><UserCheck size={16}/><strong>{t.sessions}</strong><p>{locale==='en'?'Open service sessions right now.':locale==='es'?'Sesiones de culto abiertas ahora.':'Sessões de culto abertas agora.'}</p></span><b>{metrics.sessions}</b></div>
+      <div><span><House size={16}/><strong>{labels.groups||t.groups}</strong><p>{locale==='en'?'Houses registered; attention only when near capacity.':locale==='es'?'Casas registradas; atención solo cuando se acercan a la capacidad.':'Casas registradas; atenção somente quando se aproximam da capacidade.'}</p></span><b>{metrics.groups}</b></div>
+      <div><span><Leaf size={16}/><strong>{labels.discipleship||t.root}</strong><p>{locale==='en'?'Active Root relationships.':locale==='es'?'Acompañamientos activos de Raíz.':'Acompanhamentos ativos no Raiz.'}</p></span><b>{metrics.discipleships}</b></div>
+    </section>:null}
+
     <div className="journey-section-note"><ShieldCheck size={18}/><p>{t.journeyHealthDesc}</p></div>
   </div></main>
+
 }
