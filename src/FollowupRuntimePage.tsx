@@ -22,6 +22,7 @@ import { followupRuntimeCopy, getInitialLocale, localeLabels, persistLocale, typ
 import { GuidedEmptyState } from './GuidedEmptyState'
 import { emptyGuidance } from './emptyGuidance'
 import { AccessDeniedState } from './AccessDeniedState'
+import { JourneyAreaFocus } from './JourneyAreaFocus'
 import './FollowupRuntimePage.css'
 
 function formatDate(value: string, locale: AppLocale) {
@@ -169,6 +170,24 @@ export default function FollowupRuntimePage() {
   const pendingEmpty=emptyGuidance(locale,'followup_pending_none')
   const completedEmpty=emptyGuidance(locale,'followup_completed_none')
 
+  const activeUnit=congregations.find(item=>item.id===congregationId)
+  const focusTitle=pending.length>0
+    ?locale==='en'?pending.length+' follow-up(s) waiting for an outcome':locale==='es'?pending.length+' seguimiento(s) esperando resultado':pending.length+' acompanhamento(s) aguardando resultado'
+    :ready.length>0
+      ?locale==='en'?ready.length+' care promise(s) ready to start':locale==='es'?ready.length+' promesa(s) de cuidado listas para iniciar':ready.length+' promessa(s) de cuidado prontas para iniciar'
+      :locale==='en'?'No follow-up needs action now':locale==='es'?'Ningún seguimiento necesita acción ahora':'Nenhum acompanhamento precisa de ação agora'
+  const focusBody=pending.length>0
+    ?locale==='en'?'Finish conversations already started before opening new ones. Record only the outcome and permitted next step.'
+      :locale==='es'?'Termina las conversaciones ya iniciadas antes de abrir nuevas. Registra solo el resultado y el próximo paso permitido.'
+      :'Conclua as conversas já iniciadas antes de abrir novas. Registre somente o resultado e o próximo passo permitido.'
+    :ready.length>0
+      ?locale==='en'?'Start with the care promise that belongs to you. Contact authorization remains the gate for any outreach.'
+        :locale==='es'?'Empieza por la promesa de cuidado que te pertenece. La autorización de contacto sigue siendo requisito para cualquier contacto.'
+        :'Comece pela promessa de cuidado que pertence a você. A autorização de contato continua sendo requisito para qualquer contato.'
+      :locale==='en'?'The care flow is caught up. Return to Care when a new real promise appears.'
+        :locale==='es'?'El flujo de cuidado está al día. Vuelve a Cuidado cuando aparezca una nueva promesa real.'
+        :'O fluxo de cuidado está em dia. Volte para Cuidado quando surgir uma nova promessa real.'
+
   if (loading) return <main className="followup-page"><div className="followup-loading">{t.loading}</div></main>
   if (!access?.canManageCare) return <main className="followup-page"><AccessDeniedState locale={locale} title={t.noAccessTitle} body={t.noAccess} retryLabel={t.retry} onRetry={()=>void bootstrap()} /></main>
 
@@ -180,9 +199,28 @@ export default function FollowupRuntimePage() {
 
     <section className="followup-hero"><div><span className="followup-kicker">Journey / Follow-up</span><h1>{t.title}</h1><p>{t.subtitle}</p></div></section>
     {error ? <div className="followup-error" role="alert">{error}</div> : null}
+
+    <JourneyAreaFocus
+      locale={locale}
+      context={activeUnit?.name}
+      title={focusTitle}
+      body={focusBody}
+      metrics={[
+        {label:t.ready,value:ready.length,tone:ready.length?'good':'muted'},
+        {label:t.inProgress,value:pending.length,tone:pending.length?'attention':'muted'},
+        {label:t.completed,value:completed.length,tone:completed.length?'good':'muted'},
+      ]}
+      actions={pending.length
+        ?[{label:t.recordOutcome,href:'#followup-pending',primary:true}]
+        :ready.length
+          ?[{label:t.start,href:'#ready-followups',primary:true}]
+          :[{label:t.back,href:'/care-integrity',primary:true}]
+      }
+    />
+
     <section className="followup-panel followup-boundary"><ShieldCheck size={18}/><div><strong>{t.connectBoundaryTitle}</strong><p>{t.connectBoundary}</p></div></section>
 
-    <section className="followup-panel followup-toolbar"><label><span>{t.congregation}</span><select value={congregationId} disabled={busy} onChange={(event)=>void selectUnit(event.target.value)}>{congregations.map((item)=><option key={item.id} value={item.id}>{item.name}{item.city?` · ${item.city}`:''}</option>)}</select></label></section>
+    {congregations.length>1?<section className="journey-area-toolbar"><label><span>{t.congregation}</span><select value={congregationId} disabled={busy} onChange={(event)=>void selectUnit(event.target.value)}>{congregations.map((item)=><option key={item.id} value={item.id}>{item.name}{item.city?` · ${item.city}`:''}</option>)}</select></label></section>:null}
 
     <section className="followup-section" id="ready-followups">
       <div className="followup-section-head"><div><span>{t.ready}</span><h2>{t.readyTitle}</h2></div><b>{ready.length}</b></div>
@@ -200,7 +238,7 @@ export default function FollowupRuntimePage() {
       </div>
     </section>
 
-    <section className="followup-section">
+    <section className="followup-section" id="followup-pending">
       <div className="followup-section-head"><div><span>{t.inProgress}</span><h2>{t.inProgressTitle}</h2></div><b>{pending.length}</b></div>
       <div className="followup-grid">
         {pending.map((item)=>{
