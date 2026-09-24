@@ -3,7 +3,7 @@
 --nj-mint-700:#2fa47e;--nj-mint-600:#43c79a;--nj-mint-500:#72d6b0;--nj-mint-300:#a8ead2;
 --nj-white:#fff;--nj-ivory:#f7f6f1;--nj-text:#f7fafc;--nj-text-muted:#9eb0c3;--nj-text-subtle:#71869b;
 --nj-border:rgba(156,181,204,.16);--nj-border-strong:rgba(156,181,204,.28);
---nj-success:#52d39f;--nj-warning:#f3bd62;--nj-danger:#f17878;--nj-info:#76b7ff;
+--nj-success:#52d39f;--nj-warning:#f3bd62;--nj-danger:#f17878;--nj-info:#76b7ff;--nj-positive-text:#a3e7c9;--nj-warning-text:#ffd88c;--nj-danger-text:#ffb1b1;--nj-info-text:#a9d1ff;--nj-on-accent:#06101e;
 --nj-bg:var(--nj-navy-950);--nj-surface:var(--nj-navy-900);--nj-surface-raised:var(--nj-navy-800);--nj-surface-hover:var(--nj-navy-700);
 --nj-accent:var(--nj-mint-500);--nj-accent-strong:var(--nj-mint-600);--nj-focus-ring:0 0 0 3px rgba(114,214,176,.34);
 --nj-shadow-sm:0 8px 24px rgba(0,6,18,.18);--nj-shadow-md:0 18px 48px rgba(0,6,18,.28);
