@@ -11,6 +11,7 @@ import {
   loadJourneyAccess,
   setMesaParticipation,
   setMesaPreparationItem,
+  subscribeJourneyLiveChanges,
   type JourneyAccessContext,
   type JourneyCongregation,
   type MesaParticipationRecord,
@@ -105,6 +106,17 @@ export default function MesaRuntimePage(){
     }catch(cause){console.error(cause);setError(t.error)}finally{setLoading(false)}
   },[loadScope,t.error])
   useEffect(()=>{void bootstrap()},[bootstrap])
+
+  useEffect(()=>{
+    if(!access?.canManageMesa||!congregationId)return
+    return subscribeJourneyLiveChanges({
+      organizationId:access.organizationId,
+      congregationId,
+      collections:['people','presenceSessions','mesaParticipations','mesaPreparations'],
+      onChange:()=>{void loadScope(access,congregationId).catch(cause=>console.error('Mesa live refresh failed',cause))},
+      onError:cause=>console.error('Mesa live subscription failed',cause),
+    })
+  },[access,congregationId,loadScope])
 
   async function changeUnit(unitId:string){
     if(!access)return

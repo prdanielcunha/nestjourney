@@ -13,6 +13,7 @@ import {
   listPastoralHandoffs,
   listPresenceSessions,
   loadJourneyAccess,
+  subscribeJourneyLiveChanges,
   type CareRequestRecord,
   type JourneyAccessContext,
   type JourneyCongregation,
@@ -100,6 +101,17 @@ export default function JourneyReportsPage(){
     }catch(cause){console.error(cause);setError(t.error)}finally{setLoading(false)}
   },[loadScope,t.error])
   useEffect(()=>{void bootstrap()},[bootstrap])
+
+  useEffect(()=>{
+    if(!access||!unitId||!canViewJourneyReports(access))return
+    return subscribeJourneyLiveChanges({
+      organizationId:access.organizationId,
+      congregationId:unitId,
+      collections:['people','careRequests','presenceSessions','groups','discipleships','pastoralHandoffs'],
+      onChange:()=>{void loadScope(access,unitId)},
+      onError:(cause)=>console.error('Reports live sync failed',cause),
+    })
+  },[access,unitId,loadScope])
 
   async function selectUnit(nextUnit:string){
     if(!access)return

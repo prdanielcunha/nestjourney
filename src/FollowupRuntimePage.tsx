@@ -10,6 +10,7 @@ import {
   listJourneyPeople,
   loadJourneyAccess,
   startJourneyFollowup,
+  subscribeJourneyLiveChanges,
   type CareRequestRecord,
   type JourneyAccessContext,
   type JourneyCongregation,
@@ -90,6 +91,17 @@ export default function FollowupRuntimePage() {
   }, [refresh, t.error])
 
   useEffect(() => { void bootstrap() }, [bootstrap])
+
+  useEffect(() => {
+    if (!access?.canManageCare || !congregationId) return
+    return subscribeJourneyLiveChanges({
+      organizationId: access.organizationId,
+      congregationId,
+      collections: ['people', 'careRequests', 'followups'],
+      onChange: () => { void refresh(access, congregationId).catch((cause) => console.error('Follow-up live refresh failed', cause)) },
+      onError: (cause) => console.error('Follow-up live subscription failed', cause),
+    })
+  }, [access, congregationId, refresh])
 
   useEffect(() => {
     if (!requestedFollowupId || resolving || !access) return

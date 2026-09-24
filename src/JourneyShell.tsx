@@ -1,12 +1,15 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import {
   BarChart3, ChevronDown, CircleHelp, CloudOff, Eye, HeartHandshake, House, Languages, Leaf,
-  ListTodo, MoreHorizontal, Settings2, UserCheck, Users, UsersRound, Workflow,
+  ListTodo, MoreHorizontal, PanelLeftClose, PanelLeftOpen, Settings2, UserCheck, Users, UsersRound, Workflow,
 } from 'lucide-react'
 import { auth } from './firebase'
 import {
   getActiveJourneyOrganizationId,
+  getActiveJourneyCongregationId,
+  listJourneyCongregations,
   loadJourneyAccess,
+  loadJourneyOrganizationSummary,
   setJourneyViewAsRole,
   type JourneyAccessContext,
   type JourneyViewAsRole,
@@ -33,7 +36,7 @@ const copy={
     care:'Cuidado & Conexão',careDesc:'Contato em 24–48h e próximos passos',groups:'Casas de Paz',groupsDesc:'Casas, participantes e operação',
     root:'Raiz',rootDesc:'Discipulado inicial 1–7',restricted:'Sem acesso neste papel',
     language:'Idioma',role:'Seu acesso',realAccess:'Acesso real',viewAs:'Visualizar experiência como',
-    viewing:'Visualizando como',backCeo:'Voltar à visão CEO',offline:'Sem conexão. As ações serão retomadas quando a internet voltar.',
+    viewing:'Visualizando como',backCeo:'Voltar à visão CEO',offline:'Sem conexão. As ações serão retomadas quando a internet voltar.',collapse:'Recolher navegação',expand:'Expandir navegação',scope:'Escopo',globalScope:'Ecossistema',organizationScope:'Organização',unitsScope:'unidades',
   },
   en:{
     tagline:'care at every step',today:'Today',todayDesc:'What needs you now',
@@ -43,7 +46,7 @@ const copy={
     care:'Care & Connection',careDesc:'24–48h contact and next steps',groups:'Peace Houses',groupsDesc:'Groups, participants, and operations',
     root:'Root',rootDesc:'Initial discipleship 1–7',restricted:'Not available for this role',
     language:'Language',role:'Your access',realAccess:'Real access',viewAs:'View experience as',
-    viewing:'Viewing as',backCeo:'Return to CEO view',offline:'You are offline. Actions will resume when your internet connection returns.',
+    viewing:'Viewing as',backCeo:'Return to CEO view',offline:'You are offline. Actions will resume when your internet connection returns.',collapse:'Collapse navigation',expand:'Expand navigation',scope:'Scope',globalScope:'Ecosystem',organizationScope:'Organization',unitsScope:'campuses',
   },
   es:{
     tagline:'cuidado en cada paso',today:'Hoy',todayDesc:'Lo que necesita de ti ahora',
@@ -53,7 +56,7 @@ const copy={
     care:'Cuidado & Conexión',careDesc:'Contacto en 24–48h y próximos pasos',groups:'Casas de Paz',groupsDesc:'Casas, participantes y operación',
     root:'Raíz',rootDesc:'Discipulado inicial 1–7',restricted:'Sin acceso en este rol',
     language:'Idioma',role:'Tu acceso',realAccess:'Acceso real',viewAs:'Visualizar experiencia como',
-    viewing:'Visualizando como',backCeo:'Volver a la visión CEO',offline:'Sin conexión. Las acciones se reanudarán cuando vuelva internet.',
+    viewing:'Visualizando como',backCeo:'Volver a la visión CEO',offline:'Sin conexión. Las acciones se reanudarán cuando vuelva internet.',collapse:'Contraer navegación',expand:'Expandir navegación',scope:'Alcance',globalScope:'Ecosistema',organizationScope:'Organización',unitsScope:'sedes',
   },
 } as const
 
@@ -92,6 +95,9 @@ export function JourneyShell({children}:{children:ReactNode}){
   const [pathname,setPathname]=useState(()=>window.location.pathname)
   const [online,setOnline]=useState(()=>navigator.onLine)
   const [accessOpen,setAccessOpen]=useState(false)
+  const [collapsed,setCollapsed]=useState(()=>{try{return localStorage.getItem('nestjourney_sidebar_collapsed')==='1'}catch{return false}})
+  const [organizationName,setOrganizationName]=useState('')
+  const [unitName,setUnitName]=useState('')
   const {labels}=useJourneyLabels()
   const t=copy[locale]
 
@@ -124,6 +130,31 @@ export function JourneyShell({children}:{children:ReactNode}){
     void loadJourneyAccess(user.uid,organizationId).then(setAccess).catch(()=>setAccess(null))
   },[pathname])
 
+  useEffect(()=>{
+    if(!access){setOrganizationName('');setUnitName('');return}
+    let disposed=false
+    const refreshContext=async()=>{
+      try{
+        const [organization,units]=await Promise.all([
+          loadJourneyOrganizationSummary(access),
+          listJourneyCongregations(access),
+        ])
+        if(disposed)return
+        setOrganizationName(organization?.name||access.organizationId)
+        const activeUnitId=getActiveJourneyCongregationId(access.organizationId)
+        setUnitName(units.find(unit=>unit.id===activeUnitId)?.name||'')
+      }catch(cause){
+        console.error('Journey shell context failed',cause)
+        if(!disposed){setOrganizationName(access.organizationId);setUnitName('')}
+      }
+    }
+    const sync=()=>{void refreshContext()}
+    void refreshContext()
+    window.addEventListener('nestjourney:unit',sync)
+    window.addEventListener('nestjourney:organization',sync)
+    return()=>{disposed=true;window.removeEventListener('nestjourney:unit',sync);window.removeEventListener('nestjourney:organization',sync)}
+  },[access])
+
   const names=useMemo(()=>({
     presence:labels.presence||t.presence,
     mesa:labels.table||t.table,
@@ -148,6 +179,16 @@ export function JourneyShell({children}:{children:ReactNode}){
 
   const visiblePrimary=primary.filter(item=>!item.enabled||Boolean(access&&item.enabled(access)))
   const visibleAreas=areas.filter(item=>!item.enabled||Boolean(access&&item.enabled(access)))
+  const managementItem:NavItem={href:'/more',label:t.management,description:t.managementDesc,icon:Settings2}
+  const activeItem=[...visiblePrimary,...visibleAreas,managementItem].find(item=>sameRoute(item.href,pathname))
+  const activeLabel=activeItem?.label??'NestJourney'
+  const scopeType=access?.isSystemAdmin
+    ?t.globalScope
+    :access?.broadJourneyAccess
+      ?t.organizationScope
+      :unitName||((access?.congregationIds.length??0)>0?access?.congregationIds.length+' '+t.unitsScope:t.organizationScope)
+  const scopeLabel=[organizationName,scopeType].filter(Boolean).join(' · ')
+  const toggleCollapsed=()=>setCollapsed(value=>{const next=!value;try{localStorage.setItem('nestjourney_sidebar_collapsed',next?'1':'0')}catch{}return next})
 
   const navigate=(href:string,enabled=true)=>{
     if(!enabled)return
@@ -208,7 +249,7 @@ export function JourneyShell({children}:{children:ReactNode}){
     window.location.reload()
   }
 
-  return <div className="journey-app-frame">
+  return <div className={'journey-app-frame'+(collapsed?' sidebar-collapsed':'')}>
     {!online?<div className="journey-network-banner" role="status"><CloudOff size={15}/><span>{t.offline}</span></div>:null}
     {isRealCeo&&currentView&&currentView!=='ceo'?<div className="journey-view-banner" role="status">
       <span>{t.viewing} <strong>{roleLabels[locale][currentView]}</strong></span>
@@ -216,10 +257,14 @@ export function JourneyShell({children}:{children:ReactNode}){
     </div>:null}
 
     <aside className="journey-side-nav">
-      <button className="journey-side-brand" onClick={()=>navigate('/my-today')}>
-        <img src="/nestjourney-icon.svg" alt=""/>
-        <span><strong>NestJourney</strong><small>{t.tagline}</small></span>
-      </button>
+      <div className="journey-brand-row">
+        <button className="journey-side-brand" onClick={()=>navigate('/my-today')} aria-label="NestJourney">
+          <img className="journey-brand-full" src="/brand/nestjourney-horizontal-light.png" alt="NestJourney"/>
+          <img className="journey-brand-symbol" src="/brand/nestjourney-symbol.svg" alt=""/>
+          <small>{t.tagline}</small>
+        </button>
+        <button className="journey-collapse-toggle" onClick={toggleCollapsed} aria-label={collapsed?t.expand:t.collapse} title={collapsed?t.expand:t.collapse}>{collapsed?<PanelLeftOpen size={17}/>:<PanelLeftClose size={17}/>}</button>
+      </div>
 
       <nav aria-label="NestJourney">
         <section className="journey-nav-group journey-nav-primary">
@@ -232,7 +277,7 @@ export function JourneyShell({children}:{children:ReactNode}){
         </section>:null}
 
         <section className="journey-nav-group journey-nav-management">
-          {renderItem({href:'/more',label:t.management,description:t.managementDesc,icon:Settings2})}
+          {renderItem(managementItem)}
         </section>
       </nav>
 
@@ -278,6 +323,11 @@ export function JourneyShell({children}:{children:ReactNode}){
           </div>
         </div>:null}
       </div>:null}
+    </div>
+
+    <div className="journey-context-bar" aria-label={t.scope}>
+      <div><strong>{activeLabel}</strong><span>{scopeLabel}</span></div>
+      <span className="journey-context-role">{displayRole}</span>
     </div>
 
     <section className="journey-app-content">{children}</section>

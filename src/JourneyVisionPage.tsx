@@ -16,12 +16,14 @@ import {
   listPastoralHandoffs,
   listPresenceSessions,
   loadJourneyAccess,
+  subscribeJourneyLiveChanges,
   setJourneyViewAsRole,
   type CareRequestRecord,
   type JourneyAccessContext,
   type JourneyCongregation,
   type JourneyDiscipleshipRecord,
   type JourneyGroupRecord,
+  type JourneyLiveCollection,
   type JourneyModuleLabels,
   type JourneyOrganizationSummary,
   type JourneyPastoralHandoff,
@@ -188,6 +190,29 @@ export default function JourneyVisionPage(){
     }catch(cause){console.error(cause);setError(t.error)}finally{setLoading(false)}
   },[loadOrganization,t.error])
   useEffect(()=>{void bootstrap()},[bootstrap])
+
+  useEffect(()=>{
+    if(!scopeAccess||!unitId)return
+    const collections:JourneyLiveCollection[]=['people']
+    if(scopeAccess.canManageCare||scopeAccess.broadJourneyAccess)collections.push('careRequests')
+    if(scopeAccess.canManagePresence||scopeAccess.canManageMesa)collections.push('presenceSessions')
+    if(scopeAccess.canManageGroups||scopeAccess.broadJourneyAccess)collections.push('groups')
+    if(scopeAccess.canManageDiscipleship||scopeAccess.broadJourneyAccess)collections.push('discipleships')
+    if(scopeAccess.canManagePastoral)collections.push('pastoralHandoffs')
+    return subscribeJourneyLiveChanges({
+      organizationId:scopeAccess.organizationId,
+      congregationId:unitId,
+      collections,
+      onChange:()=>{
+        void loadUnit(scopeAccess,unitId)
+        const activeUnit=units.find(unit=>unit.id===unitId)
+        if(activeUnit){
+          void loadUnitPulse(scopeAccess,activeUnit).then(nextPulse=>setUnitPulses(current=>current.map(pulse=>pulse.unitId===unitId?nextPulse:pulse)))
+        }
+      },
+      onError:(cause)=>console.error('Vision live sync failed',cause),
+    })
+  },[scopeAccess,unitId,units,loadUnit,loadUnitPulse])
 
   async function selectOrganization(nextOrg:string){
     const user=auth?.currentUser

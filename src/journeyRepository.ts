@@ -1,5 +1,5 @@
 import {
-  Timestamp, collection, doc, getDoc, getDocs, query, runTransaction, serverTimestamp, updateDoc, where, writeBatch,
+  Timestamp, collection, doc, getDoc, getDocs, onSnapshot, query, runTransaction, serverTimestamp, updateDoc, where, writeBatch,
   type Firestore,
 } from 'firebase/firestore'
 import { db } from './firebase'
@@ -526,6 +526,92 @@ export function setActiveJourneyOrganizationId(organizationId: string) {
     window.dispatchEvent(new CustomEvent('nestjourney:organization', { detail: organizationId.trim() }))
   } catch {
     // Session storage is an enhancement; the ecosystem handoff remains authoritative.
+  }
+}
+
+export type JourneyLiveCollection =
+  | 'people'
+  | 'presenceSessions'
+  | 'presenceChecks'
+  | 'mesaParticipations'
+  | 'mesaPreparations'
+  | 'careRequests'
+  | 'followups'
+  | 'groups'
+  | 'groupMemberships'
+  | 'groupEntryRequests'
+  | 'groupMeetings'
+  | 'groupAttendance'
+  | 'discipleships'
+  | 'pastoralHandoffs'
+  | 'privacyRequests'
+  | 'audit'
+  | 'implementationCycles'
+  | 'retentionRequests'
+
+export function subscribeJourneyLiveChanges(input: {
+  organizationId: string
+  congregationId: string
+  collections: JourneyLiveCollection[]
+  onChange: () => void
+  onError?: (error: Error) => void
+}) {
+  if (!input.organizationId || !input.congregationId || input.collections.length === 0) return () => {}
+  const firestore = requireDb()
+  let timer: ReturnType<typeof setTimeout> | null = null
+  let disposed = false
+  const queueRefresh = () => {
+    if (disposed) return
+    if (timer) clearTimeout(timer)
+    timer = setTimeout(() => {
+      timer = null
+      if (!disposed) input.onChange()
+    }, 80)
+  }
+  const uniqueCollections = [...new Set(input.collections)]
+  const unsubscribers = uniqueCollections.map((collectionName) => {
+    let initialized = false
+    const source = query(
+      collection(firestore, journeyCollectionPath(input.organizationId, collectionName)),
+      where('congregationId', '==', input.congregationId),
+    )
+    return onSnapshot(source, (snapshot) => {
+      if (!initialized) {
+        initialized = true
+        return
+      }
+      if (snapshot.docChanges().length > 0) queueRefresh()
+    }, (cause) => input.onError?.(cause instanceof Error ? cause : new Error('journey_live_subscription_failed')))
+  })
+  return () => {
+    disposed = true
+    if (timer) clearTimeout(timer)
+    unsubscribers.forEach((unsubscribe) => unsubscribe())
+  }
+}
+
+
+export async function loadJourneyOrganizationSummary(access: JourneyAccessContext): Promise<JourneyOrganizationSummary | null> {
+  if (!access.organizationId) return null
+  const firestore = requireDb()
+  const snapshot = await getDoc(doc(firestore, `organizations/${access.organizationId}`))
+  if (!snapshot.exists()) return null
+  const data = snapshot.data()
+  const apps = data.apps && typeof data.apps === 'object' ? data.apps as Record<string, unknown> : {}
+  const rawJourney = (apps.nestjourney ?? apps.raiz_e_mesa)
+  const journey = rawJourney && typeof rawJourney === 'object' ? rawJourney as Record<string, unknown> : {}
+  const rawStatus = asString(journey.status)
+  const journeyStatus: JourneyOrganizationSummary['journeyStatus'] =
+    rawStatus === 'active' ? 'active'
+    : rawStatus === 'trialing' ? 'trialing'
+    : rawStatus ? 'inactive'
+    : 'not_configured'
+  return {
+    id: snapshot.id,
+    name: asString(data.name || data.organizationName || data.displayName) || snapshot.id,
+    city: asString(data.city) || undefined,
+    status: asString(data.status) || undefined,
+    journeyStatus,
   }
 }
 

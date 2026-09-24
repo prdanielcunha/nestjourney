@@ -9,6 +9,7 @@ import {
   listJourneyPeople,
   loadJourneyAccess,
   updateJourneyDiscipleship,
+  subscribeJourneyLiveChanges,
   type JourneyAccessContext,
   type JourneyCongregation,
   type JourneyDiscipleshipRecord,
@@ -47,6 +48,17 @@ export default function DiscipleshipRuntimePage(){
     }catch(cause){console.error(cause);setError(t.error)}finally{setLoading(false)}
   },[refresh,t.error])
   useEffect(()=>{void bootstrap()},[bootstrap])
+
+  useEffect(()=>{
+    if(!(access?.canManageDiscipleship||access?.broadJourneyAccess)||!congregationId)return
+    return subscribeJourneyLiveChanges({
+      organizationId:access.organizationId,
+      congregationId,
+      collections:['people','discipleships'],
+      onChange:()=>{void refresh(access,congregationId).catch(cause=>console.error('Discipleship live refresh failed',cause))},
+      onError:cause=>console.error('Discipleship live subscription failed',cause),
+    })
+  },[access,congregationId,refresh])
 
   async function selectUnit(unitId:string){if(!access)return;setCongregationId(unitId);setActiveJourneyCongregationId(access.organizationId,unitId);setBusy(true);setError('');try{await refresh(access,unitId)}catch(cause){console.error(cause);setError(t.error)}finally{setBusy(false)}}
   async function act(item:JourneyDiscipleshipRecord,action:'advance'|'pause'|'resume'){if(!access)return;setBusy(true);setError('');try{await updateJourneyDiscipleship({organizationId:access.organizationId,relation:item,actorId:access.userId,action});await refresh(access,congregationId)}catch(cause){console.error(cause);setError(t.error)}finally{setBusy(false)}}
