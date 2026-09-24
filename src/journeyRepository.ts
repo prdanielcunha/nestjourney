@@ -544,6 +544,9 @@ export type JourneyLiveCollection =
   | 'groupAttendance'
   | 'discipleships'
   | 'pastoralHandoffs'
+  | 'privacyRequests'
+  | 'audit'
+  | 'implementationCycles'
   | 'retentionRequests'
 
 export function subscribeJourneyLiveChanges(input: {
