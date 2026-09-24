@@ -27,7 +27,7 @@
 }
 .presence-button { cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
 .presence-button.primary { background: var(--nj-accent-strong); color: var(--nj-navy-950); border-color: var(--nj-accent-strong); font-weight: 700; }
-.presence-button.success { background: rgba(74, 128, 91, .18); border-color: rgba(111, 177, 132, .32); color: #dff4e5; }
+.presence-button.success { background: rgba(74, 128, 91, .18); border-color: rgba(111, 177, 132, .32); color: var(--nj-positive-text); }
 .presence-button:disabled { opacity: .45; cursor: not-allowed; }
 .presence-hero { display: grid; grid-template-columns: 1fr auto; gap: 24px; align-items: end; margin-bottom: 22px; }
 .presence-kicker { color: var(--nj-accent); font-size: 12px; font-weight: 800; letter-spacing: .13em; text-transform: uppercase; }
@@ -66,10 +66,10 @@
 .presence-person-name strong { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .presence-person-name small { display: block; margin-top: 4px; color: var(--nj-text-subtle); }
 .presence-state { font-size: 12px; color: var(--nj-text-subtle); }
-.presence-state.confirmed { color: #a3e7c9; }
-.presence-state.absent { color: #ffd2a2; }
+.presence-state.confirmed { color: var(--nj-positive-text); }
+.presence-state.absent { color: var(--nj-warning-text); }
 .presence-person-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-.presence-button.absence { background: rgba(146, 101, 76, .16); border-color: rgba(196, 146, 113, .26); color: #f2d8c8; }
+.presence-button.absence { background: rgba(146, 101, 76, .16); border-color: rgba(196, 146, 113, .26); color: var(--nj-warning-text); }
 .presence-person .presence-button { width: 100%; }
 .presence-rule { margin: 16px 0 0; color: var(--nj-text-muted); font-size: 13px; text-align: center; }
 .presence-empty { padding: 32px; text-align: center; color: var(--nj-text-muted); }
@@ -80,7 +80,7 @@
 .presence-modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
 .presence-check { display: flex; align-items: flex-start; gap: 10px; color: var(--nj-text-muted); font-size: 13px; line-height: 1.5; }
 .presence-check input { margin-top: 3px; }
-.presence-error { border: 1px solid rgba(202, 126, 126, .25); background: rgba(140, 53, 53, .12); color: #ffb1b1; border-radius: 14px; padding: 12px 14px; margin-bottom: 14px; }
+.presence-error { border: 1px solid rgba(202, 126, 126, .25); background: rgba(140, 53, 53, .12); color: var(--nj-danger-text); border-radius: 14px; padding: 12px 14px; margin-bottom: 14px; }
 .presence-loading { min-height: 60vh; display: grid; place-items: center; color: var(--nj-text-muted); }
 .presence-no-access { max-width: 560px; margin: 14vh auto 0; padding: 26px; text-align: center; }
 .presence-no-access h1 { margin: 0 0 10px; }
@@ -112,8 +112,8 @@
 .presence-mesa-actions{display:grid;gap:7px;padding-top:11px;border-top:1px solid rgba(255,255,255,.07)}.presence-mesa-actions>span{display:grid;gap:2px}.presence-mesa-actions>span b{font-size:9px;color:var(--nj-accent)}.presence-mesa-actions>span small{color:var(--nj-text-subtle);font-size:8.5px;line-height:1.35}.presence-mesa-actions .presence-button{min-height:36px;font-size:9px}
 @media(max-width:640px){.presence-mesa-summary{grid-template-columns:1fr}.presence-mesa-summary>div{justify-content:start}}
 
-.presence-bond-row{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 0 2px}.presence-bond-state{display:inline-flex;align-items:center;gap:5px;color:var(--nj-text-subtle);font-size:8.5px;font-weight:700}.presence-bond-state.assigned{color:#9fe2c6}.presence-bond-button{min-height:29px;padding:0 8px;border:1px solid rgba(114,214,176,.2);border-radius:8px;background:rgba(114,214,176,.05);color:var(--nj-accent);font:inherit;font-size:8px;font-weight:800;cursor:pointer}.presence-bond-button:disabled{opacity:.45;cursor:not-allowed}@media(max-width:560px){.presence-bond-row{align-items:stretch;flex-direction:column}.presence-bond-button{width:100%}}
+.presence-bond-row{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 0 2px}.presence-bond-state{display:inline-flex;align-items:center;gap:5px;color:var(--nj-text-subtle);font-size:8.5px;font-weight:700}.presence-bond-state.assigned{color:var(--nj-positive-text)}.presence-bond-button{min-height:29px;padding:0 8px;border:1px solid rgba(114,214,176,.2);border-radius:8px;background:rgba(114,214,176,.05);color:var(--nj-accent);font:inherit;font-size:8px;font-weight:800;cursor:pointer}.presence-bond-button:disabled{opacity:.45;cursor:not-allowed}@media(max-width:560px){.presence-bond-row{align-items:stretch;flex-direction:column}.presence-bond-button{width:100%}}
 
 @media(max-width:560px){.presence-person-actions{grid-template-columns:1fr}}
 
-.presence-absence-care{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:8px;align-items:start;margin:7px 0 10px;padding:10px;border:1px solid rgba(120,169,137,.2);border-radius:11px;background:rgba(120,169,137,.055);color:#9fe2c6}.presence-absence-care>svg{margin-top:1px}.presence-absence-care>div{display:grid;gap:3px}.presence-absence-care strong{font-size:9px}.presence-absence-care p{margin:0;color:var(--nj-text-subtle);font-size:8px;line-height:1.4}.presence-absence-care.blocked{border-color:rgba(196,146,113,.2);background:rgba(146,101,76,.055);color:#ffd2a2}.presence-absence-care.blocked p{color:var(--nj-text-subtle)}@media(max-width:560px){.presence-absence-care{grid-template-columns:auto 1fr}.presence-absence-care .presence-bond-button{grid-column:1/-1;width:100%}}
+.presence-absence-care{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:8px;align-items:start;margin:7px 0 10px;padding:10px;border:1px solid rgba(120,169,137,.2);border-radius:11px;background:rgba(120,169,137,.055);color:var(--nj-positive-text)}.presence-absence-care>svg{margin-top:1px}.presence-absence-care>div{display:grid;gap:3px}.presence-absence-care strong{font-size:9px}.presence-absence-care p{margin:0;color:var(--nj-text-subtle);font-size:8px;line-height:1.4}.presence-absence-care.blocked{border-color:rgba(196,146,113,.2);background:rgba(146,101,76,.055);color:var(--nj-warning-text)}.presence-absence-care.blocked p{color:var(--nj-text-subtle)}@media(max-width:560px){.presence-absence-care{grid-template-columns:auto 1fr}.presence-absence-care .presence-bond-button{grid-column:1/-1;width:100%}}
