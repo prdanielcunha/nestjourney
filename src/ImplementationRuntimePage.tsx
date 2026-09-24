@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { BookOpen, Check, ChevronLeft, CircleCheck, Clock3, Play, ShieldCheck, Sparkles } from 'lucide-react'
 import { auth } from './firebase'
-import { completeImplementationStep, createImplementationCycle, getActiveJourneyOrganizationId, resolveActiveJourneyCongregationId, setActiveJourneyCongregationId, listImplementationCycles, listJourneyCongregations, loadJourneyAccess, type JourneyAccessContext, type JourneyCongregation, type JourneyImplementationCycle } from './journeyRepository'
+import { completeImplementationStep, createImplementationCycle, getActiveJourneyOrganizationId, resolveActiveJourneyCongregationId, setActiveJourneyCongregationId, listImplementationCycles, listJourneyCongregations, loadJourneyAccess, subscribeJourneyLiveChanges, type JourneyAccessContext, type JourneyCongregation, type JourneyImplementationCycle } from './journeyRepository'
 import { IMPLEMENTATION_PREPARATION_KEYS, IMPLEMENTATION_REQUIRED_KEYS, implementationPlaybooks, implementationProgress, implementationWeekForProgress, implementationWeekKeys } from './implementationPlaybook'
 import { getInitialLocale, implementationRuntimeCopy, localeLabels, persistLocale, type AppLocale } from './i18n'
 import { AccessDeniedState } from './AccessDeniedState'
@@ -41,6 +41,16 @@ export default function ImplementationRuntimePage() {
     }catch(cause){console.error(cause);setError(t.error)}finally{setLoading(false)}
   },[refresh,t.error])
   useEffect(()=>{void bootstrap()},[bootstrap])
+  useEffect(()=>{
+    if(!access||!congregationId||!access.canManageImplementation)return
+    return subscribeJourneyLiveChanges({
+      organizationId:access.organizationId,
+      congregationId,
+      collections:['implementationCycles'],
+      onChange:()=>{void refresh(access.organizationId,congregationId)},
+      onError:(cause)=>console.error('Implementation live sync failed',cause),
+    })
+  },[access,congregationId,refresh])
 
   async function selectUnit(unitId:string){if(!access)return;setCongregationId(unitId);setActiveJourneyCongregationId(access.organizationId,unitId);setBusy(true);setError('');try{await refresh(access.organizationId,unitId)}catch(cause){console.error(cause);setError(t.error)}finally{setBusy(false)}}
   async function start(){if(!access||!congregationId)return;setBusy(true);setError('');try{await createImplementationCycle({organizationId:access.organizationId,congregationId,actorId:access.userId});await refresh(access.organizationId,congregationId)}catch(cause){console.error(cause);setError(t.error)}finally{setBusy(false)}}
