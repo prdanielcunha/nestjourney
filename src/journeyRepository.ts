@@ -539,6 +539,7 @@ export type JourneyLiveCollection =
   | 'followups'
   | 'groups'
   | 'groupMemberships'
+  | 'groupEntryRequests'
   | 'groupMeetings'
   | 'groupAttendance'
   | 'discipleships'
