@@ -1,5 +1,5 @@
 import {
-  Timestamp, collection, doc, getDoc, getDocs, query, runTransaction, serverTimestamp, updateDoc, where, writeBatch,
+  Timestamp, collection, doc, getDoc, getDocs, onSnapshot, query, runTransaction, serverTimestamp, updateDoc, where, writeBatch,
   type Firestore,
 } from 'firebase/firestore'
 import { db } from './firebase'
@@ -526,6 +526,63 @@ export function setActiveJourneyOrganizationId(organizationId: string) {
     window.dispatchEvent(new CustomEvent('nestjourney:organization', { detail: organizationId.trim() }))
   } catch {
     // Session storage is an enhancement; the ecosystem handoff remains authoritative.
+  }
+}
+
+export type JourneyLiveCollection =
+  | 'people'
+  | 'presenceSessions'
+  | 'presenceChecks'
+  | 'mesaParticipations'
+  | 'mesaPreparations'
+  | 'careRequests'
+  | 'followups'
+  | 'groups'
+  | 'groupMemberships'
+  | 'groupMeetings'
+  | 'groupAttendance'
+  | 'discipleships'
+  | 'pastoralHandoffs'
+  | 'retentionRequests'
+
+export function subscribeJourneyLiveChanges(input: {
+  organizationId: string
+  congregationId: string
+  collections: JourneyLiveCollection[]
+  onChange: () => void
+  onError?: (error: Error) => void
+}) {
+  if (!input.organizationId || !input.congregationId || input.collections.length === 0) return () => {}
+  const firestore = requireDb()
+  let timer: ReturnType<typeof setTimeout> | null = null
+  let disposed = false
+  const queueRefresh = () => {
+    if (disposed) return
+    if (timer) clearTimeout(timer)
+    timer = setTimeout(() => {
+      timer = null
+      if (!disposed) input.onChange()
+    }, 80)
+  }
+  const uniqueCollections = [...new Set(input.collections)]
+  const unsubscribers = uniqueCollections.map((collectionName) => {
+    let initialized = false
+    const source = query(
+      collection(firestore, journeyCollectionPath(input.organizationId, collectionName)),
+      where('congregationId', '==', input.congregationId),
+    )
+    return onSnapshot(source, (snapshot) => {
+      if (!initialized) {
+        initialized = true
+        return
+      }
+      if (snapshot.docChanges().length > 0) queueRefresh()
+    }, (cause) => input.onError?.(cause instanceof Error ? cause : new Error('journey_live_subscription_failed')))
+  })
+  return () => {
+    disposed = true
+    if (timer) clearTimeout(timer)
+    unsubscribers.forEach((unsubscribe) => unsubscribe())
   }
 }
 

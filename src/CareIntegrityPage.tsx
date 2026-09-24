@@ -14,6 +14,7 @@ import {
   listPresencePeople,
   loadJourneyAccess,
   resolveCareRequest,
+  subscribeJourneyLiveChanges,
   type CareRequestRecord,
   type CareResolutionCode,
   type CareType,
@@ -155,6 +156,17 @@ export default function CareIntegrityPage() {
   }, [refreshScope, t.error])
 
   useEffect(() => { void bootstrap() }, [bootstrap])
+
+  useEffect(() => {
+    if (!access?.canManageCare || !congregationId) return
+    return subscribeJourneyLiveChanges({
+      organizationId: access.organizationId,
+      congregationId,
+      collections: ['people', 'careRequests', 'followups'],
+      onChange: () => { void refreshScope(access, congregationId).catch((cause) => console.error('Care live refresh failed', cause)) },
+      onError: (cause) => console.error('Care live subscription failed', cause),
+    })
+  }, [access, congregationId, refreshScope])
 
   async function selectCongregation(unitId: string) {
     if (!access) return

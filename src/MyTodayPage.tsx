@@ -20,6 +20,8 @@ import {
   listPresenceSessions,
   loadJourneyAccess,
   setActiveJourneyOrganizationId,
+  subscribeJourneyLiveChanges,
+  type JourneyLiveCollection,
   type CareRequestRecord,
   type JourneyAccessContext,
   type JourneyCongregation,
@@ -211,6 +213,24 @@ export default function MyTodayPage(){
     }
   },[refreshScope,t.error])
   useEffect(()=>{void bootstrap()},[bootstrap])
+
+  useEffect(()=>{
+    if(!access||!congregationId)return
+    const collections:JourneyLiveCollection[]=['people']
+    if(access.canManageCare||access.broadJourneyAccess)collections.push('careRequests')
+    if(access.canManagePresence||access.canManageMesa)collections.push('presenceSessions','presenceChecks')
+    if(access.canManageMesa)collections.push('mesaParticipations','mesaPreparations')
+    if(access.canManageGroups||access.broadJourneyAccess)collections.push('groups','groupMemberships','groupMeetings','groupAttendance')
+    if(access.canManageDiscipleship||access.broadJourneyAccess)collections.push('discipleships')
+    if(access.canManagePastoral)collections.push('pastoralHandoffs')
+    return subscribeJourneyLiveChanges({
+      organizationId:access.organizationId,
+      congregationId,
+      collections,
+      onChange:()=>{void refreshScope(access,congregationId).catch(cause=>console.error('Today live refresh failed',cause))},
+      onError:cause=>console.error('Today live subscription failed',cause),
+    })
+  },[access,congregationId,refreshScope])
 
   async function selectCongregation(unitId:string){
     if(!access)return
