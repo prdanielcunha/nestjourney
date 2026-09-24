@@ -6,7 +6,10 @@ import {
 import { auth } from './firebase'
 import {
   getActiveJourneyOrganizationId,
+  getActiveJourneyCongregationId,
+  listJourneyCongregations,
   loadJourneyAccess,
+  loadJourneyOrganizationSummary,
   setJourneyViewAsRole,
   type JourneyAccessContext,
   type JourneyViewAsRole,
@@ -93,6 +96,8 @@ export function JourneyShell({children}:{children:ReactNode}){
   const [online,setOnline]=useState(()=>navigator.onLine)
   const [accessOpen,setAccessOpen]=useState(false)
   const [collapsed,setCollapsed]=useState(()=>{try{return localStorage.getItem('nestjourney_sidebar_collapsed')==='1'}catch{return false}})
+  const [organizationName,setOrganizationName]=useState('')
+  const [unitName,setUnitName]=useState('')
   const {labels}=useJourneyLabels()
   const t=copy[locale]
 
@@ -125,6 +130,31 @@ export function JourneyShell({children}:{children:ReactNode}){
     void loadJourneyAccess(user.uid,organizationId).then(setAccess).catch(()=>setAccess(null))
   },[pathname])
 
+  useEffect(()=>{
+    if(!access){setOrganizationName('');setUnitName('');return}
+    let disposed=false
+    const refreshContext=async()=>{
+      try{
+        const [organization,units]=await Promise.all([
+          loadJourneyOrganizationSummary(access),
+          listJourneyCongregations(access),
+        ])
+        if(disposed)return
+        setOrganizationName(organization?.name||access.organizationId)
+        const activeUnitId=getActiveJourneyCongregationId(access.organizationId)
+        setUnitName(units.find(unit=>unit.id===activeUnitId)?.name||'')
+      }catch(cause){
+        console.error('Journey shell context failed',cause)
+        if(!disposed){setOrganizationName(access.organizationId);setUnitName('')}
+      }
+    }
+    const sync=()=>{void refreshContext()}
+    void refreshContext()
+    window.addEventListener('nestjourney:unit',sync)
+    window.addEventListener('nestjourney:organization',sync)
+    return()=>{disposed=true;window.removeEventListener('nestjourney:unit',sync);window.removeEventListener('nestjourney:organization',sync)}
+  },[access])
+
   const names=useMemo(()=>({
     presence:labels.presence||t.presence,
     mesa:labels.table||t.table,
@@ -152,7 +182,8 @@ export function JourneyShell({children}:{children:ReactNode}){
   const managementItem:NavItem={href:'/more',label:t.management,description:t.managementDesc,icon:Settings2}
   const activeItem=[...visiblePrimary,...visibleAreas,managementItem].find(item=>sameRoute(item.href,pathname))
   const activeLabel=activeItem?.label??'NestJourney'
-  const scopeLabel=access?.isSystemAdmin?t.globalScope:access?.broadJourneyAccess?t.organizationScope:access?.congregationIds.length?access.congregationIds.length+' '+t.unitsScope:t.organizationScope
+  const scopeType=access?.isSystemAdmin?t.globalScope:access?.broadJourneyAccess?t.organizationScope:unitName||access?.congregationIds.length?access?.congregationIds.length+' '+t.unitsScope:t.organizationScope
+  const scopeLabel=[organizationName,scopeType].filter(Boolean).join(' · ')
   const toggleCollapsed=()=>setCollapsed(value=>{const next=!value;try{localStorage.setItem('nestjourney_sidebar_collapsed',next?'1':'0')}catch{}return next})
 
   const navigate=(href:string,enabled=true)=>{

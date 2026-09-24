@@ -587,6 +587,31 @@ export function subscribeJourneyLiveChanges(input: {
   }
 }
 
+
+export async function loadJourneyOrganizationSummary(access: JourneyAccessContext): Promise<JourneyOrganizationSummary | null> {
+  if (!access.organizationId) return null
+  const firestore = requireDb()
+  const snapshot = await getDoc(doc(firestore, `organizations/${access.organizationId}`))
+  if (!snapshot.exists()) return null
+  const data = snapshot.data()
+  const apps = data.apps && typeof data.apps === 'object' ? data.apps as Record<string, unknown> : {}
+  const rawJourney = (apps.nestjourney ?? apps.raiz_e_mesa)
+  const journey = rawJourney && typeof rawJourney === 'object' ? rawJourney as Record<string, unknown> : {}
+  const rawStatus = asString(journey.status)
+  const journeyStatus: JourneyOrganizationSummary['journeyStatus'] =
+    rawStatus === 'active' ? 'active'
+    : rawStatus === 'trialing' ? 'trialing'
+    : rawStatus ? 'inactive'
+    : 'not_configured'
+  return {
+    id: snapshot.id,
+    name: asString(data.name || data.organizationName || data.displayName) || snapshot.id,
+    city: asString(data.city) || undefined,
+    status: asString(data.status) || undefined,
+    journeyStatus,
+  }
+}
+
 export async function listJourneyOrganizationsForSystemAdmin(access: JourneyAccessContext): Promise<JourneyOrganizationSummary[]> {
   if (!access.isSystemAdmin) return []
   const firestore = requireDb()
