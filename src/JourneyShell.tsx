@@ -224,7 +224,7 @@ export function JourneyShell({children}:{children:ReactNode}){
     <aside className="journey-side-nav">
       <div className="journey-brand-row">
         <button className="journey-side-brand" onClick={()=>navigate('/my-today')} aria-label="NestJourney">
-          <img className="journey-brand-full" src="/brand/nestjourney-horizontal-light.svg" alt="NestJourney"/>
+          <img className="journey-brand-full" src="/brand/nestjourney-horizontal-light.png" alt="NestJourney"/>
           <img className="journey-brand-symbol" src="/brand/nestjourney-symbol.svg" alt=""/>
           <small>{t.tagline}</small>
         </button>
