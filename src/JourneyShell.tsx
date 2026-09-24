@@ -217,7 +217,7 @@ export function JourneyShell({children}:{children:ReactNode}){
 
     <aside className="journey-side-nav">
       <button className="journey-side-brand" onClick={()=>navigate('/my-today')}>
-        <img src="/icon.svg" alt=""/>
+        <img src="/nestjourney-icon.svg" alt=""/>
         <span><strong>NestJourney</strong><small>{t.tagline}</small></span>
       </button>
 

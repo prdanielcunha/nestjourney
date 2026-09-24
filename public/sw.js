@@ -1,5 +1,5 @@
-const CACHE='nestjourney-static-v2';
-const STATIC=['/manifest.webmanifest','/icon.svg'];
+const CACHE='nestjourney-static-v3';
+const STATIC=['/manifest.webmanifest','/nestjourney-icon.svg','/icon.svg'];
 
 self.addEventListener('install',event=>{
   event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(STATIC)));
