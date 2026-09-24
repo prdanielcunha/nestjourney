@@ -3,6 +3,22 @@ import html from '../index.html?raw'
 import shellSource from './JourneyShell.tsx?raw'
 import { DIGITAL_PREMIUM } from './design-system/digitalPremium'
 
+function channel(value: number) {
+  const normalized = value / 255
+  return normalized <= 0.04045 ? normalized / 12.92 : ((normalized + 0.055) / 1.055) ** 2.4
+}
+
+function luminance(hex: string) {
+  const value = hex.replace('#', '')
+  const [r, g, b] = [0, 2, 4].map((offset) => Number.parseInt(value.slice(offset, offset + 2), 16))
+  return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b)
+}
+
+function contrast(foreground: string, background: string) {
+  const [bright, dark] = [luminance(foreground), luminance(background)].sort((a, b) => b - a)
+  return (bright + 0.05) / (dark + 0.05)
+}
+
 describe('Digital Premium design contract', () => {
   it('keeps the official NestJourney palette as the product contract', () => {
     expect(DIGITAL_PREMIUM.colors).toEqual({
@@ -31,6 +47,22 @@ describe('Digital Premium design contract', () => {
     expect(shellSource).toContain(DIGITAL_PREMIUM.assets.fullBrand)
     expect(shellSource).toContain(DIGITAL_PREMIUM.assets.symbol)
     expect(DIGITAL_PREMIUM.minTouchTargetPx).toBe(44)
+  })
+
+  it('proves WCAG AA contrast for canonical text and action combinations', () => {
+    const backgrounds = [
+      DIGITAL_PREMIUM.colors.navy950,
+      DIGITAL_PREMIUM.colors.navy900,
+      DIGITAL_PREMIUM.colors.navy800,
+      DIGITAL_PREMIUM.colors.navy700,
+    ]
+
+    for (const background of backgrounds) {
+      expect(contrast(DIGITAL_PREMIUM.colors.text, background)).toBeGreaterThanOrEqual(4.5)
+      expect(contrast(DIGITAL_PREMIUM.colors.textMuted, background)).toBeGreaterThanOrEqual(4.5)
+    }
+
+    expect(contrast(DIGITAL_PREMIUM.colors.navy950, DIGITAL_PREMIUM.colors.action)).toBeGreaterThanOrEqual(4.5)
   })
 
   it('keeps green intentionally limited to accent and strong action roles', () => {
