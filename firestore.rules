@@ -706,6 +706,7 @@ service cloud.firestore {
         && summary.size() <= 160
         && (
           (source == 'manual'
+            && request.resource.data.get('careType', '') != 'absence_check'
             && request.resource.data.get('sourcePresenceSessionId', '') == ''
             && request.resource.data.get('sourcePresenceCheckId', '') == ''
             && ownerRef == request.auth.uid
