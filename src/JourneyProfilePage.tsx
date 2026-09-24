@@ -12,6 +12,7 @@ import {
   listJourneyGroups,
   listJourneyPeople,
   loadJourneyAccess,
+  subscribeJourneyLiveChanges,
   type CareRequestRecord,
   type JourneyAccessContext,
   type JourneyCongregation,
@@ -122,6 +123,17 @@ export default function JourneyProfilePage() {
   }, [refreshScope, t.error])
 
   useEffect(() => { void bootstrap() }, [bootstrap])
+
+  useEffect(() => {
+    if (!access || !congregationId || !canView) return
+    return subscribeJourneyLiveChanges({
+      organizationId: access.organizationId,
+      congregationId,
+      collections: ['people','careRequests','groups','groupMemberships','discipleships'],
+      onChange: () => { void refreshScope(access, congregationId) },
+      onError: (cause) => console.error('Journey Profile live sync failed', cause),
+    })
+  }, [access, congregationId, canView, refreshScope])
 
   async function selectCongregation(unitId: string) {
     if (!access) return
