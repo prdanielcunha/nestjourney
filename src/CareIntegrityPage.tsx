@@ -342,16 +342,18 @@ function NewCareModal({ locale, people, close, save }: { locale: AppLocale; peop
   const [promiseHours, setPromiseHours] = useState(48)
   const [summary, setSummary] = useState('')
   const person = people.find((item) => item.id === personId)
-  const needsConsent = careType === 'first_contact' || careType === 'absence_check'
+  const manualCareTypes = (Object.keys(t.careTypes) as CareType[]).filter((id) => id !== 'absence_check')
+  const needsConsent = careType === 'first_contact'
   const blockedByConsent = Boolean(needsConsent && (!person?.consent || !person.phone))
 
   return <div className="care-modal-backdrop" onMouseDown={close}><section className="care-panel care-modal" role="dialog" aria-modal="true" aria-labelledby="care-new-title" onMouseDown={(event) => event.stopPropagation()}>
     <div className="care-modal-head"><div><span className="care-kicker">Care Request</span><h2 id="care-new-title">{t.newRequest}</h2></div><button className="care-button" onClick={close} aria-label={t.cancel}><X size={17} /></button></div>
     <div className="care-modal-grid">
       <label className="care-field"><span>{t.person}</span><select value={personId} onChange={(event) => setPersonId(event.target.value)}>{people.map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}</select></label>
-      <label className="care-field"><span>{t.type}</span><select value={careType} onChange={(event) => setCareType(event.target.value as CareType)}>{(Object.keys(t.careTypes) as CareType[]).map((id) => <option value={id} key={id}>{t.careTypes[id]}</option>)}</select></label>
+      <label className="care-field"><span>{t.type}</span><select value={careType} onChange={(event) => setCareType(event.target.value as CareType)}>{manualCareTypes.map((id) => <option value={id} key={id}>{t.careTypes[id]}</option>)}</select><small className="care-field-help">{t.careTypeDescriptions[careType]}</small></label>
       <label className="care-field"><span>{t.promiseWindow}</span><select value={promiseHours} onChange={(event) => setPromiseHours(Number(event.target.value))}><option value={24}>24h</option><option value={48}>48h</option><option value={72}>72h</option></select></label>
       <label className="care-field"><span>{t.operationalNote}</span><textarea maxLength={160} value={summary} onChange={(event) => setSummary(event.target.value)} placeholder={t.notePlaceholder} /></label>
+      <p className="care-source-hint">{t.absenceFromPresence}</p>
       {blockedByConsent ? <p className="care-warning"><AlertTriangle size={16} /> {t.contactNeedsConsent}</p> : null}
     </div>
     <div className="care-modal-actions"><button className="care-button" onClick={close}>{t.cancel}</button><button className="care-button primary" disabled={!personId || blockedByConsent} onClick={() => void save(personId, careType, promiseHours, summary)}>{t.create}</button></div>
