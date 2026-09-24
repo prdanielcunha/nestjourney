@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import tokens from './design-system/nestjourney-tokens.css?raw'
-import globalCss from './index.css?raw'
+import tokens from './design-system/nestjourney-tokens.css?inline'
+import globalCss from './index.css?inline'
 import shellSource from './JourneyShell.tsx?raw'
 import html from '../index.html?raw'
 
