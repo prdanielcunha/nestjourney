@@ -182,7 +182,11 @@ export function JourneyShell({children}:{children:ReactNode}){
   const managementItem:NavItem={href:'/more',label:t.management,description:t.managementDesc,icon:Settings2}
   const activeItem=[...visiblePrimary,...visibleAreas,managementItem].find(item=>sameRoute(item.href,pathname))
   const activeLabel=activeItem?.label??'NestJourney'
-  const scopeType=access?.isSystemAdmin?t.globalScope:access?.broadJourneyAccess?t.organizationScope:unitName||access?.congregationIds.length?access?.congregationIds.length+' '+t.unitsScope:t.organizationScope
+  const scopeType=access?.isSystemAdmin
+    ?t.globalScope
+    :access?.broadJourneyAccess
+      ?t.organizationScope
+      :unitName||((access?.congregationIds.length??0)>0?access?.congregationIds.length+' '+t.unitsScope:t.organizationScope)
   const scopeLabel=[organizationName,scopeType].filter(Boolean).join(' · ')
   const toggleCollapsed=()=>setCollapsed(value=>{const next=!value;try{localStorage.setItem('nestjourney_sidebar_collapsed',next?'1':'0')}catch{}return next})
 
