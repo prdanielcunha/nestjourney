@@ -20,6 +20,7 @@ import {
   loadJourneyAccess,
   resolveJourneyGroupEntryRequest,
   setJourneyGroupMembership,
+  subscribeJourneyLiveChanges,
   type JourneyAccessContext,
   type JourneyCongregation,
   type JourneyGroupAttendanceRecord,
@@ -89,6 +90,40 @@ export default function GroupsRuntimePage() {
   }, [refresh, t.error])
 
   useEffect(() => { void bootstrap() }, [bootstrap])
+
+  useEffect(() => {
+    if (!(access?.canManageGroups || access?.broadJourneyAccess) || !congregationId) return
+    return subscribeJourneyLiveChanges({
+      organizationId: access.organizationId,
+      congregationId,
+      collections: ['people', 'groups', 'groupMemberships', 'groupEntryRequests', 'groupMeetings', 'groupAttendance'],
+      onChange: () => {
+        void (async () => {
+          try {
+            const nextGroups = await refresh(access, congregationId)
+            if (!rosterGroup) return
+            const currentGroup = nextGroups.find((group) => group.id === rosterGroup.id) ?? rosterGroup
+            if (!canManageJourneyGroupRoster(access, currentGroup)) return
+            const [nextRoster, nextRequests, nextMeetings] = await Promise.all([
+              listJourneyGroupMemberships(access, currentGroup),
+              listJourneyGroupEntryRequests(access, currentGroup),
+              listJourneyGroupMeetings(access, currentGroup),
+            ])
+            const openMeeting = nextMeetings.find((item) => item.status === 'open')
+            const nextAttendance = openMeeting ? await listJourneyGroupAttendance(access, currentGroup, openMeeting.id) : []
+            setRosterGroup(currentGroup)
+            setRoster(nextRoster)
+            setEntryRequests(nextRequests)
+            setMeetings(nextMeetings)
+            setAttendance(nextAttendance)
+          } catch (cause) {
+            console.error('Groups live refresh failed', cause)
+          }
+        })()
+      },
+      onError: (cause) => console.error('Groups live subscription failed', cause),
+    })
+  }, [access, congregationId, refresh, rosterGroup?.id])
 
   async function selectUnit(unitId: string) {
     if (!access) return
