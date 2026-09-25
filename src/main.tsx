@@ -113,7 +113,7 @@ function JourneyRoute() {
 
 function RouteFallback() {
   return <main className="journey-route-loading" aria-live="polite">
-    <img src="/nestjourney-icon.svg" alt="" />
+    <img src="/brand/nestjourney-symbol-light.png" alt="" />
     <strong>NestJourney</strong>
     <span>cuidado em cada passo</span>
   </main>

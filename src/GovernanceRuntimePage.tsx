@@ -172,7 +172,7 @@ export default function GovernanceRuntimePage() {
       :'A governança permanece quieta até que privacidade, histórico ou limites de acesso precisem de revisão.'
   return <main className="governance-runtime"><div className="governance-shell">
     <header className="governance-topbar">
-      <div className="governance-brand"><img src="/icon.svg" alt=""/><span><strong>{t.product}</strong><small>Journey & Care Engine</small></span></div>
+      <div className="governance-brand"><img src="/brand/nestjourney-symbol-light.png" alt=""/><span><strong>{t.product}</strong><small>Journey & Care Engine</small></span></div>
       <div className="governance-actions"><a href="/vision"><ArrowLeft size={16}/>{t.back}</a><select value={locale} onChange={e=>{const next=e.target.value as AppLocale;setLocale(next);persistLocale(next)}}>{(Object.keys(localeLabels) as AppLocale[]).map(id=><option key={id} value={id}>{localeLabels[id]}</option>)}</select></div>
     </header>
 

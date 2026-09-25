@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import html from '../index.html?raw'
 import shellSource from './JourneyShell.tsx?raw'
+import gateSource from './EcosystemSessionGate.tsx?raw'
 import { DIGITAL_PREMIUM } from './design-system/digitalPremium'
 
 function channel(value: number) {
@@ -35,17 +36,20 @@ describe('Digital Premium design contract', () => {
 
   it('keeps browser, PWA and social metadata wired to NestJourney assets', () => {
     expect(html).toContain(`href="${DIGITAL_PREMIUM.assets.favicon}"`)
-    expect(html).toContain(`href="${DIGITAL_PREMIUM.assets.faviconSvg}"`)
     expect(html).toContain(`href="${DIGITAL_PREMIUM.assets.appleTouchIcon}"`)
     expect(html).toContain('href="/manifest.webmanifest"')
     expect(html).toContain(`content="${DIGITAL_PREMIUM.colors.navy950}"`)
-    expect(html).toContain('property="og:image"')
+    expect(html).toContain(`content="${DIGITAL_PREMIUM.assets.socialImage}"`)
     expect(html).toContain('name="twitter:card"')
   })
 
   it('preserves the full-brand / compact-symbol shell rule', () => {
     expect(shellSource).toContain(DIGITAL_PREMIUM.assets.fullBrand)
     expect(shellSource).toContain(DIGITAL_PREMIUM.assets.symbol)
+    expect(gateSource).toContain(DIGITAL_PREMIUM.assets.fullBrand)
+    expect(gateSource).not.toContain('/icon.svg')
+    expect(gateSource).not.toContain('#c79a57')
+    expect(gateSource).not.toContain('#090a09')
     expect(DIGITAL_PREMIUM.minTouchTargetPx).toBe(44)
   })
 
