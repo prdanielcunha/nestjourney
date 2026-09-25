@@ -260,7 +260,7 @@ export function JourneyShell({children}:{children:ReactNode}){
       <div className="journey-brand-row">
         <button className="journey-side-brand" onClick={()=>navigate('/my-today')} aria-label="NestJourney">
           <img className="journey-brand-full" src="/brand/nestjourney-horizontal-light.png" alt="NestJourney"/>
-          <img className="journey-brand-symbol" src="/brand/nestjourney-symbol.svg" alt=""/>
+          <img className="journey-brand-symbol" src="/brand/nestjourney-symbol-light.png" alt=""/>
           <small>{t.tagline}</small>
         </button>
         <button className="journey-collapse-toggle" onClick={toggleCollapsed} aria-label={collapsed?t.expand:t.collapse} title={collapsed?t.expand:t.collapse}>{collapsed?<PanelLeftOpen size={17}/>:<PanelLeftClose size={17}/>}</button>

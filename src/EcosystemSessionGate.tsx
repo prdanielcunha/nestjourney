@@ -345,41 +345,40 @@ export function EcosystemSessionGate({ children }: { children: ReactNode }) {
     width: 'min(440px, 100%)',
     padding: 28,
     borderRadius: 24,
-    border: '1px solid rgba(255,255,255,.075)',
-    background: 'rgba(17,18,16,.92)',
-    boxShadow: '0 24px 70px rgba(0,0,0,.34)',
-    backdropFilter: 'blur(20px)',
+    border: '1px solid var(--nj-border)',
+    background: 'var(--nj-surface)',
+    boxShadow: 'var(--nj-shadow-md)',
+    overflow: 'hidden',
   } as const
   const primary = {
     width: '100%',
     minHeight: 50,
-    border: 0,
+    border: '1px solid var(--nj-accent-strong)',
     borderRadius: 13,
-    background: '#f4f1eb',
-    color: '#151512',
+    background: 'var(--nj-accent-strong)',
+    color: 'var(--nj-on-accent)',
     fontWeight: 700,
     cursor: 'pointer',
     padding: '0 18px',
   } as const
   const secondary = {
     ...primary,
-    background: 'rgba(255,255,255,.035)',
-    color: '#f4f1eb',
-    border: '1px solid rgba(255,255,255,.09)',
+    background: 'var(--nj-surface-raised)',
+    color: 'var(--nj-text)',
+    border: '1px solid var(--nj-border-strong)',
   } as const
 
   return (
-    <main style={{ minHeight: '100dvh', display: 'grid', placeItems: 'center', background: 'radial-gradient(circle at 50% 14%, rgba(156,134,255,.13), transparent 32%), radial-gradient(circle at 90% 90%, rgba(199,154,87,.08), transparent 28%), #090a09', color: '#f4f1eb', padding: 24 }}>
+    <main style={{ minHeight: '100dvh', display: 'grid', placeItems: 'center', background: 'var(--nj-bg)', color: 'var(--nj-text)', padding: 24 }}>
       <section style={cardStyle}>
         <div style={{ textAlign: 'center', marginBottom: 24 }}>
-          <img src="/icon.svg" alt="" style={{ width: 44, height: 44, margin: '0 auto 14px' }} />
-          <div style={{ fontSize: 13, color: '#c79a57', fontWeight: 700, letterSpacing: '.08em' }}>NESTJOURNEY</div>
+          <img src="/brand/nestjourney-horizontal-light.png" alt="NestJourney" style={{ display: 'block', width: 'min(260px, 78%)', height: 'auto', margin: '0 auto' }} />
         </div>
 
         {state === 'checking' ? (
           <div style={{ textAlign: 'center', padding: '18px 0 14px' }}>
-            <div aria-hidden="true" style={{ width: 34, height: 34, margin: '0 auto 18px', borderRadius: 999, border: '3px solid rgba(255,255,255,.1)', borderTopColor: '#c79a57', animation: 'spin 1s linear infinite' }} />
-            <p style={{ margin: 0, color: '#9a9b94', lineHeight: 1.6, fontSize: 14 }}>{message}</p>
+            <div aria-hidden="true" style={{ width: 34, height: 34, margin: '0 auto 18px', borderRadius: 999, border: '3px solid var(--nj-border)', borderTopColor: 'var(--nj-accent)', animation: 'spin 1s linear infinite' }} />
+            <p style={{ margin: 0, color: 'var(--nj-text-muted)', lineHeight: 1.6, fontSize: 14 }}>{message}</p>
             {(slow || !online) ? <div style={{ display: 'grid', gap: 9, marginTop: 20 }}>
               <button type="button" onClick={() => void retry()} style={primary} disabled={!online}>{c.retry}</button>
               {online ? <button type="button" onClick={() => openHub()} style={secondary}>{c.hub}</button> : null}
@@ -388,7 +387,7 @@ export function EcosystemSessionGate({ children }: { children: ReactNode }) {
         ) : state === 'choose' ? (
           <>
             <h1 style={{ margin: 0, fontSize: 23, letterSpacing: '-.03em' }}>{c.choose}</h1>
-            <p style={{ margin: '8px 0 20px', color: '#969790', lineHeight: 1.55, fontSize: 14 }}>{c.chooseHelp}</p>
+            <p style={{ margin: '8px 0 20px', color: 'var(--nj-text-muted)', lineHeight: 1.55, fontSize: 14 }}>{c.chooseHelp}</p>
             <div style={{ display: 'grid', gap: 9 }}>
               {organizations.map((organization) => (
                 <button
@@ -399,18 +398,18 @@ export function EcosystemSessionGate({ children }: { children: ReactNode }) {
                 >
                   <span>
                     <strong style={{ display: 'block', fontSize: 14 }}>{organization.name}</strong>
-                    {organization.slug ? <span style={{ display: 'block', marginTop: 3, color: '#777972', fontSize: 12 }}>{organization.slug}</span> : null}
+                    {organization.slug ? <span style={{ display: 'block', marginTop: 3, color: 'var(--nj-text-subtle)', fontSize: 12 }}>{organization.slug}</span> : null}
                   </span>
                   <span aria-hidden="true">›</span>
                 </button>
               ))}
             </div>
-            <button type="button" onClick={switchAccount} style={{ background: 'transparent', color: '#a9aaa3', border: 0, width: '100%', padding: 15, cursor: 'pointer', marginTop: 5 }}>{c.another}</button>
+            <button type="button" onClick={switchAccount} style={{ background: 'transparent', color: 'var(--nj-text-muted)', border: 0, width: '100%', padding: 15, cursor: 'pointer', marginTop: 5 }}>{c.another}</button>
           </>
         ) : state === 'no_access' ? (
           <>
             <h1 style={{ margin: 0, fontSize: 22, letterSpacing: '-.03em' }}>{c.noAccess}</h1>
-            <p style={{ margin: '10px 0 22px', color: '#969790', lineHeight: 1.55, fontSize: 14 }}>{c.noAccessHelp}</p>
+            <p style={{ margin: '10px 0 22px', color: 'var(--nj-text-muted)', lineHeight: 1.55, fontSize: 14 }}>{c.noAccessHelp}</p>
             <div style={{ display: 'grid', gap: 9 }}>
               <button type="button" onClick={switchAccount} style={primary}>{c.another}</button>
               <button type="button" onClick={() => openHub()} style={secondary}>{c.hub}</button>
@@ -419,7 +418,7 @@ export function EcosystemSessionGate({ children }: { children: ReactNode }) {
         ) : state === 'error' ? (
           <>
             <h1 style={{ margin: 0, fontSize: 22, letterSpacing: '-.03em' }}>{c.error}</h1>
-            <p style={{ margin: '10px 0 22px', color: '#969790', lineHeight: 1.55, fontSize: 14 }}>{message}</p>
+            <p style={{ margin: '10px 0 22px', color: 'var(--nj-text-muted)', lineHeight: 1.55, fontSize: 14 }}>{message}</p>
             <div style={{ display: 'grid', gap: 9 }}>
               <button type="button" onClick={() => void retry()} style={primary} disabled={!online}>{c.retry}</button>
               <button type="button" onClick={() => openHub()} style={secondary}>{c.hub}</button>
@@ -428,12 +427,12 @@ export function EcosystemSessionGate({ children }: { children: ReactNode }) {
         ) : (
           <>
             <h1 style={{ margin: 0, textAlign: 'center', fontSize: 24, letterSpacing: '-.035em' }}>{c.title}</h1>
-            <p style={{ margin: '9px auto 24px', maxWidth: 350, textAlign: 'center', color: '#969790', lineHeight: 1.6, fontSize: 14 }}>{c.subtitle}</p>
+            <p style={{ margin: '9px auto 24px', maxWidth: 350, textAlign: 'center', color: 'var(--nj-text-muted)', lineHeight: 1.6, fontSize: 14 }}>{c.subtitle}</p>
             <div style={{ display: 'grid', gap: 9 }}>
               <button type="button" onClick={signInGoogle} style={primary}>{c.google}</button>
               <button type="button" onClick={() => openHub()} style={secondary}>{c.hub}</button>
             </div>
-            <p style={{ margin: '18px 0 0', color: '#6f716a', lineHeight: 1.55, fontSize: 11, textAlign: 'center' }}>{c.security}</p>
+            <p style={{ margin: '18px 0 0', color: 'var(--nj-text-subtle)', lineHeight: 1.55, fontSize: 11, textAlign: 'center' }}>{c.security}</p>
           </>
         )}
       </section>

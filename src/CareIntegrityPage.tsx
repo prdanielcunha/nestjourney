@@ -230,7 +230,7 @@ export default function CareIntegrityPage() {
 
   return <main className="care-integrity"><div className="care-shell">
     <header className="care-topbar">
-      <div className="care-brand"><img src="/icon.svg" alt="" /><span><strong>{t.product}</strong><small>Journey & Care Engine</small></span></div>
+      <div className="care-brand"><img src="/brand/nestjourney-symbol-light.png" alt="" /><span><strong>{t.product}</strong><small>Journey & Care Engine</small></span></div>
       <div className="care-actions">
         <a href="/"><ChevronLeft size={16} /> {t.back}</a>
         <select value={locale} aria-label="Language" onChange={(event) => { const next = event.target.value as AppLocale; setLocale(next); persistLocale(next) }}>{(Object.keys(localeLabels) as AppLocale[]).map((id) => <option value={id} key={id}>{localeLabels[id]}</option>)}</select>
