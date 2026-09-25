@@ -14,7 +14,7 @@ export const DIGITAL_PREMIUM = {
     appleTouchIcon: '/apple-touch-icon.png',
     fullBrand: '/brand/nestjourney-horizontal-light.png',
     symbol: '/brand/nestjourney-symbol-light.png',
-    socialImage: '/brand/nestjourney-og.png',
+    socialImage: '/pwa/icon-512.png',
   },
   minTouchTargetPx: 44,
 } as const
