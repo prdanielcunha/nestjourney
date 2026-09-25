@@ -10,7 +10,7 @@ export const DIGITAL_PREMIUM = {
     textMuted: '#9EB0C3',
   },
   assets: {
-    favicon: '/favicon.ico',
+    favicon: '/pwa/icon-192.png',
     appleTouchIcon: '/apple-touch-icon.png',
     fullBrand: '/brand/nestjourney-horizontal-light.png',
     symbol: '/brand/nestjourney-symbol-light.png',
