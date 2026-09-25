@@ -489,6 +489,19 @@ describe('Care Integrity persistence and scope', () => {
     }))
   })
 
+  it('requires Presence evidence instead of allowing a manual absence care request', async () => {
+    await seedMembership('care-absence-manual', 'org-a', 'care', ['unit-a'])
+    await seedPerson()
+    const db = environment.authenticatedContext('care-absence-manual').firestore()
+    await assertFails(setDoc(doc(db, 'organizations/org-a/products/raiz_e_mesa/careRequests/manual-absence'), {
+      organizationId: 'org-a', congregationId: 'unit-a', personId: 'person-a',
+      careType: 'absence_check', source: 'manual', summary: '', status: 'open',
+      requestedAt: serverTimestamp(), requestedBy: 'care-absence-manual', promiseHours: 24,
+      dueAt: Timestamp.fromMillis(Date.now() + 24 * 60 * 60 * 1000), ownerRef: 'care-absence-manual',
+      assignedAt: serverTimestamp(), assignedBy: 'care-absence-manual', resolvedAt: null, resolvedBy: '', resolutionCode: '', resolutionNote: '',
+    }))
+  })
+
   it('keeps care requests and facts inside the assigned congregation', async () => {
     await seedMembership('care-a', 'org-a', 'care', ['unit-a'])
     await seedPerson('person-b', 'unit-b')

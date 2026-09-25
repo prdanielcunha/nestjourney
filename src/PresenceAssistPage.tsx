@@ -17,6 +17,7 @@ import {
   listPresenceSessions,
   loadJourneyAccess,
   recordPresenceCheck,
+  subscribeJourneyLiveChanges,
   type JourneyAccessContext,
   type JourneyCongregation,
   type PresencePerson,
@@ -174,6 +175,17 @@ export default function PresenceAssistPage() {
   }, [refreshScope, t.error])
 
   useEffect(() => { void bootstrap() }, [bootstrap])
+
+  useEffect(() => {
+    if (!access?.canManagePresence || !congregationId) return
+    return subscribeJourneyLiveChanges({
+      organizationId: access.organizationId,
+      congregationId,
+      collections: ['people', 'presenceSessions', 'presenceChecks', 'careRequests'],
+      onChange: () => { void refreshScope(access.organizationId, congregationId).catch((cause) => console.error('Presence live refresh failed', cause)) },
+      onError: (cause) => console.error('Presence live subscription failed', cause),
+    })
+  }, [access, congregationId, refreshScope])
 
   async function selectCongregation(unitId: string) {
     if (!access) return

@@ -12,6 +12,7 @@ import {
   listJourneyPeople,
   listPrivacyRequests,
   loadJourneyAccess,
+  subscribeJourneyLiveChanges,
   resolvePrivacyRequest,
   type JourneyAccessContext,
   type JourneyAuditEvent,
@@ -98,6 +99,18 @@ export default function GovernanceRuntimePage() {
   },[refresh,t.error])
 
   useEffect(()=>{void bootstrap()},[bootstrap])
+
+  useEffect(()=>{
+    if(!access||!congregationId||!canView)return
+    const collections = access.canManagePrivacy ? ['people','privacyRequests','audit'] as const : ['people','audit'] as const
+    return subscribeJourneyLiveChanges({
+      organizationId:access.organizationId,
+      congregationId,
+      collections:[...collections],
+      onChange:()=>{void refresh(access,congregationId)},
+      onError:(cause)=>console.error('Governance live sync failed',cause),
+    })
+  },[access,congregationId,canView,refresh])
 
   async function selectUnit(unitId:string){
     if(!access)return

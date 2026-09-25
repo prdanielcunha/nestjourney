@@ -205,6 +205,15 @@ export const careIntegrityCopy = {
     pastoralHandoffRule: 'O encaminhamento pastoral registra somente o marcador “precisa contato pastoral”. Não descreva aqui o problema, confissão ou história íntima.',
     resolve: 'Concluir cuidado', error: 'Não foi possível concluir a operação.',
     careTypes: { first_contact: 'Primeiro contato', prayer: 'Pedido de oração', pastoral_contact: 'Contato pastoral', group_interest: 'Interesse em grupo', absence_check: 'Contato por ausência', operational_followup: 'Acompanhamento operacional' },
+    careTypeDescriptions: {
+      first_contact: 'Use quando a pessoa autorizou contato e precisa receber o primeiro acolhimento da equipe.',
+      prayer: 'Use para organizar um pedido de oração explicitamente compartilhado, sem registrar detalhes íntimos.',
+      pastoral_contact: 'Use quando a próxima ação é um contato pastoral. Registre apenas o marcador e o necessário para encaminhar.',
+      group_interest: 'Use quando a pessoa demonstrou interesse em conhecer uma Casa de Paz, PG ou grupo equivalente.',
+      absence_check: 'Este tipo nasce de uma ausência confirmada com evidência suficiente na Presença; não é criado manualmente.',
+      operational_followup: 'Use para um próximo passo objetivo que não se encaixa nos demais tipos, sem transformar a fila em prontuário.',
+    },
+    absenceFromPresence: 'Ausências confirmadas são encaminhadas pela área de Presença somente quando a evidência factual e a autorização de contato permitem.',
     resolutions: { contact_completed: 'Contato concluído', pastoral_handoff: 'Encaminhado ao pastor', declined_contact: 'Pessoa não deseja contato', consent_revoked: 'Autorização de contato revogada', invalid_contact: 'Contato inválido', closed_no_response: 'Encerrado sem resposta', other_resolved: 'Outro resultado concluído' },
   },
   en: {
@@ -231,6 +240,15 @@ export const careIntegrityCopy = {
     pastoralHandoffRule: 'A pastoral handoff records only the marker “needs pastoral contact”. Do not describe the problem, confession, or intimate story here.',
     resolve: 'Complete care', error: 'The operation could not be completed.',
     careTypes: { first_contact: 'First contact', prayer: 'Prayer request', pastoral_contact: 'Pastoral contact', group_interest: 'Group interest', absence_check: 'Absence check-in', operational_followup: 'Operational follow-up' },
+    careTypeDescriptions: {
+      first_contact: 'Use when the person authorized contact and needs the team’s first welcome follow-up.',
+      prayer: 'Use to organize an explicitly shared prayer request without recording intimate details.',
+      pastoral_contact: 'Use when the next action is pastoral contact. Record only the marker and what is needed to route it.',
+      group_interest: 'Use when the person explicitly showed interest in a House, small group, or equivalent community.',
+      absence_check: 'This type comes from a confirmed absence with sufficient Presence evidence; it is not created manually.',
+      operational_followup: 'Use for an objective next step that does not fit the other types, without turning the queue into a case file.',
+    },
+    absenceFromPresence: 'Confirmed absences are routed from Presence only when factual evidence and contact authorization allow it.',
     resolutions: { contact_completed: 'Contact completed', pastoral_handoff: 'Handed off to pastor', declined_contact: 'Person does not want contact', consent_revoked: 'Contact authorization revoked', invalid_contact: 'Invalid contact', closed_no_response: 'Closed without response', other_resolved: 'Other resolved outcome' },
   },
   es: {
@@ -258,6 +276,15 @@ export const careIntegrityCopy = {
     pastoralHandoffRule: 'El encaminamiento pastoral registra solo el marcador “necesita contacto pastoral”. No describas aquí el problema, confesión ni historia íntima.',
     resolve: 'Concluir cuidado', error: 'No se pudo completar la operación.',
     careTypes: { first_contact: 'Primer contacto', prayer: 'Pedido de oración', pastoral_contact: 'Contacto pastoral', group_interest: 'Interés en grupo', absence_check: 'Contacto por ausencia', operational_followup: 'Seguimiento operativo' },
+    careTypeDescriptions: {
+      first_contact: 'Úsalo cuando la persona autorizó el contacto y necesita el primer acompañamiento de bienvenida.',
+      prayer: 'Úsalo para organizar un pedido de oración compartido explícitamente, sin registrar detalles íntimos.',
+      pastoral_contact: 'Úsalo cuando el próximo paso es un contacto pastoral. Registra solo el marcador y lo necesario para derivar.',
+      group_interest: 'Úsalo cuando la persona mostró interés explícito en una Casa, grupo pequeño o comunidad equivalente.',
+      absence_check: 'Este tipo nace de una ausencia confirmada con evidencia suficiente en Presencia; no se crea manualmente.',
+      operational_followup: 'Úsalo para un próximo paso objetivo que no encaja en los otros tipos, sin convertir la fila en expediente.',
+    },
+    absenceFromPresence: 'Las ausencias confirmadas se encaminan desde Presencia solo cuando la evidencia factual y la autorización de contacto lo permiten.',
     resolutions: { contact_completed: 'Contacto concluido', pastoral_handoff: 'Derivado al pastor', declined_contact: 'La persona no desea contacto', consent_revoked: 'Autorización de contacto revocada', invalid_contact: 'Contacto inválido', closed_no_response: 'Cerrado sin respuesta', other_resolved: 'Otro resultado concluido' },
   },
 } as const

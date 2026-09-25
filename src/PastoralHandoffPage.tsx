@@ -7,6 +7,7 @@ import {
   listJourneyPeople,
   listPastoralHandoffs,
   loadJourneyAccess,
+  subscribeJourneyLiveChanges,
   resolvePastoralHandoff,
   type JourneyAccessContext,
   type JourneyCongregation,
@@ -87,6 +88,17 @@ export default function PastoralHandoffPage() {
   },[refresh,t.error])
 
   useEffect(()=>{void bootstrap()},[bootstrap])
+
+  useEffect(()=>{
+    if(!access||!congregationId||!access.canManagePastoral)return
+    return subscribeJourneyLiveChanges({
+      organizationId:access.organizationId,
+      congregationId,
+      collections:['people','pastoralHandoffs'],
+      onChange:()=>{void refresh(access,congregationId)},
+      onError:(cause)=>console.error('Pastoral live sync failed',cause),
+    })
+  },[access,congregationId,refresh])
 
   async function selectUnit(unitId:string){
     if(!access)return
