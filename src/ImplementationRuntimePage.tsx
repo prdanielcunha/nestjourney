@@ -72,7 +72,7 @@ export default function ImplementationRuntimePage() {
       :playbook.weeks[suggestedWeek-1]?.objective||playbook.progressiveDecision
 
   return <main className="implementation-runtime"><div className="implementation-shell">
-    <header className="implementation-topbar"><div className="implementation-brand"><img src="/icon.svg" alt=""/><span><strong>{t.product}</strong><small>Journey & Care Engine</small></span></div><div className="implementation-actions"><a href="/more"><ChevronLeft size={16}/>{t.back}</a><select value={locale} onChange={e=>{const next=e.target.value as AppLocale;setLocale(next);persistLocale(next)}}>{(Object.keys(localeLabels) as AppLocale[]).map(id=><option key={id} value={id}>{localeLabels[id]}</option>)}</select></div></header>
+    <header className="implementation-topbar"><div className="implementation-brand"><img src="/brand/nestjourney-symbol-light.png" alt=""/><span><strong>{t.product}</strong><small>Journey & Care Engine</small></span></div><div className="implementation-actions"><a href="/more"><ChevronLeft size={16}/>{t.back}</a><select value={locale} onChange={e=>{const next=e.target.value as AppLocale;setLocale(next);persistLocale(next)}}>{(Object.keys(localeLabels) as AppLocale[]).map(id=><option key={id} value={id}>{localeLabels[id]}</option>)}</select></div></header>
     <section className="implementation-hero"><div><span className="implementation-kicker">Journey / Playbook</span><h1>{t.title}</h1><p>{t.subtitle}</p></div></section>
     {error?<div className="implementation-error">{error}</div>:null}
 
