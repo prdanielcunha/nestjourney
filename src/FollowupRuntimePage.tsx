@@ -205,7 +205,7 @@ export default function FollowupRuntimePage() {
 
   return <main className="followup-page"><div className="followup-shell">
     <header className="followup-topbar">
-      <div className="followup-brand"><img src="/icon.svg" alt=""/><span><strong>{t.product}</strong><small>Journey & Care Engine</small></span></div>
+      <div className="followup-brand"><img src="/brand/nestjourney-symbol-light.png" alt=""/><span><strong>{t.product}</strong><small>Journey & Care Engine</small></span></div>
       <div className="followup-actions"><a href="/care-integrity"><ChevronLeft size={16}/>{t.back}</a><select value={locale} onChange={(event)=>{const next=event.target.value as AppLocale;setLocale(next);persistLocale(next)}}>{(Object.keys(localeLabels) as AppLocale[]).map((id)=><option key={id} value={id}>{localeLabels[id]}</option>)}</select></div>
     </header>
 
