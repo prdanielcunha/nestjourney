@@ -295,7 +295,7 @@ export default function PresenceAssistPage() {
 
   return <main className="presence-assist"><div className="presence-shell">
     <header className="presence-topbar">
-      <div className="presence-brand"><img src="/icon.svg" alt="" /><span><strong>{t.product}</strong><small>Journey & Care Engine</small></span></div>
+      <div className="presence-brand"><img src="/brand/nestjourney-symbol-light.png" alt="" /><span><strong>{t.product}</strong><small>Journey & Care Engine</small></span></div>
       <div className="presence-actions">
         <a href="/"><ChevronLeft size={16} /> {t.back}</a>
         <select value={locale} aria-label="Language" onChange={(event) => { const next = event.target.value as AppLocale; setLocale(next); persistLocale(next) }}>{(Object.keys(localeLabels) as AppLocale[]).map((id) => <option value={id} key={id}>{localeLabels[id]}</option>)}</select>
