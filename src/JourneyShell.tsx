@@ -85,7 +85,7 @@ const viewAsOptions:JourneyViewAsRole[]=[
 function sameRoute(href:string,pathname:string){
   if(href==='/my-today')return pathname==='/'||pathname==='/my-today'
   if(href==='/areas')return pathname==='/areas'||['/presence-assist','/mesa-runtime','/care-integrity','/groups-runtime','/discipleship-runtime'].includes(pathname)
-  if(href==='/more')return pathname==='/more'||['/team-runtime','/implementation-runtime','/reports','/governance-runtime','/settings-runtime','/help','/pastoral-handoff'].includes(pathname)
+  if(href==='/more')return pathname==='/more'||['/team-runtime','/implementation-runtime','/playbook-studio','/reports','/governance-runtime','/settings-runtime','/help','/whats-new','/pastoral-handoff'].includes(pathname)
   return pathname===href
 }
 
