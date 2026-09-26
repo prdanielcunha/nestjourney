@@ -24,6 +24,7 @@ describe('NestJourney route resolver', () => {
     expect(resolveJourneyRoute('/more')).toBe('more')
     expect(resolveJourneyRoute('/reports')).toBe('reports')
     expect(resolveJourneyRoute('/help')).toBe('help')
+    expect(resolveJourneyRoute('/whats-new')).toBe('whats-new')
     expect(resolveJourneyRoute('/groups-runtime')).toBe('groups')
     expect(resolveJourneyRoute('/discipleship-runtime')).toBe('discipleship')
     expect(resolveJourneyRoute('/implementation-runtime')).toBe('implementation')
