@@ -28,7 +28,7 @@ const roleCopy:Record<AppLocale,Record<JourneyResponsibility,{title:string;focus
     group_leader:{title:'House Leader',focus:'Care for your group, participants, entry requests, capacity, and next meetings.'},
     discipler:{title:'Discipler',focus:'See the people you accompany, the current meeting from 1 to 7, and the agreed next step.'},
     coordinator:{title:'Coordinator',focus:'Watch pending work, workload distribution, unassigned items, and operational quality.'},
-    pastor:{title:'Pastor',focus:'Prioritize Cuidado atrasado, pastoral handoffs, and journeys that need a pastoral decision or care.'},
+    pastor:{title:'Pastor',focus:'Prioritize overdue care, pastoral handoffs, and journeys that need a pastoral decision or care.'},
     admin:{title:'Owner / Administrator',focus:'You can follow the whole organization operation, teams, implementation, reports, and settings.'},
     ceo:{title:'MillionsNest CEO',focus:'Start in Today to read the ecosystem pulse. Use Vision to go deeper across organizations and the access switcher to safely view each responsibility experience.'},
     member:{title:'User',focus:'Your access does not have an operational responsibility yet. Ask an organization administrator.'},
