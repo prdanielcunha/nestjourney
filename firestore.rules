@@ -44,15 +44,10 @@ service cloud.firestore {
         ) == request.auth.uid;
     }
     function hasProductAccess(orgId) {
-      let organizationPath = /databases/$(database)/documents/organizations/$(orgId);
-      let apps = exists(organizationPath)
-        ? get(organizationPath).data.get('apps', {})
-        : {};
-      let canonicalStatus = apps.get('nestjourney', {}).get('status', '');
-      let legacyStatus = apps.get('raiz_e_mesa', {}).get('status', '');
+      let apps = get(/databases/$(database)/documents/organizations/$(orgId)).data.get('apps', {});
+      let product = apps.get('nestjourney', apps.get('raiz_e_mesa', {}));
       return isSystemAdmin()
-        || canonicalStatus in ['active', 'trialing']
-        || (canonicalStatus == '' && legacyStatus in ['active', 'trialing']);
+        || product.get('status', '') in ['active', 'trialing'];
     }
     function hasMembership(orgId) {
       return hasProductAccess(orgId) && (membershipIsActive(orgId) || isOwner(orgId) || isSystemAdmin());
