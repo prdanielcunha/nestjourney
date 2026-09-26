@@ -313,6 +313,8 @@ export interface JourneyDiscipleshipRecord {
   disciplerId: string
   disciplerName?: string
   meeting: number
+  targetMeetings?: number
+  playbookId?: string
   status: 'active' | 'paused' | 'completed'
   nextMeeting?: string
   startedAt?: string
@@ -1457,6 +1459,8 @@ export async function listJourneyDiscipleships(access: JourneyAccessContext, con
       disciplerId: asString(data.disciplerId || data.mentorId),
       disciplerName: asString(data.disciplerName || data.mentor) || undefined,
       meeting: typeof data.meeting === 'number' ? data.meeting : 1,
+      targetMeetings: typeof data.targetMeetings === 'number' ? Math.max(1, Math.min(24, Math.floor(data.targetMeetings))) : 7,
+      playbookId: asString(data.playbookId) || undefined,
       status,
       nextMeeting: asString(data.nextMeeting) || undefined,
       startedAt: data.startedAt ? toIso(data.startedAt) : undefined,
@@ -1530,11 +1534,15 @@ export async function createJourneyDiscipleship(input: {
   actorId: string
   disciplerId?: string
   disciplerName?: string
+  targetMeetings?: number
+  playbookId?: string
 }) {
   const firestore = requireDb()
   const relationRef = doc(collection(firestore, journeyCollectionPath(input.organizationId, 'discipleships')))
   const targetDisciplerId = String(input.disciplerId || input.actorId).trim()
   if (!targetDisciplerId) throw new Error('missing_discipler')
+  const targetMeetings = Math.max(1, Math.min(24, Math.floor(input.targetMeetings ?? 7)))
+  const playbookId = String(input.playbookId ?? '').trim()
   const batch = writeBatch(firestore)
   batch.set(relationRef, {
     organizationId: input.organizationId,
@@ -1544,6 +1552,8 @@ export async function createJourneyDiscipleship(input: {
     disciplerId: targetDisciplerId,
     disciplerName: String(input.disciplerName ?? '').trim(),
     meeting: 1,
+    targetMeetings,
+    playbookId,
     completedMeetings: [],
     status: 'active',
     nextMeeting: 'Agendar encontro 1',
@@ -1567,9 +1577,10 @@ export async function updateJourneyDiscipleship(input: {
   const relationRef = doc(firestore, `${journeyCollectionPath(input.organizationId, 'discipleships')}/${input.relation.id}`)
   const batch = writeBatch(firestore)
   if (input.action === 'advance') {
-    const currentMeeting = Math.max(1, Math.min(7, input.relation.meeting || 1))
-    const nextMeeting = Math.min(7, currentMeeting + 1)
-    const completed = currentMeeting >= 7
+    const targetMeetings = Math.max(1, Math.min(24, input.relation.targetMeetings || 7))
+    const currentMeeting = Math.max(1, Math.min(targetMeetings, input.relation.meeting || 1))
+    const nextMeeting = Math.min(targetMeetings, currentMeeting + 1)
+    const completed = currentMeeting >= targetMeetings
     batch.update(relationRef, {
       meeting: nextMeeting,
       status: completed ? 'completed' : 'active',
