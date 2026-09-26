@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { ArrowRight, BarChart3, BookOpen, ClipboardCheck, History, Settings2, ShieldCheck, UserCog } from 'lucide-react'
+import { ArrowRight, BarChart3, BookOpen, ClipboardCheck, History, Settings2, ShieldCheck, Sparkles, UserCog } from 'lucide-react'
 import { auth } from './firebase'
 import { getActiveJourneyOrganizationId, loadJourneyAccess, type JourneyAccessContext } from './journeyRepository'
 import { canViewJourneyReports } from './journeyExperience'
@@ -17,6 +17,7 @@ const copy={
     audit:'Auditoria',auditDesc:'Histórico factual de ações e mudanças autorizadas.',
     settings:'Configurações',settingsDesc:'Nomes dos módulos e preferências da organização.',
     help:'Ajuda',helpDesc:'Entenda o que fazer em cada área sem precisar aprender o sistema inteiro.',
+    news:'Novidades',newsDesc:'Veja versões, correções e melhorias recentes do NestJourney.',
     operate:'Operação',govern:'Governança',support:'Suporte',
   },
   en:{
@@ -29,6 +30,7 @@ const copy={
     audit:'Audit',auditDesc:'Factual history of authorized actions and changes.',
     settings:'Settings',settingsDesc:'Organization module names and preferences.',
     help:'Help',helpDesc:'Understand what to do in each area without learning the whole system.',
+    news:"What's new",newsDesc:'See recent NestJourney releases, fixes, and improvements.',
     operate:'Operations',govern:'Governance',support:'Support',
   },
   es:{
@@ -41,6 +43,7 @@ const copy={
     audit:'Auditoría',auditDesc:'Historial factual de acciones y cambios autorizados.',
     settings:'Configuración',settingsDesc:'Nombres de módulos y preferencias de la organización.',
     help:'Ayuda',helpDesc:'Entiende qué hacer en cada área sin aprender todo el sistema.',
+    news:'Novedades',newsDesc:'Mira versiones, correcciones y mejoras recientes de NestJourney.',
     operate:'Operación',govern:'Gobernanza',support:'Soporte',
   }
 } as const
@@ -71,13 +74,14 @@ export default function MorePage(){
     {title:t.audit,desc:t.auditDesc,href:'/governance-runtime?view=audit',Icon:History,allowed:Boolean(access?.canViewGovernance)},
     {title:t.settings,desc:t.settingsDesc,href:'/settings-runtime',Icon:Settings2,allowed:canManageSettings},
     {title:t.help,desc:t.helpDesc,href:'/help',Icon:BookOpen,allowed:true},
+    {title:t.news,desc:t.newsDesc,href:'/whats-new',Icon:Sparkles,allowed:true},
   ]
 
   const visibleCards=cards.filter(item=>item.allowed)
   const groups=[
     {label:t.operate,items:visibleCards.filter(item=>['/team-runtime','/implementation-runtime','/reports'].includes(item.href))},
     {label:t.govern,items:visibleCards.filter(item=>['/governance-runtime?view=privacy','/governance-runtime?view=audit','/settings-runtime'].includes(item.href))},
-    {label:t.support,items:visibleCards.filter(item=>item.href==='/help')},
+    {label:t.support,items:visibleCards.filter(item=>['/help','/whats-new'].includes(item.href))},
   ].filter(group=>group.items.length)
 
   return <main className="journey-section-page"><div className="journey-section-shell">
