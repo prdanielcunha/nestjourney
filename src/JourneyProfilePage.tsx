@@ -11,6 +11,7 @@ import {
   listJourneyGroupMemberships,
   listJourneyGroups,
   listJourneyPeople,
+  loadActiveJourneyPlaybook,
   loadJourneyAccess,
   subscribeJourneyLiveChanges,
   type CareRequestRecord,
@@ -21,6 +22,7 @@ import {
   type JourneyGroupRecord,
   type JourneyPersonRecord,
 } from './journeyRepository'
+import type { JourneyPlaybookDefinition } from './playbookEngine'
 import { getInitialLocale, journeyProfileCopy, localeLabels, persistLocale, type AppLocale } from './i18n'
 import { canViewJourneyPeople } from './journeyExperience'
 import { GuidedEmptyState } from './GuidedEmptyState'
@@ -51,6 +53,7 @@ export default function JourneyProfilePage() {
   const [groups, setGroups] = useState<JourneyGroupRecord[]>([])
   const [memberships, setMemberships] = useState<JourneyGroupMembership[]>([])
   const [discipleships, setDiscipleships] = useState<JourneyDiscipleshipRecord[]>([])
+  const [activePlaybook, setActivePlaybook] = useState<JourneyPlaybookDefinition | null>(null)
   const requestedPersonId = useMemo(() => new URLSearchParams(window.location.search).get('person') ?? '', [])
   const [selectedId, setSelectedId] = useState(requestedPersonId)
   const [query, setQuery] = useState('')
@@ -109,8 +112,12 @@ export default function JourneyProfilePage() {
       const nextAccess = await loadJourneyAccess(user.uid, organizationId)
       setAccess(nextAccess)
       if (!canViewJourneyPeople(nextAccess)) return
-      const nextCongregations = await listJourneyCongregations(nextAccess)
+      const [nextCongregations, nextPlaybook] = await Promise.all([
+        listJourneyCongregations(nextAccess),
+        loadActiveJourneyPlaybook(nextAccess),
+      ])
       setCongregations(nextCongregations)
+      setActivePlaybook(nextPlaybook)
       const unitId = resolveActiveJourneyCongregationId(nextAccess.organizationId, nextCongregations)
       setCongregationId(unitId)
       if (unitId) await refreshScope(nextAccess, unitId)
@@ -164,7 +171,7 @@ export default function JourneyProfilePage() {
       href:'/care-integrity',
     }
     if(canReadDiscipleship&&snapshot.discipleship&&snapshot.discipleship.status!=='completed')return{
-      title:locale==='en'?'Root · meeting '+snapshot.discipleship.meeting+'/7':locale==='es'?'Raíz · encuentro '+snapshot.discipleship.meeting+'/7':'Raiz · encontro '+snapshot.discipleship.meeting+'/7',
+      title:locale==='en'?'Root · meeting '+snapshot.discipleship.meeting+'/'+(activePlaybook?.discipleshipMeetingCount??7):locale==='es'?'Raíz · encuentro '+snapshot.discipleship.meeting+'/'+(activePlaybook?.discipleshipMeetingCount??7):'Raiz · encontro '+snapshot.discipleship.meeting+'/'+(activePlaybook?.discipleshipMeetingCount??7),
       body:locale==='en'?'The active discipleship relationship is this person’s current recorded next step.':locale==='es'?'La relación activa de discipulado es el próximo paso registrado para esta persona.':'O acompanhamento ativo no discipulado é o próximo passo registrado desta pessoa.',
       href:'/discipleship-runtime',
     }
@@ -230,6 +237,7 @@ export default function JourneyProfilePage() {
 
           <JourneyPath
             locale={locale}
+            steps={activePlaybook?.stages.map(stage=>stage.label)}
             currentStep={inferJourneyStep({
               stage:snapshot.person.stage,
               hasGroup:snapshot.groups.length>0,
@@ -251,7 +259,7 @@ export default function JourneyProfilePage() {
 
             <article className="journey-panel journey-domain-card wide">
               <div className="journey-card-title"><span className="journey-icon"><Leaf size={17} /></span><div><h3>{t.discipleship}</h3><small>{t.discipleshipSource}</small></div></div>
-              {!canReadDiscipleship ? <p className="journey-muted">{t.restrictedDiscipleship}</p> : snapshot.discipleship ? <div className="journey-discipleship"><div><span>{t.status}</span><strong>{snapshot.discipleship.status === 'completed' ? t.completed : snapshot.discipleship.status === 'paused' ? t.paused : t.active}</strong></div><div><span>{t.meeting}</span><strong>{snapshot.discipleship.meeting}/7</strong></div><div><span>{t.discipler}</span><strong>{snapshot.discipleship.disciplerName || snapshot.discipleship.disciplerId}</strong></div></div> : <p className="journey-muted">{t.noDiscipleship}</p>}
+              {!canReadDiscipleship ? <p className="journey-muted">{t.restrictedDiscipleship}</p> : snapshot.discipleship ? <div className="journey-discipleship"><div><span>{t.status}</span><strong>{snapshot.discipleship.status === 'completed' ? t.completed : snapshot.discipleship.status === 'paused' ? t.paused : t.active}</strong></div><div><span>{t.meeting}</span><strong>{snapshot.discipleship.meeting}/{activePlaybook?.discipleshipMeetingCount??7}</strong></div><div><span>{t.discipler}</span><strong>{snapshot.discipleship.disciplerName || snapshot.discipleship.disciplerId}</strong></div></div> : <p className="journey-muted">{t.noDiscipleship}</p>}
             </article>
           </div>
         </>}
