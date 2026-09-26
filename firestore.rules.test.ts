@@ -59,6 +59,47 @@ describe('Firestore tenant and pastoral isolation', () => {
       'organizations/org-a/products/raiz_e_mesa/people/person-a',
     )))
   })
+  it('accepts the canonical NestJourney entitlement and only falls back to the legacy entitlement when canonical is absent', async () => {
+    await environment.withSecurityRulesDisabled(async (context) => {
+      const db = context.firestore()
+      await setDoc(doc(db, 'organizations/org-canonical'), {
+        ownerUid: 'another-owner',
+        status: 'active',
+        apps: { nestjourney: { status: 'active' } },
+      })
+      await setDoc(doc(db, 'organizations/org-canonical/members/user-canonical'), {
+        status: 'active', organizationRole: 'care', congregationIds: ['unit-a'],
+      })
+      await setDoc(doc(db, 'organizations/org-canonical/products/raiz_e_mesa/people/person-a'), {
+        organizationId: 'org-canonical', congregationId: 'unit-a', name: 'Canonical',
+      })
+
+      await setDoc(doc(db, 'organizations/org-disabled'), {
+        ownerUid: 'another-owner',
+        status: 'active',
+        apps: {
+          nestjourney: { status: 'inactive' },
+          raiz_e_mesa: { status: 'active' },
+        },
+      })
+      await setDoc(doc(db, 'organizations/org-disabled/members/user-disabled'), {
+        status: 'active', organizationRole: 'care', congregationIds: ['unit-a'],
+      })
+      await setDoc(doc(db, 'organizations/org-disabled/products/raiz_e_mesa/people/person-a'), {
+        organizationId: 'org-disabled', congregationId: 'unit-a', name: 'Disabled',
+      })
+    })
+
+    await assertSucceeds(getDoc(doc(
+      environment.authenticatedContext('user-canonical').firestore(),
+      'organizations/org-canonical/products/raiz_e_mesa/people/person-a',
+    )))
+    await assertFails(getDoc(doc(
+      environment.authenticatedContext('user-disabled').firestore(),
+      'organizations/org-disabled/products/raiz_e_mesa/people/person-a',
+    )))
+  })
+
   it('accepts the canonical migration membership document', async () => {
     await environment.withSecurityRulesDisabled(async (context) => {
       const db = context.firestore()

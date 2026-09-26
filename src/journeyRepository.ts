@@ -98,7 +98,7 @@ function applyJourneyViewAs(access: JourneyAccessContext): JourneyAccessContext 
     canManageImplementation: true,
     canViewGovernance: true,
     canManagePrivacy: true,
-    canManagePastoral: true,
+    canManagePastoral: false,
     broadJourneyAccess: true,
   }
   if (requested === 'pastor') return {

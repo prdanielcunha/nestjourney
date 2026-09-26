@@ -6,6 +6,7 @@ export type JourneyRoute =
   | 'more'
   | 'reports'
   | 'help'
+  | 'whats-new'
   | 'presence'
   | 'care'
   | 'followup'
@@ -38,6 +39,8 @@ export function resolveJourneyRoute(pathname: string): JourneyRoute {
       return 'reports'
     case '/help':
       return 'help'
+    case '/whats-new':
+      return 'whats-new'
     case '/presence-assist':
       return 'presence'
     case '/care-integrity':

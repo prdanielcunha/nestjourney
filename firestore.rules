@@ -44,11 +44,10 @@ service cloud.firestore {
         ) == request.auth.uid;
     }
     function hasProductAccess(orgId) {
-      return isSystemAdmin() || (
-        exists(/databases/$(database)/documents/organizations/$(orgId))
-        && get(/databases/$(database)/documents/organizations/$(orgId)).data
-          .get('apps', {}).get('raiz_e_mesa', {}).get('status', '') in ['active', 'trialing']
-      );
+      let apps = get(/databases/$(database)/documents/organizations/$(orgId)).data.get('apps', {});
+      let product = apps.get('nestjourney', apps.get('raiz_e_mesa', {}));
+      return isSystemAdmin()
+        || product.get('status', '') in ['active', 'trialing'];
     }
     function hasMembership(orgId) {
       return hasProductAccess(orgId) && (membershipIsActive(orgId) || isOwner(orgId) || isSystemAdmin());

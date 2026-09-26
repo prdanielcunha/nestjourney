@@ -13,6 +13,7 @@ const JourneyVisionPage = lazy(() => import('./JourneyVisionPage.tsx'))
 const MorePage = lazy(() => import('./MorePage.tsx'))
 const JourneyReportsPage = lazy(() => import('./JourneyReportsPage.tsx'))
 const HelpPage = lazy(() => import('./HelpPage.tsx'))
+const WhatsNewPage = lazy(() => import('./WhatsNewPage.tsx'))
 const PresenceAssistPage = lazy(() => import('./PresenceAssistPage.tsx'))
 const CareIntegrityPage = lazy(() => import('./CareIntegrityPage.tsx'))
 const FollowupRuntimePage = lazy(() => import('./FollowupRuntimePage.tsx'))
@@ -82,6 +83,8 @@ function JourneyRoute() {
       return <JourneyReportsPage />
     case 'help':
       return <HelpPage />
+    case 'whats-new':
+      return <WhatsNewPage />
     case 'presence':
       return <PresenceAssistPage />
     case 'care':

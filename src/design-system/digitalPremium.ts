@@ -15,6 +15,9 @@ export const DIGITAL_PREMIUM = {
     fullBrand: '/brand/nestjourney-horizontal-light.png',
     symbol: '/brand/nestjourney-symbol-light.png',
     socialImage: '/pwa/icon-512.png',
+    notificationIcon: '/pwa/notification-icon-96.png',
+    browserConfig: '/browserconfig.xml',
+    microsoftTile: '/mstile-150x150.png',
   },
   minTouchTargetPx: 44,
 } as const
