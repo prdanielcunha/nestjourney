@@ -14,6 +14,7 @@ export type JourneyRoute =
   | 'groups'
   | 'discipleship'
   | 'implementation'
+  | 'playbook-studio'
   | 'team'
   | 'settings'
   | 'governance'
@@ -57,6 +58,8 @@ export function resolveJourneyRoute(pathname: string): JourneyRoute {
       return 'discipleship'
     case '/implementation-runtime':
       return 'implementation'
+    case '/playbook-studio':
+      return 'playbook-studio'
     case '/team-runtime':
       return 'team'
     case '/settings-runtime':
