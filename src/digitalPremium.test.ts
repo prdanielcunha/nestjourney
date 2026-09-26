@@ -41,6 +41,9 @@ describe('Digital Premium design contract', () => {
     expect(html).toContain(`content="${DIGITAL_PREMIUM.colors.navy950}"`)
     expect(html).toContain(`content="${DIGITAL_PREMIUM.assets.socialImage}"`)
     expect(html).toContain('name="twitter:card"')
+    expect(html).toContain(`content="${DIGITAL_PREMIUM.assets.browserConfig}"`)
+    expect(DIGITAL_PREMIUM.assets.notificationIcon).toBe('/pwa/notification-icon-96.png')
+    expect(DIGITAL_PREMIUM.assets.microsoftTile).toBe('/mstile-150x150.png')
   })
 
   it('preserves the full-brand / compact-symbol shell rule', () => {
