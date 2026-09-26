@@ -1134,6 +1134,79 @@ describe('Implementation Runtime rules', () => {
     await assertFails(updateDoc(ref,{status:'completed'}))
   })
 
+  it('allows an owner to configure a different playbook and a scoped coordinator to execute only its declared steps', async () => {
+    await seedMembership('owner-playbook','org-a','owner',['unit-a'])
+    await seedMembership('coord-custom','org-a','coordinator',['unit-a'])
+    const ownerDb=environment.authenticatedContext('owner-playbook').firestore()
+    const playbookRef=doc(ownerDb,'organizations/org-a/products/raiz_e_mesa/playbooks/custom-care-path')
+    await assertSucceeds(setDoc(playbookRef,{
+      organizationId:'org-a',
+      schemaVersion:1,
+      name:'Caminho da Família',
+      description:'Jornada configurável para esta organização.',
+      status:'active',
+      carePromiseHours:36,
+      discipleshipMeetingCount:10,
+      areaLabels:{presence:'Boas-vindas',table:'Café',care:'Cuidado',groups:'PG',discipleship:'Caminho'},
+      stages:[
+        {id:'welcome',label:'Chegada',kind:'presence',entryCriteria:'Chegou',completionCriteria:'Acolhido',responsibleRoles:['presence_host'],requiredFields:['name']},
+        {id:'community',label:'Comunidade',kind:'groups',entryCriteria:'Interesse',completionCriteria:'Entrou em PG',responsibleRoles:['group_leader'],requiredFields:['name']},
+      ],
+      indicators:['care_debt'],
+      routingRules:['visitor_to_first_contact'],
+      implementationPhases:[
+        {id:'prepare',title:'Preparar',objective:'Preparar equipe',items:['Definir responsáveis','Treinar']},
+      ],
+      implementationKeys:['phase.prepare.item.1','phase.prepare.item.2'],
+      createdAt:serverTimestamp(),
+      createdBy:'owner-playbook',
+      updatedAt:serverTimestamp(),
+      updatedBy:'owner-playbook',
+    }))
+    await assertSucceeds(setDoc(
+      doc(ownerDb,'organizations/org-a/products/raiz_e_mesa/settings/playbook'),
+      {organizationId:'org-a',activePlaybookId:'custom-care-path',updatedAt:serverTimestamp(),updatedBy:'owner-playbook'},
+    ))
+
+    const db=environment.authenticatedContext('coord-custom').firestore()
+    await assertSucceeds(setDoc(
+      doc(db,'organizations/org-a/products/raiz_e_mesa/implementationCycles/custom-cycle'),
+      {
+        organizationId:'org-a',congregationId:'unit-a',playbookId:'custom-care-path',status:'active',
+        startedAt:serverTimestamp(),createdAt:serverTimestamp(),createdBy:'coord-custom',
+      },
+    ))
+    await assertSucceeds(setDoc(
+      doc(db,'organizations/org-a/products/raiz_e_mesa/implementationCycles/custom-cycle/steps/phase.prepare.item.1'),
+      {
+        organizationId:'org-a',congregationId:'unit-a',cycleId:'custom-cycle',playbookId:'custom-care-path',
+        key:'phase.prepare.item.1',completedAt:serverTimestamp(),completedBy:'coord-custom',
+      },
+    ))
+    await assertFails(setDoc(
+      doc(db,'organizations/org-a/products/raiz_e_mesa/implementationCycles/custom-cycle/steps/phase.prepare.item.99'),
+      {
+        organizationId:'org-a',congregationId:'unit-a',cycleId:'custom-cycle',playbookId:'custom-care-path',
+        key:'phase.prepare.item.99',completedAt:serverTimestamp(),completedBy:'coord-custom',
+      },
+    ))
+  })
+
+  it('does not let a coordinator rewrite the organization playbook', async () => {
+    await seedMembership('coord-no-config','org-a','coordinator',['unit-a'])
+    const db=environment.authenticatedContext('coord-no-config').firestore()
+    await assertFails(setDoc(doc(db,'organizations/org-a/products/raiz_e_mesa/playbooks/not-allowed'),{
+      organizationId:'org-a',schemaVersion:1,name:'No',description:'',status:'active',
+      carePromiseHours:48,discipleshipMeetingCount:7,
+      areaLabels:{presence:'P',table:'T',care:'C',groups:'G',discipleship:'D'},
+      stages:[{id:'s',label:'S',kind:'custom',entryCriteria:'',completionCriteria:'',responsibleRoles:[],requiredFields:['name']}],
+      indicators:[],routingRules:[],
+      implementationPhases:[{id:'p',title:'P',objective:'',items:['A']}],
+      implementationKeys:['phase.p.item.1'],
+      createdAt:serverTimestamp(),createdBy:'coord-no-config',updatedAt:serverTimestamp(),updatedBy:'coord-no-config',
+    }))
+  })
+
   it('keeps implementation management away from an ordinary scoped member', async () => {
     await seedMembership('member-impl','org-a','member',['unit-a'])
     const db=environment.authenticatedContext('member-impl').firestore()
