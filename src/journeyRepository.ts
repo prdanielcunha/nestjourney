@@ -4,6 +4,7 @@ import {
 } from 'firebase/firestore'
 import { db } from './firebase'
 import { journeyCollectionPath } from './productIdentity'
+import { createRaizEMesaPlaybook, JOURNEY_PLAYBOOK_DEFAULT_ID, normalizeJourneyPlaybook, type JourneyPlaybookDefinition } from './playbookEngine'
 import { planFollowupOutcome, type FollowupNextActionCode, type FollowupOutcomeCode } from './followup'
 import { calculatePresenceCoverage, canUseAbsenceEvidence, type CarePromise, type PresenceCheck, type PresenceSession, type PresenceSource, type PresenceVerificationState } from './intelligence'
 
@@ -321,7 +322,7 @@ export interface JourneyImplementationCycle {
   id: string
   organizationId: string
   congregationId: string
-  playbookId: 'raiz_e_mesa_2026'
+  playbookId: string
   status: 'active' | 'completed'
   completedKeys: string[]
   startedAt: string
@@ -785,6 +786,125 @@ export async function saveJourneyModuleLabels(access: JourneyAccessContext, labe
     updatedBy: access.userId,
   }
   const existing = await getDoc(ref)
+  const batch = writeBatch(firestore)
+  if (existing.exists()) batch.update(ref, payload)
+  else batch.set(ref, payload)
+  await batch.commit()
+}
+
+export function canConfigureJourneyPlaybooks(access: JourneyAccessContext) {
+  return access.isSystemAdmin
+    || access.isOwner
+    || ['owner','admin','pastor'].includes(access.organizationRole)
+    || access.role === 'pastor'
+}
+
+function playbookFromSnapshot(organizationId: string, id: string, data: Record<string, unknown>): JourneyPlaybookDefinition {
+  const normalized = normalizeJourneyPlaybook({
+    ...(data as Partial<JourneyPlaybookDefinition>),
+    id,
+    organizationId,
+    createdAt: data.createdAt ? toIso(data.createdAt) : undefined,
+    createdBy: asString(data.createdBy) || undefined,
+    updatedAt: data.updatedAt ? toIso(data.updatedAt) : undefined,
+    updatedBy: asString(data.updatedBy) || undefined,
+  }, id)
+  const storedKeys = asStringArray(data.implementationKeys)
+  if (storedKeys.length) normalized.implementationKeys = storedKeys.slice(0, 120)
+  return normalized
+}
+
+export async function listJourneyPlaybooks(access: JourneyAccessContext): Promise<JourneyPlaybookDefinition[]> {
+  const firestore = requireDb()
+  const snapshot = await getDocs(collection(firestore, journeyCollectionPath(access.organizationId, 'playbooks')))
+  const playbooks = snapshot.docs.map((item) => playbookFromSnapshot(access.organizationId, item.id, item.data()))
+  return playbooks.sort((a, b) => {
+    if (a.status === 'active' && b.status !== 'active') return -1
+    if (a.status !== 'active' && b.status === 'active') return 1
+    return a.name.localeCompare(b.name, 'pt-BR')
+  })
+}
+
+export async function ensureDefaultJourneyPlaybook(access: JourneyAccessContext): Promise<JourneyPlaybookDefinition> {
+  const firestore = requireDb()
+  const ref = doc(firestore, `${journeyCollectionPath(access.organizationId, 'playbooks')}/${JOURNEY_PLAYBOOK_DEFAULT_ID}`)
+  const snapshot = await getDoc(ref)
+  if (snapshot.exists()) return playbookFromSnapshot(access.organizationId, snapshot.id, snapshot.data())
+  const fallback = createRaizEMesaPlaybook(access.organizationId)
+  if (!canConfigureJourneyPlaybooks(access)) return fallback
+  const batch = writeBatch(firestore)
+  batch.set(ref, {
+    ...fallback,
+    createdAt: serverTimestamp(),
+    createdBy: access.userId,
+    updatedAt: serverTimestamp(),
+    updatedBy: access.userId,
+  })
+  await batch.commit()
+  return fallback
+}
+
+export async function saveJourneyPlaybook(access: JourneyAccessContext, input: JourneyPlaybookDefinition) {
+  if (!canConfigureJourneyPlaybooks(access)) throw new Error('playbook_access_denied')
+  const firestore = requireDb()
+  const playbook = normalizeJourneyPlaybook({ ...input, organizationId: access.organizationId }, input.id)
+  if (!playbook.stages.length) throw new Error('playbook_requires_stage')
+  if (!playbook.implementationKeys.length) throw new Error('playbook_requires_implementation')
+  const ref = doc(firestore, `${journeyCollectionPath(access.organizationId, 'playbooks')}/${playbook.id}`)
+  const existing = await getDoc(ref)
+  const payload = {
+    organizationId: access.organizationId,
+    schemaVersion: playbook.schemaVersion,
+    name: playbook.name,
+    description: playbook.description,
+    status: playbook.status,
+    carePromiseHours: playbook.carePromiseHours,
+    discipleshipMeetingCount: playbook.discipleshipMeetingCount,
+    areaLabels: playbook.areaLabels,
+    stages: playbook.stages,
+    indicators: playbook.indicators,
+    routingRules: playbook.routingRules,
+    implementationPhases: playbook.implementationPhases,
+    implementationKeys: playbook.implementationKeys,
+    updatedAt: serverTimestamp(),
+    updatedBy: access.userId,
+  }
+  const batch = writeBatch(firestore)
+  if (existing.exists()) batch.update(ref, payload)
+  else batch.set(ref, { ...payload, createdAt: serverTimestamp(), createdBy: access.userId })
+  await batch.commit()
+  return playbook
+}
+
+export async function loadActiveJourneyPlaybook(access: JourneyAccessContext): Promise<JourneyPlaybookDefinition> {
+  const firestore = requireDb()
+  const settingsRef = doc(firestore, `${journeyCollectionPath(access.organizationId, 'settings')}/playbook`)
+  const settings = await getDoc(settingsRef)
+  const activePlaybookId = settings.exists() ? asString(settings.data().activePlaybookId) : ''
+  if (activePlaybookId) {
+    const playbook = await getDoc(doc(firestore, `${journeyCollectionPath(access.organizationId, 'playbooks')}/${activePlaybookId}`))
+    if (playbook.exists()) return playbookFromSnapshot(access.organizationId, playbook.id, playbook.data())
+  }
+  const playbooks = await listJourneyPlaybooks(access)
+  const active = playbooks.find((item) => item.status === 'active')
+  if (active) return active
+  return ensureDefaultJourneyPlaybook(access)
+}
+
+export async function setActiveJourneyPlaybook(access: JourneyAccessContext, playbookId: string) {
+  if (!canConfigureJourneyPlaybooks(access)) throw new Error('playbook_access_denied')
+  const firestore = requireDb()
+  const playbookRef = doc(firestore, `${journeyCollectionPath(access.organizationId, 'playbooks')}/${playbookId}`)
+  const playbook = await getDoc(playbookRef)
+  if (!playbook.exists() || asString(playbook.data().status) !== 'active') throw new Error('playbook_not_active')
+  const ref = doc(firestore, `${journeyCollectionPath(access.organizationId, 'settings')}/playbook`)
+  const existing = await getDoc(ref)
+  const payload = {
+    organizationId: access.organizationId,
+    activePlaybookId: playbookId,
+    updatedAt: serverTimestamp(),
+    updatedBy: access.userId,
+  }
   const batch = writeBatch(firestore)
   if (existing.exists()) batch.update(ref, payload)
   else batch.set(ref, payload)
@@ -1639,17 +1759,25 @@ export async function listImplementationCycles(organizationId: string, congregat
 
   const cycles = await Promise.all(snapshot.docs.map(async (item): Promise<JourneyImplementationCycle> => {
     const data = item.data()
-    const steps = await getDocs(collection(firestore, `${basePath}/${item.id}/steps`))
+    const playbookId = asString(data.playbookId) || JOURNEY_PLAYBOOK_DEFAULT_ID
+    const [steps, playbook] = await Promise.all([
+      getDocs(collection(firestore, `${basePath}/${item.id}/steps`)),
+      getDoc(doc(firestore, `${journeyCollectionPath(organizationId, 'playbooks')}/${playbookId}`)),
+    ])
     const completedKeys = steps.docs
       .map((step) => asString(step.data().key))
       .filter(Boolean)
       .sort()
+    const requiredKeys = playbook.exists()
+      ? asStringArray(playbook.data().implementationKeys)
+      : (playbookId === JOURNEY_PLAYBOOK_DEFAULT_ID ? createRaizEMesaPlaybook(organizationId).implementationKeys : [])
+    const completed = requiredKeys.length > 0 && requiredKeys.every((key) => completedKeys.includes(key))
     return {
       id: item.id,
       organizationId,
       congregationId,
-      playbookId: 'raiz_e_mesa_2026',
-      status: completedKeys.length >= 46 ? 'completed' : 'active',
+      playbookId,
+      status: completed ? 'completed' : 'active',
       completedKeys,
       startedAt: toIso(data.startedAt),
       createdAt: data.createdAt ? toIso(data.createdAt) : undefined,
@@ -1663,14 +1791,20 @@ export async function listImplementationCycles(organizationId: string, congregat
   return cycles.sort((a, b) => Date.parse(b.startedAt) - Date.parse(a.startedAt))
 }
 
-export async function createImplementationCycle(input: { organizationId: string; congregationId: string; actorId: string }) {
+export async function createImplementationCycle(input: {
+  organizationId: string
+  congregationId: string
+  actorId: string
+  playbookId?: string
+}) {
   const firestore = requireDb()
-  const cycleRef = doc(firestore, `${journeyCollectionPath(input.organizationId, 'implementationCycles')}/${input.congregationId}-raiz-e-mesa-2026`)
+  const playbookId = asString(input.playbookId) || JOURNEY_PLAYBOOK_DEFAULT_ID
+  const cycleRef = doc(collection(firestore, journeyCollectionPath(input.organizationId, 'implementationCycles')))
   const batch = writeBatch(firestore)
   batch.set(cycleRef, {
     organizationId: input.organizationId,
     congregationId: input.congregationId,
-    playbookId: 'raiz_e_mesa_2026',
+    playbookId,
     status: 'active',
     startedAt: serverTimestamp(),
     createdAt: serverTimestamp(),
