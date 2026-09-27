@@ -15,6 +15,7 @@ export type JourneyRoute =
   | 'discipleship'
   | 'milestones'
   | 'implementation'
+  | 'implementation-control'
   | 'playbook-studio'
   | 'team'
   | 'settings'
@@ -61,6 +62,8 @@ export function resolveJourneyRoute(pathname: string): JourneyRoute {
       return 'milestones'
     case '/implementation-runtime':
       return 'implementation'
+    case '/implementation-control':
+      return 'implementation-control'
     case '/playbook-studio':
       return 'playbook-studio'
     case '/team-runtime':
