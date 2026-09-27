@@ -1018,6 +1018,29 @@ service cloud.firestore {
           'key', 'completedAt', 'completedBy'
         ]);
     }
+    function canManageImplementationEventScope(orgId, congregationId) {
+      let active = membershipIsActive(orgId);
+      let memberData = active ? membership(orgId) : {};
+      let roleName = active
+        ? memberData.get('journeyRole', memberData.get('organizationRole', memberData.get('role', 'member')))
+        : '';
+      let permissions = active ? memberData.get('permissions', {}) : {};
+      let privileged = isSystemAdmin() || isOwner(orgId);
+      let inScope = privileged || (
+        active && (
+          roleName in ['owner', 'admin', 'pastor', 'data_admin']
+          || congregationId in memberData.get('congregationIds', [])
+        )
+      );
+      let canManage = privileged || (
+        active && (
+          roleName in ['owner', 'admin', 'pastor', 'coordinator']
+          || permissions.get('canManageImplementation', false) == true
+        )
+      );
+      return hasProductAccess(orgId) && inScope && canManage;
+    }
+
     function validImplementationEventCreate(orgId, eventId) {
       let congregationId = request.resource.data.get('congregationId', '');
       let cycleId = request.resource.data.get('cycleId', '');
@@ -1035,6 +1058,7 @@ service cloud.firestore {
         ])
         && tenantCreate(orgId)
         && congregationId is string && congregationId.size() > 0
+        && canManageImplementationEventScope(orgId, congregationId)
         && cycleId is string && cycleId.size() > 0
         && playbookId is string && playbookId.size() > 0
         && phaseId is string && phaseId.size() > 0 && phaseId.size() <= 80
@@ -1825,9 +1849,7 @@ service cloud.firestore {
         match /implementationEvents/{eventId} {
           allow read: if canManageImplementation(orgId)
             && canAccessCongregation(orgId, resource.data.get('congregationId', ''));
-          allow create: if canManageImplementation(orgId)
-            && canAccessCongregation(orgId, request.resource.data.get('congregationId', ''))
-            && validImplementationEventCreate(orgId, eventId);
+          allow create: if validImplementationEventCreate(orgId, eventId);
           allow update, delete: if false;
         }
         match /groups/{groupId} {
