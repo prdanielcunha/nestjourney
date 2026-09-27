@@ -504,6 +504,7 @@ service cloud.firestore {
       let implementationKeys = request.resource.data.get('implementationKeys', []);
       let stageIds = request.resource.data.get('stageIds', []);
       let stageRoles = request.resource.data.get('stageRoles', {});
+      let implementationPhaseIds = request.resource.data.get('implementationPhaseIds', []);
       return request.resource.data.get('organizationId', '') == orgId
         && request.resource.data.get('schemaVersion', 0) == 1
         && request.resource.data.get('name', '') is string
@@ -532,6 +533,7 @@ service cloud.firestore {
         && implementationKeys is list && implementationKeys.size() > 0 && implementationKeys.size() <= 120
         && stageIds is list && stageIds.size() > 0 && stageIds.size() <= 20
         && stageRoles is map
+        && implementationPhaseIds is list && implementationPhaseIds.size() > 0 && implementationPhaseIds.size() <= 16
         && request.resource.data.get('updatedAt', null) == request.time
         && request.resource.data.get('updatedBy', '') == request.auth.uid;
     }
@@ -542,7 +544,7 @@ service cloud.firestore {
         && request.resource.data.keys().hasOnly([
           'organizationId', 'schemaVersion', 'name', 'description', 'status',
           'carePromiseHours', 'discipleshipMeetingCount', 'areaLabels', 'stages',
-          'stageIds', 'stageRoles', 'indicators', 'routingRules', 'implementationPhases', 'implementationKeys',
+          'stageIds', 'stageRoles', 'implementationPhaseIds', 'indicators', 'routingRules', 'implementationPhases', 'implementationKeys',
           'createdAt', 'createdBy', 'updatedAt', 'updatedBy'
         ]);
     }
@@ -554,7 +556,7 @@ service cloud.firestore {
         && request.resource.data.keys().hasOnly([
           'organizationId', 'schemaVersion', 'name', 'description', 'status',
           'carePromiseHours', 'discipleshipMeetingCount', 'areaLabels', 'stages',
-          'stageIds', 'stageRoles', 'indicators', 'routingRules', 'implementationPhases', 'implementationKeys',
+          'stageIds', 'stageRoles', 'implementationPhaseIds', 'indicators', 'routingRules', 'implementationPhases', 'implementationKeys',
           'createdAt', 'createdBy', 'updatedAt', 'updatedBy'
         ]);
     }
@@ -1016,6 +1018,72 @@ service cloud.firestore {
           'key', 'completedAt', 'completedBy'
         ]);
     }
+    function validImplementationEventCreate(orgId, eventId) {
+      let congregationId = request.resource.data.get('congregationId', '');
+      let cycleId = request.resource.data.get('cycleId', '');
+      let playbookId = request.resource.data.get('playbookId', '');
+      let phaseId = request.resource.data.get('phaseId', '');
+      let eventType = request.resource.data.get('eventType', '');
+      let memberId = request.resource.data.get('memberId', '');
+      let memberName = request.resource.data.get('memberName', '');
+      let decision = request.resource.data.get('decision', '');
+      let scheduledFor = request.resource.data.get('scheduledFor', null);
+      let cyclePath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/implementationCycles/$(cycleId);
+      let playbookPath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/playbooks/$(playbookId);
+      let cycleData = get(cyclePath).data;
+      let playbookData = get(playbookPath).data;
+      return request.resource.data.keys().hasOnly([
+          'organizationId', 'congregationId', 'cycleId', 'playbookId', 'phaseId',
+          'eventType', 'scheduledFor', 'memberId', 'memberName', 'decision',
+          'actorId', 'createdAt'
+        ])
+        && tenantCreate(orgId)
+        && congregationId is string && congregationId.size() > 0
+        && cycleId is string && cycleId.size() > 0
+        && playbookId is string && playbookId.size() > 0
+        && phaseId is string && phaseId.size() > 0 && phaseId.size() <= 80
+        && eventType in ['scheduled', 'owner_assigned', 'attendance_confirmed', 'decision']
+        && request.resource.data.get('actorId', '') == request.auth.uid
+        && request.resource.data.get('createdAt', null) == request.time
+        && exists(cyclePath)
+        && cycleData.get('congregationId', '') == congregationId
+        && cycleData.get('playbookId', '') == playbookId
+        && exists(playbookPath)
+        && playbookData.get('status', '') == 'active'
+        && phaseId in playbookData.get('implementationPhaseIds', [])
+        && (
+          (
+            eventType == 'scheduled'
+            && scheduledFor is timestamp
+            && memberId == ''
+            && memberName == ''
+            && decision == ''
+          )
+          || (
+            eventType == 'owner_assigned'
+            && scheduledFor == null
+            && memberId is string && memberId.size() > 0 && memberId.size() <= 256
+            && memberName is string && memberName.size() <= 80
+            && decision == ''
+          )
+          || (
+            eventType == 'attendance_confirmed'
+            && eventId == cycleId + '__' + phaseId + '__attendance__' + memberId
+            && scheduledFor == null
+            && memberId is string && memberId.size() > 0 && memberId.size() <= 256
+            && memberName is string && memberName.size() <= 80
+            && decision == ''
+          )
+          || (
+            eventType == 'decision'
+            && scheduledFor == null
+            && memberId == ''
+            && memberName == ''
+            && decision in ['advance', 'repeat', 'pause']
+          )
+        );
+    }
+
     function canOperateJourneyMilestone(orgId, congregationId, playbookId, stageId) {
       let active = membershipIsActive(orgId);
       let memberData = active ? membership(orgId) : {};
@@ -1757,6 +1825,14 @@ service cloud.firestore {
               && validImplementationStepCreate(orgId, cycleId, stepId);
             allow update, delete: if false;
           }
+        }
+        match /implementationEvents/{eventId} {
+          allow read: if canManageImplementation(orgId)
+            && canAccessCongregation(orgId, resource.data.get('congregationId', ''));
+          allow create: if canManageImplementation(orgId)
+            && canAccessCongregation(orgId, request.resource.data.get('congregationId', ''))
+            && validImplementationEventCreate(orgId, eventId);
+          allow update, delete: if false;
         }
         match /groups/{groupId} {
           allow read: if canAccessCongregation(orgId, resource.data.get('congregationId', ''));
