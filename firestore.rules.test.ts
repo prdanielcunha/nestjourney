@@ -1152,6 +1152,8 @@ describe('Implementation Runtime rules', () => {
         {id:'welcome',label:'Chegada',kind:'presence',entryCriteria:'Chegou',completionCriteria:'Acolhido',responsibleRoles:['presence_host'],requiredFields:['name']},
         {id:'community',label:'Comunidade',kind:'groups',entryCriteria:'Interesse',completionCriteria:'Entrou em PG',responsibleRoles:['group_leader'],requiredFields:['name']},
       ],
+      stageIds:['welcome','community'],
+      stageRoles:{welcome:['presence_host'],community:['group_leader']},
       indicators:['care_debt'],
       routingRules:['visitor_to_first_contact'],
       implementationPhases:[
@@ -1200,6 +1202,7 @@ describe('Implementation Runtime rules', () => {
       carePromiseHours:48,discipleshipMeetingCount:7,
       areaLabels:{presence:'P',table:'T',care:'C',groups:'G',discipleship:'D'},
       stages:[{id:'s',label:'S',kind:'custom',entryCriteria:'',completionCriteria:'',responsibleRoles:[],requiredFields:['name']}],
+      stageIds:['s'],stageRoles:{s:[]},
       indicators:[],routingRules:[],
       implementationPhases:[{id:'p',title:'P',objective:'',items:['A']}],
       implementationKeys:['phase.p.item.1'],
@@ -1214,6 +1217,82 @@ describe('Implementation Runtime rules', () => {
   })
 })
 
+
+
+describe('Journey milestone rules', () => {
+  async function seedMilestonePlaybook() {
+    await environment.withSecurityRulesDisabled(async (context) => {
+      const db=context.firestore()
+      await setDoc(doc(db,'organizations/org-a/products/raiz_e_mesa/playbooks/milestones'),{
+        organizationId:'org-a',
+        schemaVersion:1,
+        name:'Jornada de marcos',
+        description:'Etapas configuráveis depois da integração.',
+        status:'active',
+        carePromiseHours:48,
+        discipleshipMeetingCount:7,
+        areaLabels:{presence:'Recepção',table:'Mesa',care:'Cuidado',groups:'PG',discipleship:'Raiz'},
+        stages:[
+          {id:'service',label:'Vida & Serviço',kind:'service',entryCriteria:'Interesse explícito',completionCriteria:'Encaminhamento concluído',responsibleRoles:['coordinator'],requiredFields:['name']},
+          {id:'multiplication',label:'Multiplicação',kind:'multiplication',entryCriteria:'Formação iniciada',completionCriteria:'Responsabilidade confirmada',responsibleRoles:['pastor'],requiredFields:['name']},
+        ],
+        stageIds:['service','multiplication'],
+        stageRoles:{service:['coordinator'],multiplication:['pastor']},
+        indicators:[],
+        routingRules:[],
+        implementationPhases:[{id:'prepare',title:'Preparar',objective:'Preparar',items:['Definir responsáveis']}],
+        implementationKeys:['phase.prepare.item.1'],
+        createdAt:new Date(),createdBy:'owner',
+        updatedAt:new Date(),updatedBy:'owner',
+      })
+      await setDoc(doc(db,'organizations/org-a/products/raiz_e_mesa/people/person-milestone'),{
+        organizationId:'org-a',congregationId:'unit-a',name:'Pessoa Marco',
+      })
+    })
+  }
+
+  it('lets the configured responsible role start and complete a factual milestone', async () => {
+    await seedMembership('coord-milestone','org-a','coordinator',['unit-a'])
+    await seedMilestonePlaybook()
+    const db=environment.authenticatedContext('coord-milestone').firestore()
+    const ref=doc(db,'organizations/org-a/products/raiz_e_mesa/journeyMilestones/person-milestone__service')
+    await assertSucceeds(setDoc(ref,{
+      organizationId:'org-a',congregationId:'unit-a',personId:'person-milestone',personName:'Pessoa Marco',
+      playbookId:'milestones',stageId:'service',stageLabel:'Vida & Serviço',status:'active',
+      startedAt:serverTimestamp(),startedBy:'coord-milestone',completedAt:null,completedBy:'',
+      updatedAt:serverTimestamp(),updatedBy:'coord-milestone',
+    }))
+    await assertSucceeds(updateDoc(ref,{
+      status:'completed',completedAt:serverTimestamp(),completedBy:'coord-milestone',
+      updatedAt:serverTimestamp(),updatedBy:'coord-milestone',
+    }))
+    await assertFails(updateDoc(ref,{stageId:'multiplication'}))
+  })
+
+  it('rejects an unrelated role, an undeclared stage, and cross-scope milestone creation', async () => {
+    await seedMembership('care-milestone','org-a','care',['unit-a'])
+    await seedMilestonePlaybook()
+    const db=environment.authenticatedContext('care-milestone').firestore()
+    const base={
+      organizationId:'org-a',congregationId:'unit-a',personId:'person-milestone',personName:'Pessoa Marco',
+      playbookId:'milestones',stageLabel:'Vida & Serviço',status:'active',
+      startedAt:serverTimestamp(),startedBy:'care-milestone',completedAt:null,completedBy:'',
+      updatedAt:serverTimestamp(),updatedBy:'care-milestone',
+    }
+    await assertFails(setDoc(
+      doc(db,'organizations/org-a/products/raiz_e_mesa/journeyMilestones/person-milestone__service'),
+      {...base,stageId:'service'},
+    ))
+    await assertFails(setDoc(
+      doc(db,'organizations/org-a/products/raiz_e_mesa/journeyMilestones/person-milestone__invented'),
+      {...base,stageId:'invented',stageLabel:'Inventada'},
+    ))
+    await assertFails(setDoc(
+      doc(db,'organizations/org-a/products/raiz_e_mesa/journeyMilestones/person-milestone__service'),
+      {...base,stageId:'service',congregationId:'unit-b'},
+    ))
+  })
+})
 
 
 describe('Governance Runtime rules', () => {
