@@ -873,11 +873,14 @@ export async function ensureDefaultJourneyPlaybook(access: JourneyAccessContext)
   if (snapshot.exists()) {
     const current = playbookFromSnapshot(access.organizationId, snapshot.id, snapshot.data())
     const data = snapshot.data()
-    const hasStageIndexes = Array.isArray(data.stageIds) && data.stageRoles && typeof data.stageRoles === 'object'
-    if (!hasStageIndexes && canConfigureJourneyPlaybooks(access)) {
+    const hasIndexes = Array.isArray(data.stageIds)
+      && data.stageRoles && typeof data.stageRoles === 'object'
+      && Array.isArray(data.implementationPhaseIds)
+    if (!hasIndexes && canConfigureJourneyPlaybooks(access)) {
       await updateDoc(ref, {
         stageIds: current.stages.map((stage) => stage.id),
         stageRoles: Object.fromEntries(current.stages.map((stage) => [stage.id, stage.responsibleRoles])),
+        implementationPhaseIds: current.implementationPhases.map((phase) => phase.id),
         updatedAt: serverTimestamp(),
         updatedBy: access.userId,
       })
@@ -891,6 +894,7 @@ export async function ensureDefaultJourneyPlaybook(access: JourneyAccessContext)
     ...fallback,
     stageIds: fallback.stages.map((stage) => stage.id),
     stageRoles: Object.fromEntries(fallback.stages.map((stage) => [stage.id, stage.responsibleRoles])),
+    implementationPhaseIds: fallback.implementationPhases.map((phase) => phase.id),
     createdAt: serverTimestamp(),
     createdBy: access.userId,
     updatedAt: serverTimestamp(),
@@ -920,6 +924,7 @@ export async function saveJourneyPlaybook(access: JourneyAccessContext, input: J
     stages: playbook.stages,
     stageIds: playbook.stages.map((stage) => stage.id),
     stageRoles: Object.fromEntries(playbook.stages.map((stage) => [stage.id, stage.responsibleRoles])),
+    implementationPhaseIds: playbook.implementationPhases.map((phase) => phase.id),
     indicators: playbook.indicators,
     routingRules: playbook.routingRules,
     implementationPhases: playbook.implementationPhases,
@@ -2127,18 +2132,31 @@ export async function confirmImplementationAttendance(input: {
   memberId: string
   memberName: string
 }) {
-  if (!input.memberId.trim()) throw new Error('missing_implementation_attendee')
-  return appendImplementationEvent({
+  const memberId = input.memberId.trim()
+  if (!memberId) throw new Error('missing_implementation_attendee')
+  const firestore = requireDb()
+  const safePhase = input.phaseId.trim().slice(0,80)
+  const id = input.cycle.id + '__' + safePhase + '__attendance__' + memberId
+  const ref = doc(firestore, journeyCollectionPath(input.cycle.organizationId, 'implementationEvents') + '/' + id)
+  const existing = await getDoc(ref)
+  if (existing.exists()) return id
+  const batch = writeBatch(firestore)
+  batch.set(ref, {
     organizationId: input.cycle.organizationId,
     congregationId: input.cycle.congregationId,
     cycleId: input.cycle.id,
     playbookId: input.cycle.playbookId,
-    phaseId: input.phaseId,
-    actorId: input.actorId,
+    phaseId: safePhase,
     eventType: 'attendance_confirmed',
-    memberId: input.memberId,
-    memberName: input.memberName,
+    scheduledFor: null,
+    memberId: memberId.slice(0,256),
+    memberName: input.memberName.trim().slice(0,80),
+    decision: '',
+    actorId: input.actorId,
+    createdAt: serverTimestamp(),
   })
+  await batch.commit()
+  return id
 }
 
 export async function recordImplementationDecision(input: {
