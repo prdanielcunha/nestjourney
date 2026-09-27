@@ -23,6 +23,7 @@ const GroupsRuntimePage = lazy(() => import('./GroupsRuntimePage.tsx'))
 const DiscipleshipRuntimePage = lazy(() => import('./DiscipleshipRuntimePage.tsx'))
 const JourneyMilestonesPage = lazy(() => import('./JourneyMilestonesPage.tsx'))
 const ImplementationRuntimePage = lazy(() => import('./ImplementationRuntimePage.tsx'))
+const ImplementationControlPage = lazy(() => import('./ImplementationControlPage.tsx'))
 const PlaybookStudioPage = lazy(() => import('./PlaybookStudioPage.tsx'))
 const TeamSetupPage = lazy(() => import('./TeamSetupPage.tsx'))
 const JourneySettingsPage = lazy(() => import('./JourneySettingsPage.tsx'))
@@ -105,6 +106,8 @@ function JourneyRoute() {
       return <JourneyMilestonesPage />
     case 'implementation':
       return <ImplementationRuntimePage />
+    case 'implementation-control':
+      return <ImplementationControlPage />
     case 'playbook-studio':
       return <PlaybookStudioPage />
     case 'team':
