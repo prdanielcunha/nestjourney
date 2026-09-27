@@ -1012,7 +1012,7 @@ service cloud.firestore {
         && (customKeyAllowed || legacyKeyAllowed)
         && request.resource.data.get('completedAt', null) == request.time
         && request.resource.data.get('completedBy', '') == request.auth.uid
-        && request.resource.data.get('congregationId', '') == cycleData.get('congregationId', '')
+        && request.resource.data.get('congregationId', '') == get(cyclePath).data.get('congregationId', '')
         && request.resource.data.keys().hasOnly([
           'organizationId', 'congregationId', 'cycleId', 'playbookId',
           'key', 'completedAt', 'completedBy'
@@ -1025,13 +1025,9 @@ service cloud.firestore {
       let phaseId = request.resource.data.get('phaseId', '');
       let eventType = request.resource.data.get('eventType', '');
       let memberId = request.resource.data.get('memberId', '');
-      let memberName = request.resource.data.get('memberName', '');
       let decision = request.resource.data.get('decision', '');
-      let scheduledFor = request.resource.data.get('scheduledFor', null);
       let cyclePath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/implementationCycles/$(cycleId);
       let playbookPath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/playbooks/$(playbookId);
-      let cycleData = get(cyclePath).data;
-      let playbookData = get(playbookPath).data;
       return request.resource.data.keys().hasOnly([
           'organizationId', 'congregationId', 'cycleId', 'playbookId', 'phaseId',
           'eventType', 'scheduledFor', 'memberId', 'memberName', 'decision',
@@ -1046,39 +1042,39 @@ service cloud.firestore {
         && request.resource.data.get('actorId', '') == request.auth.uid
         && request.resource.data.get('createdAt', null) == request.time
         && exists(cyclePath)
-        && cycleData.get('congregationId', '') == congregationId
-        && cycleData.get('playbookId', '') == playbookId
+        && get(cyclePath).data.get('congregationId', '') == congregationId
+        && get(cyclePath).data.get('playbookId', '') == playbookId
         && exists(playbookPath)
-        && playbookData.get('status', '') == 'active'
-        && phaseId in playbookData.get('implementationPhaseIds', [])
+        && get(playbookPath).data.get('status', '') == 'active'
+        && phaseId in get(playbookPath).data.get('implementationPhaseIds', [])
         && (
           (
             eventType == 'scheduled'
-            && scheduledFor is timestamp
+            && request.resource.data.get('scheduledFor', null) is timestamp
             && memberId == ''
-            && memberName == ''
+            && request.resource.data.get('memberName', '') == ''
             && decision == ''
           )
           || (
             eventType == 'owner_assigned'
-            && scheduledFor == null
+            && request.resource.data.get('scheduledFor', null) == null
             && memberId is string && memberId.size() > 0 && memberId.size() <= 256
-            && memberName is string && memberName.size() <= 80
+            && request.resource.data.get('memberName', '') is string && request.resource.data.get('memberName', '').size() <= 80
             && decision == ''
           )
           || (
             eventType == 'attendance_confirmed'
             && eventId == cycleId + '__' + phaseId + '__attendance__' + memberId
-            && scheduledFor == null
+            && request.resource.data.get('scheduledFor', null) == null
             && memberId is string && memberId.size() > 0 && memberId.size() <= 256
-            && memberName is string && memberName.size() <= 80
+            && request.resource.data.get('memberName', '') is string && request.resource.data.get('memberName', '').size() <= 80
             && decision == ''
           )
           || (
             eventType == 'decision'
-            && scheduledFor == null
+            && request.resource.data.get('scheduledFor', null) == null
             && memberId == ''
-            && memberName == ''
+            && request.resource.data.get('memberName', '') == ''
             && decision in ['advance', 'repeat', 'pause']
           )
         );
@@ -1112,7 +1108,7 @@ service cloud.firestore {
       );
       return hasProductAccess(orgId)
         && exists(playbookPath)
-        && playbookData.get('status', '') == 'active'
+        && get(playbookPath).data.get('status', '') == 'active'
         && stageId in playbookData.get('stageIds', [])
         && inScope
         && allowed;
