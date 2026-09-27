@@ -850,7 +850,20 @@ export async function ensureDefaultJourneyPlaybook(access: JourneyAccessContext)
   const firestore = requireDb()
   const ref = doc(firestore, `${journeyCollectionPath(access.organizationId, 'playbooks')}/${JOURNEY_PLAYBOOK_DEFAULT_ID}`)
   const snapshot = await getDoc(ref)
-  if (snapshot.exists()) return playbookFromSnapshot(access.organizationId, snapshot.id, snapshot.data())
+  if (snapshot.exists()) {
+    const current = playbookFromSnapshot(access.organizationId, snapshot.id, snapshot.data())
+    const data = snapshot.data()
+    const hasStageIndexes = Array.isArray(data.stageIds) && data.stageRoles && typeof data.stageRoles === 'object'
+    if (!hasStageIndexes && canConfigureJourneyPlaybooks(access)) {
+      await updateDoc(ref, {
+        stageIds: current.stages.map((stage) => stage.id),
+        stageRoles: Object.fromEntries(current.stages.map((stage) => [stage.id, stage.responsibleRoles])),
+        updatedAt: serverTimestamp(),
+        updatedBy: access.userId,
+      })
+    }
+    return current
+  }
   const fallback = createRaizEMesaPlaybook(access.organizationId)
   if (!canConfigureJourneyPlaybooks(access)) return fallback
   const batch = writeBatch(firestore)
