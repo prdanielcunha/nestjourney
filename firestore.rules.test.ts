@@ -1160,6 +1160,7 @@ describe('Implementation Runtime rules', () => {
         {id:'prepare',title:'Preparar',objective:'Preparar equipe',items:['Definir responsáveis','Treinar']},
       ],
       implementationKeys:['phase.prepare.item.1','phase.prepare.item.2'],
+      implementationPhaseIds:['prepare'],
       createdAt:serverTimestamp(),
       createdBy:'owner-playbook',
       updatedAt:serverTimestamp(),
@@ -1206,7 +1207,83 @@ describe('Implementation Runtime rules', () => {
       indicators:[],routingRules:[],
       implementationPhases:[{id:'p',title:'P',objective:'',items:['A']}],
       implementationKeys:['phase.p.item.1'],
+      implementationPhaseIds:['p'],
       createdAt:serverTimestamp(),createdBy:'coord-no-config',updatedAt:serverTimestamp(),updatedBy:'coord-no-config',
+    }))
+  })
+
+  it('records schedule, owner, attendance and human rollout decisions as append-only events', async () => {
+    await seedMembership('coord-control','org-a','coordinator',['unit-a'])
+    await environment.withSecurityRulesDisabled(async (context) => {
+      const db=context.firestore()
+      await setDoc(doc(db,'organizations/org-a/products/raiz_e_mesa/playbooks/control-playbook'),{
+        organizationId:'org-a',schemaVersion:1,name:'Control',description:'',status:'active',
+        carePromiseHours:48,discipleshipMeetingCount:7,
+        areaLabels:{presence:'P',table:'T',care:'C',groups:'G',discipleship:'D'},
+        stages:[{id:'s',label:'S',kind:'custom',entryCriteria:'',completionCriteria:'',responsibleRoles:['coordinator'],requiredFields:['name']}],
+        stageIds:['s'],stageRoles:{s:['coordinator']},
+        indicators:[],routingRules:[],
+        implementationPhases:[{id:'launch',title:'Launch',objective:'',items:['Treinar']}],
+        implementationKeys:['phase.launch.item.1'],implementationPhaseIds:['launch'],
+        createdAt:new Date(),createdBy:'owner',updatedAt:new Date(),updatedBy:'owner',
+      })
+      await setDoc(doc(db,'organizations/org-a/products/raiz_e_mesa/implementationCycles/cycle-control'),{
+        organizationId:'org-a',congregationId:'unit-a',playbookId:'control-playbook',status:'active',
+        startedAt:new Date(),createdAt:new Date(),createdBy:'coord-control',
+      })
+    })
+    const db=environment.authenticatedContext('coord-control').firestore()
+    const base={
+      organizationId:'org-a',congregationId:'unit-a',cycleId:'cycle-control',playbookId:'control-playbook',
+      phaseId:'launch',actorId:'coord-control',createdAt:serverTimestamp(),
+    }
+    await assertSucceeds(setDoc(doc(db,'organizations/org-a/products/raiz_e_mesa/implementationEvents/schedule-a'),{
+      ...base,eventType:'scheduled',scheduledFor:Timestamp.fromDate(new Date('2026-10-01T22:00:00Z')),memberId:'',memberName:'',decision:'',
+    }))
+    await assertSucceeds(setDoc(doc(db,'organizations/org-a/products/raiz_e_mesa/implementationEvents/owner-a'),{
+      ...base,eventType:'owner_assigned',scheduledFor:null,memberId:'leader-a',memberName:'Leader A',decision:'',
+    }))
+    await assertSucceeds(setDoc(doc(db,'organizations/org-a/products/raiz_e_mesa/implementationEvents/cycle-control__launch__attendance__leader-a'),{
+      ...base,eventType:'attendance_confirmed',scheduledFor:null,memberId:'leader-a',memberName:'Leader A',decision:'',
+    }))
+    await assertSucceeds(setDoc(doc(db,'organizations/org-a/products/raiz_e_mesa/implementationEvents/decision-a'),{
+      ...base,eventType:'decision',scheduledFor:null,memberId:'',memberName:'',decision:'advance',
+    }))
+    await assertFails(updateDoc(doc(db,'organizations/org-a/products/raiz_e_mesa/implementationEvents/decision-a'),{decision:'repeat'}))
+  })
+
+  it('rejects implementation control events for undeclared phases, invalid decisions and cross-scope cycles', async () => {
+    await seedMembership('coord-control','org-a','coordinator',['unit-a'])
+    await environment.withSecurityRulesDisabled(async (context) => {
+      const db=context.firestore()
+      await setDoc(doc(db,'organizations/org-a/products/raiz_e_mesa/playbooks/control-playbook'),{
+        organizationId:'org-a',schemaVersion:1,name:'Control',description:'',status:'active',
+        carePromiseHours:48,discipleshipMeetingCount:7,
+        areaLabels:{presence:'P',table:'T',care:'C',groups:'G',discipleship:'D'},
+        stages:[{id:'s',label:'S',kind:'custom',entryCriteria:'',completionCriteria:'',responsibleRoles:['coordinator'],requiredFields:['name']}],
+        stageIds:['s'],stageRoles:{s:['coordinator']},indicators:[],routingRules:[],
+        implementationPhases:[{id:'launch',title:'Launch',objective:'',items:['Treinar']}],
+        implementationKeys:['phase.launch.item.1'],implementationPhaseIds:['launch'],
+        createdAt:new Date(),createdBy:'owner',updatedAt:new Date(),updatedBy:'owner',
+      })
+      await setDoc(doc(db,'organizations/org-a/products/raiz_e_mesa/implementationCycles/cycle-control'),{
+        organizationId:'org-a',congregationId:'unit-a',playbookId:'control-playbook',status:'active',
+        startedAt:new Date(),createdAt:new Date(),createdBy:'coord-control',
+      })
+    })
+    const db=environment.authenticatedContext('coord-control').firestore()
+    const base={
+      organizationId:'org-a',congregationId:'unit-a',cycleId:'cycle-control',playbookId:'control-playbook',
+      actorId:'coord-control',createdAt:serverTimestamp(),scheduledFor:null,memberId:'',memberName:'',
+    }
+    await assertFails(setDoc(doc(db,'organizations/org-a/products/raiz_e_mesa/implementationEvents/bad-phase'),{
+      ...base,phaseId:'invented',eventType:'decision',decision:'advance',
+    }))
+    await assertFails(setDoc(doc(db,'organizations/org-a/products/raiz_e_mesa/implementationEvents/bad-decision'),{
+      ...base,phaseId:'launch',eventType:'decision',decision:'force',
+    }))
+    await assertFails(setDoc(doc(db,'organizations/org-a/products/raiz_e_mesa/implementationEvents/cross-scope'),{
+      ...base,congregationId:'unit-b',phaseId:'launch',eventType:'decision',decision:'advance',
     }))
   })
 
@@ -1242,6 +1319,7 @@ describe('Journey milestone rules', () => {
         routingRules:[],
         implementationPhases:[{id:'prepare',title:'Preparar',objective:'Preparar',items:['Definir responsáveis']}],
         implementationKeys:['phase.prepare.item.1'],
+        implementationPhaseIds:['prepare'],
         createdAt:new Date(),createdBy:'owner',
         updatedAt:new Date(),updatedBy:'owner',
       })

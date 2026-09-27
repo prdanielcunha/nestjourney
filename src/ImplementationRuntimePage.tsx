@@ -42,9 +42,9 @@ function genericProgress(requiredKeys:string[],completedKeys:string[]){
 }
 
 const extraCopy={
-  'pt-BR':{studio:'Configurar jornada',activePlaybook:'Jornada ativa',customIntro:'Esta organização usa uma implantação configurada. Conclua somente fatos realmente executados; o histórico permanece auditável.',phase:'Fase',startNamed:'Iniciar implantação',noSteps:'Esta jornada ainda não possui um checklist de implantação válido.'},
-  en:{studio:'Configure journey',activePlaybook:'Active journey',customIntro:'This organization uses a configured implementation. Complete only work that actually happened; history remains auditable.',phase:'Phase',startNamed:'Start implementation',noSteps:'This journey does not yet have a valid implementation checklist.'},
-  es:{studio:'Configurar jornada',activePlaybook:'Jornada activa',customIntro:'Esta organización usa una implementación configurada. Completa solo hechos realmente ejecutados; el historial permanece auditable.',phase:'Fase',startNamed:'Iniciar implementación',noSteps:'Esta jornada todavía no tiene una lista de implementación válida.'},
+  'pt-BR':{studio:'Configurar jornada',control:'Controle da implantação',activePlaybook:'Jornada ativa',customIntro:'Esta organização usa uma implantação configurada. Conclua somente fatos realmente executados; o histórico permanece auditável.',phase:'Fase',startNamed:'Iniciar implantação',noSteps:'Esta jornada ainda não possui um checklist de implantação válido.'},
+  en:{studio:'Configure journey',control:'Implementation control',activePlaybook:'Active journey',customIntro:'This organization uses a configured implementation. Complete only work that actually happened; history remains auditable.',phase:'Phase',startNamed:'Start implementation',noSteps:'This journey does not yet have a valid implementation checklist.'},
+  es:{studio:'Configurar jornada',control:'Control de implementación',activePlaybook:'Jornada activa',customIntro:'Esta organización usa una implementación configurada. Completa solo hechos realmente ejecutados; el historial permanece auditable.',phase:'Fase',startNamed:'Iniciar implementación',noSteps:'Esta jornada todavía no tiene una lista de implementación válida.'},
 } as const
 
 export default function ImplementationRuntimePage() {
@@ -176,7 +176,7 @@ export default function ImplementationRuntimePage() {
 
   return <main className="implementation-runtime"><div className="implementation-shell">
     <header className="implementation-topbar"><div className="implementation-brand"><img src="/brand/nestjourney-symbol-light.png" alt=""/><span><strong>{t.product}</strong><small>Journey & Care Engine</small></span></div><div className="implementation-actions"><a href="/more"><ChevronLeft size={16}/>{t.back}</a><select value={locale} onChange={e=>{const next=e.target.value as AppLocale;setLocale(next);persistLocale(next)}}>{(Object.keys(localeLabels) as AppLocale[]).map(id=><option key={id} value={id}>{localeLabels[id]}</option>)}</select></div></header>
-    <section className="implementation-hero"><div><span className="implementation-kicker">Journey / Playbook</span><h1>{t.title}</h1><p>{t.subtitle}</p></div><a className="implementation-button" href="/playbook-studio"><Settings2 size={16}/>{x.studio}</a></section>
+    <section className="implementation-hero"><div><span className="implementation-kicker">Journey / Playbook</span><h1>{t.title}</h1><p>{t.subtitle}</p></div><div className="implementation-actions"><a className="implementation-button" href="/implementation-control"><CircleCheck size={16}/>{x.control}</a><a className="implementation-button" href="/playbook-studio"><Settings2 size={16}/>{x.studio}</a></div></section>
     {error?<div className="implementation-error">{error}</div>:null}
 
     <JourneyAreaFocus
