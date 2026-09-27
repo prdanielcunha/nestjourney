@@ -353,6 +353,25 @@ export interface JourneyImplementationCycle {
   completedAt?: string
 }
 
+export type JourneyImplementationDecision = 'advance' | 'repeat' | 'pause'
+export type JourneyImplementationEventType = 'scheduled' | 'owner_assigned' | 'attendance_confirmed' | 'decision'
+
+export interface JourneyImplementationEvent {
+  id: string
+  organizationId: string
+  congregationId: string
+  cycleId: string
+  playbookId: string
+  phaseId: string
+  eventType: JourneyImplementationEventType
+  scheduledFor?: string
+  memberId?: string
+  memberName?: string
+  decision?: JourneyImplementationDecision
+  actorId: string
+  createdAt: string
+}
+
 export interface PresenceSessionRecord extends PresenceSession {
   eventName?: string
   status: 'open' | 'closed'
@@ -569,6 +588,7 @@ export type JourneyLiveCollection =
   | 'privacyRequests'
   | 'audit'
   | 'implementationCycles'
+  | 'implementationEvents'
   | 'retentionRequests'
 
 export function subscribeJourneyLiveChanges(input: {
@@ -1986,6 +2006,157 @@ export async function completeImplementationStep(input: {
     completedBy: input.actorId,
   })
   await batch.commit()
+}
+
+
+export async function listImplementationEvents(
+  organizationId: string,
+  congregationId: string,
+  cycleId: string,
+): Promise<JourneyImplementationEvent[]> {
+  const firestore = requireDb()
+  const snapshot = await getDocs(query(
+    collection(firestore, journeyCollectionPath(organizationId, 'implementationEvents')),
+    where('congregationId', '==', congregationId),
+  ))
+  return snapshot.docs.map((item): JourneyImplementationEvent => {
+    const data = item.data()
+    const eventType: JourneyImplementationEventType =
+      data.eventType === 'scheduled' || data.eventType === 'owner_assigned' || data.eventType === 'attendance_confirmed'
+        ? data.eventType
+        : 'decision'
+    const rawDecision = asString(data.decision)
+    return {
+      id: item.id,
+      organizationId,
+      congregationId,
+      cycleId: asString(data.cycleId),
+      playbookId: asString(data.playbookId),
+      phaseId: asString(data.phaseId),
+      eventType,
+      scheduledFor: data.scheduledFor ? toIso(data.scheduledFor) : undefined,
+      memberId: asString(data.memberId) || undefined,
+      memberName: asString(data.memberName) || undefined,
+      decision: rawDecision === 'advance' || rawDecision === 'repeat' || rawDecision === 'pause' ? rawDecision : undefined,
+      actorId: asString(data.actorId),
+      createdAt: toIso(data.createdAt),
+    }
+  }).filter((item) => item.cycleId === cycleId)
+    .sort((a,b)=>Date.parse(a.createdAt)-Date.parse(b.createdAt))
+}
+
+async function appendImplementationEvent(input: {
+  organizationId: string
+  congregationId: string
+  cycleId: string
+  playbookId: string
+  phaseId: string
+  actorId: string
+  eventType: JourneyImplementationEventType
+  scheduledFor?: Date
+  memberId?: string
+  memberName?: string
+  decision?: JourneyImplementationDecision
+}) {
+  const firestore = requireDb()
+  const ref = doc(collection(firestore, journeyCollectionPath(input.organizationId, 'implementationEvents')))
+  const payload = {
+    organizationId: input.organizationId,
+    congregationId: input.congregationId,
+    cycleId: input.cycleId,
+    playbookId: input.playbookId,
+    phaseId: input.phaseId.trim().slice(0,80),
+    eventType: input.eventType,
+    scheduledFor: input.scheduledFor ? Timestamp.fromDate(input.scheduledFor) : null,
+    memberId: String(input.memberId ?? '').trim().slice(0,256),
+    memberName: String(input.memberName ?? '').trim().slice(0,80),
+    decision: input.decision ?? '',
+    actorId: input.actorId,
+    createdAt: serverTimestamp(),
+  }
+  const batch = writeBatch(firestore)
+  batch.set(ref, payload)
+  await batch.commit()
+  return ref.id
+}
+
+export async function scheduleImplementationPhase(input: {
+  cycle: JourneyImplementationCycle
+  actorId: string
+  phaseId: string
+  scheduledFor: Date
+}) {
+  if (Number.isNaN(input.scheduledFor.getTime())) throw new Error('invalid_implementation_schedule')
+  return appendImplementationEvent({
+    organizationId: input.cycle.organizationId,
+    congregationId: input.cycle.congregationId,
+    cycleId: input.cycle.id,
+    playbookId: input.cycle.playbookId,
+    phaseId: input.phaseId,
+    actorId: input.actorId,
+    eventType: 'scheduled',
+    scheduledFor: input.scheduledFor,
+  })
+}
+
+export async function assignImplementationPhaseOwner(input: {
+  cycle: JourneyImplementationCycle
+  actorId: string
+  phaseId: string
+  memberId: string
+  memberName: string
+}) {
+  if (!input.memberId.trim()) throw new Error('missing_implementation_owner')
+  return appendImplementationEvent({
+    organizationId: input.cycle.organizationId,
+    congregationId: input.cycle.congregationId,
+    cycleId: input.cycle.id,
+    playbookId: input.cycle.playbookId,
+    phaseId: input.phaseId,
+    actorId: input.actorId,
+    eventType: 'owner_assigned',
+    memberId: input.memberId,
+    memberName: input.memberName,
+  })
+}
+
+export async function confirmImplementationAttendance(input: {
+  cycle: JourneyImplementationCycle
+  actorId: string
+  phaseId: string
+  memberId: string
+  memberName: string
+}) {
+  if (!input.memberId.trim()) throw new Error('missing_implementation_attendee')
+  return appendImplementationEvent({
+    organizationId: input.cycle.organizationId,
+    congregationId: input.cycle.congregationId,
+    cycleId: input.cycle.id,
+    playbookId: input.cycle.playbookId,
+    phaseId: input.phaseId,
+    actorId: input.actorId,
+    eventType: 'attendance_confirmed',
+    memberId: input.memberId,
+    memberName: input.memberName,
+  })
+}
+
+export async function recordImplementationDecision(input: {
+  cycle: JourneyImplementationCycle
+  actorId: string
+  phaseId: string
+  decision: JourneyImplementationDecision
+}) {
+  return appendImplementationEvent({
+    organizationId: input.cycle.organizationId,
+    congregationId: input.cycle.congregationId,
+    cycleId: input.cycle.id,
+    playbookId: input.cycle.playbookId,
+    phaseId: input.phaseId,
+    actorId: input.actorId,
+    eventType: 'decision',
+    decision: input.decision,
+  })
 }
 
 export async function listPresenceSessions(organizationId: string, congregationId: string): Promise<PresenceSessionRecord[]> {
