@@ -234,6 +234,24 @@ export interface JourneyPersonRecord extends PresencePerson {
   createdAt?: string
 }
 
+export interface JourneyMilestoneRecord {
+  id: string
+  organizationId: string
+  congregationId: string
+  personId: string
+  personName?: string
+  playbookId: string
+  stageId: string
+  stageLabel: string
+  status: 'active' | 'completed'
+  startedAt: string
+  startedBy: string
+  completedAt?: string
+  completedBy?: string
+  updatedAt?: string
+  updatedBy?: string
+}
+
 export interface JourneyGroupRecord {
   id: string
   organizationId: string
@@ -546,6 +564,7 @@ export type JourneyLiveCollection =
   | 'groupMeetings'
   | 'groupAttendance'
   | 'discipleships'
+  | 'journeyMilestones'
   | 'pastoralHandoffs'
   | 'privacyRequests'
   | 'audit'
@@ -837,6 +856,8 @@ export async function ensureDefaultJourneyPlaybook(access: JourneyAccessContext)
   const batch = writeBatch(firestore)
   batch.set(ref, {
     ...fallback,
+    stageIds: fallback.stages.map((stage) => stage.id),
+    stageRoles: Object.fromEntries(fallback.stages.map((stage) => [stage.id, stage.responsibleRoles])),
     createdAt: serverTimestamp(),
     createdBy: access.userId,
     updatedAt: serverTimestamp(),
@@ -864,6 +885,8 @@ export async function saveJourneyPlaybook(access: JourneyAccessContext, input: J
     discipleshipMeetingCount: playbook.discipleshipMeetingCount,
     areaLabels: playbook.areaLabels,
     stages: playbook.stages,
+    stageIds: playbook.stages.map((stage) => stage.id),
+    stageRoles: Object.fromEntries(playbook.stages.map((stage) => [stage.id, stage.responsibleRoles])),
     indicators: playbook.indicators,
     routingRules: playbook.routingRules,
     implementationPhases: playbook.implementationPhases,
@@ -911,6 +934,107 @@ export async function setActiveJourneyPlaybook(access: JourneyAccessContext, pla
   if (existing.exists()) batch.update(ref, payload)
   else batch.set(ref, payload)
   await batch.commit()
+}
+
+
+export function canOperateJourneyMilestones(access: JourneyAccessContext) {
+  return access.isSystemAdmin
+    || access.isOwner
+    || ['owner','admin','pastor','coordinator'].includes(access.organizationRole)
+    || ['owner','admin','pastor','coordinator'].includes(access.role)
+    || access.permissions.canCoordinateJourney === true
+}
+
+export function canOperateJourneyStage(access: JourneyAccessContext, responsibleRoles: string[]) {
+  if (canOperateJourneyMilestones(access)) return true
+  const normalized = new Set<string>([
+    access.role,
+    access.organizationRole,
+    access.role === 'mesa' ? 'mesa_team' : '',
+    access.role === 'care' ? 'caregiver' : '',
+  ].filter(Boolean))
+  return responsibleRoles.some((role) => normalized.has(role))
+}
+
+export async function listJourneyMilestones(access: JourneyAccessContext, congregationId: string): Promise<JourneyMilestoneRecord[]> {
+  const firestore = requireDb()
+  const snapshot = await getDocs(query(
+    collection(firestore, journeyCollectionPath(access.organizationId, 'journeyMilestones')),
+    where('congregationId', '==', congregationId),
+  ))
+  return snapshot.docs.map((item): JourneyMilestoneRecord => {
+    const data = item.data()
+    return {
+      id: item.id,
+      organizationId: access.organizationId,
+      congregationId: asString(data.congregationId),
+      personId: asString(data.personId),
+      personName: asString(data.personName) || undefined,
+      playbookId: asString(data.playbookId),
+      stageId: asString(data.stageId),
+      stageLabel: asString(data.stageLabel) || asString(data.stageId),
+      status: data.status === 'completed' ? 'completed' : 'active',
+      startedAt: toIso(data.startedAt),
+      startedBy: asString(data.startedBy),
+      completedAt: data.completedAt ? toIso(data.completedAt) : undefined,
+      completedBy: asString(data.completedBy) || undefined,
+      updatedAt: data.updatedAt ? toIso(data.updatedAt) : undefined,
+      updatedBy: asString(data.updatedBy) || undefined,
+    }
+  }).sort((a,b)=>Date.parse(b.startedAt)-Date.parse(a.startedAt))
+}
+
+export async function startJourneyMilestone(input: {
+  access: JourneyAccessContext
+  congregationId: string
+  person: JourneyPersonRecord
+  playbook: JourneyPlaybookDefinition
+  stageId: string
+}) {
+  const stage = input.playbook.stages.find((item) => item.id === input.stageId)
+  if (!stage) throw new Error('journey_stage_not_found')
+  if (!canOperateJourneyStage(input.access, stage.responsibleRoles)) throw new Error('journey_stage_access_denied')
+  const firestore = requireDb()
+  const id = input.person.id + '__' + stage.id
+  const ref = doc(firestore, journeyCollectionPath(input.access.organizationId, 'journeyMilestones') + '/' + id)
+  const existing = await getDoc(ref)
+  if (existing.exists()) return id
+  const batch = writeBatch(firestore)
+  batch.set(ref, {
+    organizationId: input.access.organizationId,
+    congregationId: input.congregationId,
+    personId: input.person.id,
+    personName: input.person.name,
+    playbookId: input.playbook.id,
+    stageId: stage.id,
+    stageLabel: stage.label,
+    status: 'active',
+    startedAt: serverTimestamp(),
+    startedBy: input.access.userId,
+    completedAt: null,
+    completedBy: '',
+    updatedAt: serverTimestamp(),
+    updatedBy: input.access.userId,
+  })
+  await batch.commit()
+  return id
+}
+
+export async function completeJourneyMilestone(input: {
+  access: JourneyAccessContext
+  milestone: JourneyMilestoneRecord
+  responsibleRoles: string[]
+}) {
+  if (!canOperateJourneyStage(input.access, input.responsibleRoles)) throw new Error('journey_stage_access_denied')
+  const firestore = requireDb()
+  const ref = doc(firestore, journeyCollectionPath(input.access.organizationId, 'journeyMilestones') + '/' + input.milestone.id)
+  await updateDoc(ref, {
+    status: 'completed',
+    completedAt: serverTimestamp(),
+    completedBy: input.access.userId,
+    updatedAt: serverTimestamp(),
+    updatedBy: input.access.userId,
+  })
 }
 
 export async function listJourneyCongregations(access: JourneyAccessContext): Promise<JourneyCongregation[]> {
