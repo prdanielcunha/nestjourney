@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { auth } from './firebase'
-import { getActiveJourneyOrganizationId, loadJourneyModuleLabels, type JourneyModuleLabels } from './journeyRepository'
+import { getActiveJourneyOrganizationId, loadActiveJourneyPlaybook, loadJourneyAccess, loadJourneyModuleLabels, type JourneyModuleLabels } from './journeyRepository'
 
 type JourneyLabelsContextValue = {
   labels: JourneyModuleLabels
@@ -23,7 +23,18 @@ export function JourneyLabelsProvider({ children }: { children: ReactNode }) {
       return
     }
     try {
-      setLabels(await loadJourneyModuleLabels(organizationId))
+      const access = await loadJourneyAccess(user.uid, organizationId)
+      const [custom, playbook] = await Promise.all([
+        loadJourneyModuleLabels(organizationId),
+        loadActiveJourneyPlaybook(access),
+      ])
+      setLabels({
+        presence: custom.presence || playbook.areaLabels.presence,
+        table: custom.table || playbook.areaLabels.table,
+        care: custom.care || playbook.areaLabels.care,
+        groups: custom.groups || playbook.areaLabels.groups,
+        discipleship: custom.discipleship || playbook.areaLabels.discipleship,
+      })
     } catch (cause) {
       console.error(cause)
       setLabels({})

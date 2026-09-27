@@ -28,6 +28,7 @@ describe('NestJourney route resolver', () => {
     expect(resolveJourneyRoute('/groups-runtime')).toBe('groups')
     expect(resolveJourneyRoute('/discipleship-runtime')).toBe('discipleship')
     expect(resolveJourneyRoute('/implementation-runtime')).toBe('implementation')
+    expect(resolveJourneyRoute('/playbook-studio')).toBe('playbook-studio')
     expect(resolveJourneyRoute('/team-runtime')).toBe('team')
     expect(resolveJourneyRoute('/settings-runtime')).toBe('settings')
     expect(resolveJourneyRoute('/governance-runtime')).toBe('governance')

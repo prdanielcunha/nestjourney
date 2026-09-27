@@ -31,12 +31,14 @@ export function inferJourneyStep(input:{
   return 0
 }
 
-export function JourneyPath({locale,currentStep,compact=false}:{locale:AppLocale;currentStep?:number;compact?:boolean}){
+export function JourneyPath({locale,currentStep,compact=false,steps}:{locale:AppLocale;currentStep?:number;compact?:boolean;steps?:string[]}){
   const t=copy[locale]
+  const visibleSteps=steps?.filter(Boolean).slice(0,20)??[]
+  const pathSteps=visibleSteps.length?visibleSteps:t.steps
   return <section className={'journey-path '+(compact?'compact':'')} aria-label={t.title}>
     <div className="journey-path-head"><strong>{t.title}</strong><span>{t.note}</span></div>
     <div className="journey-path-track">
-      {t.steps.map((step,index)=>{
+      {pathSteps.map((step,index)=>{
         const known=typeof currentStep==='number'
         const state=!known?'neutral':index===currentStep?'current':index<currentStep?'before':'after'
         return <div className={'journey-path-step '+state} key={step}>
