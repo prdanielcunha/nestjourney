@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { ArrowRight, HeartHandshake, House, Leaf, ShieldCheck, UserCheck, UsersRound } from 'lucide-react'
+import { ArrowRight, HeartHandshake, House, Leaf, Route, ShieldCheck, UserCheck, UsersRound } from 'lucide-react'
 import { auth } from './firebase'
-import { getActiveJourneyOrganizationId, loadJourneyAccess, type JourneyAccessContext } from './journeyRepository'
+import { canOperateJourneyStage, getActiveJourneyOrganizationId, loadActiveJourneyPlaybook, loadJourneyAccess, type JourneyAccessContext } from './journeyRepository'
+import type { JourneyPlaybookDefinition } from './playbookEngine'
 import { canOpenJourneyArea } from './journeyExperience'
 import { getInitialLocale, localeLabels, persistLocale, type AppLocale } from './i18n'
 import { useJourneyLabels } from './journeyLabels'
@@ -19,7 +20,7 @@ const copy={
     table:'Mesa Aberta',tableDesc:'Preparação, convidados e registro de quem participou da Mesa.',
     care:'Cuidado & Conexão',careDesc:'Contatos atribuídos, prazo de 24–48h, resultado e próximo passo.',
     groups:'Casas de Paz',groupsDesc:'Encontros, participantes, convidados, capacidade e operação da Casa.',
-    root:'Raiz',rootDesc:'Pessoas acompanhadas, encontro 1–7 e próximo passo do discipulado.',
+    root:'Raiz',rootDesc:'Pessoas acompanhadas, progresso e próximo passo do discipulado.',next:'Próximos passos',nextDesc:'Vida, serviço, formação, batismo, membresia e multiplicação conforme a jornada configurada.',
     principle:'Você não precisa conhecer o sistema inteiro. O NestJourney mostra somente o que o seu papel pode operar.',
   },
   en:{
@@ -30,7 +31,7 @@ const copy={
     table:'Open Table',tableDesc:'Preparation, guests, and recording who joined the Table.',
     care:'Care & Connection',careDesc:'Assigned contacts, 24–48h promise, outcome, and next step.',
     groups:'Peace Houses',groupsDesc:'Meetings, participants, guests, capacity, and house operations.',
-    root:'Root',rootDesc:'People you disciple, meeting 1–7, and the next discipleship step.',
+    root:'Root',rootDesc:'People you disciple, progress, and the next discipleship step.',next:'Next steps',nextDesc:'Life, service, formation, baptism, membership, and multiplication according to the configured journey.',
     principle:'You do not need to understand the whole system. NestJourney shows only what your role can operate.',
   },
   es:{
@@ -41,7 +42,7 @@ const copy={
     table:'Mesa Abierta',tableDesc:'Preparación, invitados y registro de quién participó de la Mesa.',
     care:'Cuidado & Conexión',careDesc:'Contactos asignados, plazo de 24–48h, resultado y próximo paso.',
     groups:'Casas de Paz',groupsDesc:'Encuentros, participantes, invitados, capacidad y operación de la Casa.',
-    root:'Raíz',rootDesc:'Personas acompañadas, encuentro 1–7 y próximo paso del discipulado.',
+    root:'Raíz',rootDesc:'Personas acompañadas, progreso y próximo paso del discipulado.',next:'Próximos pasos',nextDesc:'Vida, servicio, formación, bautismo, membresía y multiplicación según la jornada configurada.',
     principle:'No necesitas conocer todo el sistema. NestJourney muestra solamente lo que tu papel puede operar.',
   }
 } as const
@@ -51,6 +52,7 @@ export default function AreasPage(){
   const base=copy[locale]
   const {labels}=useJourneyLabels()
   const [access,setAccess]=useState<JourneyAccessContext|null>(null)
+  const [playbook,setPlaybook]=useState<JourneyPlaybookDefinition|null>(null)
   const [loading,setLoading]=useState(true)
 
   const bootstrap=useCallback(async()=>{
@@ -58,7 +60,9 @@ export default function AreasPage(){
     try{
       const user=auth?.currentUser,organizationId=getActiveJourneyOrganizationId()
       if(!user||!organizationId)throw new Error('missing_ecosystem_context')
-      setAccess(await loadJourneyAccess(user.uid,organizationId))
+      const nextAccess=await loadJourneyAccess(user.uid,organizationId)
+      setAccess(nextAccess)
+      setPlaybook(await loadActiveJourneyPlaybook(nextAccess))
     }finally{setLoading(false)}
   },[])
   useEffect(()=>{void bootstrap()},[bootstrap])
@@ -83,13 +87,15 @@ export default function AreasPage(){
   ]
 
   const visibleModules=modules.filter(item=>canOpenJourneyArea(access,item.id))
-  const hasOperationalArea=visibleModules.length>0
+  const extendedStages=playbook?.stages.filter(stage=>['service','multiplication','custom'].includes(stage.kind))??[]
+  const canOpenMilestones=extendedStages.some(stage=>canOperateJourneyStage(access,stage.responsibleRoles))
+  const hasOperationalArea=visibleModules.length>0||canOpenMilestones
   const empty=emptyGuidance(locale,'areas_none')
 
   return <main className="journey-section-page"><div className="journey-section-shell">
     <header className="journey-section-header"><div><span className="journey-section-kicker">NestJourney / Journey</span><h1>{base.title}</h1><p>{base.subtitle}</p></div><select value={locale} onChange={e=>{const next=e.target.value as AppLocale;setLocale(next);persistLocale(next)}}>{(Object.keys(localeLabels) as AppLocale[]).map(id=><option key={id} value={id}>{localeLabels[id]}</option>)}</select></header>
 
-    <JourneyPath locale={locale}/>
+    <JourneyPath locale={locale} steps={playbook?.stages.map(stage=>stage.label)}/>
 
     {!hasOperationalArea?<section className="journey-section-block"><GuidedEmptyState icon={ShieldCheck} title={empty.title} body={empty.body} primary={{label:empty.primary,href:'/help'}} secondary={{label:empty.secondary||base.title,href:'/my-today'}}/></section>:null}
 
@@ -103,6 +109,12 @@ export default function AreasPage(){
           <ArrowRight size={16}/>
         </a>
       })}
+      {canOpenMilestones?<a href="/milestones-runtime">
+        <span className="journey-flow-step">{String(visibleModules.length+1).padStart(2,'0')}</span>
+        <span className="journey-flow-icon"><Route size={18}/></span>
+        <span className="journey-flow-copy"><small>{base.available}</small><strong>{base.next}</strong><p>{base.nextDesc}</p></span>
+        <ArrowRight size={16}/>
+      </a>:null}
     </section>:null}
 
     <div className="journey-section-note"><ShieldCheck size={18}/><p>{base.principle}</p></div>
