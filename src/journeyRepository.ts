@@ -262,7 +262,9 @@ export interface JourneyGroupRecord {
   leader?: string
   leaderId?: string
   host?: string
+  hostId?: string
   apprentice?: string
+  apprenticeId?: string
   neighborhood?: string
   weekday?: string
   time?: string
@@ -1145,7 +1147,9 @@ export async function listJourneyGroups(organizationId: string, congregationId: 
       leader: asString(data.leader || data.leaderName) || undefined,
       leaderId: asString(data.leaderId) || undefined,
       host: asString(data.host) || undefined,
+      hostId: asString(data.hostId) || undefined,
       apprentice: asString(data.apprentice) || undefined,
+      apprenticeId: asString(data.apprenticeId) || undefined,
       neighborhood: asString(data.neighborhood) || undefined,
       weekday: asString(data.weekday) || undefined,
       time: asString(data.time) || undefined,
@@ -1628,11 +1632,14 @@ export async function createJourneyGroup(input: {
   leader?: string
   leaderId?: string
   host?: string
+  hostId?: string
   apprentice?: string
+  apprenticeId?: string
   neighborhood?: string
   weekday?: string
   time?: string
   capacity?: number
+  capacityMax?: number
 }) {
   const firestore = requireDb()
   const groupRef = doc(collection(firestore, journeyCollectionPath(input.organizationId, 'groups')))
@@ -1644,11 +1651,13 @@ export async function createJourneyGroup(input: {
     leader: String(input.leader ?? '').trim(),
     leaderId: String(input.leaderId ?? '').trim(),
     host: String(input.host ?? '').trim(),
+    hostId: String(input.hostId ?? '').trim(),
     apprentice: String(input.apprentice ?? '').trim(),
+    apprenticeId: String(input.apprenticeId ?? '').trim(),
     neighborhood: String(input.neighborhood ?? '').trim(),
     weekday: String(input.weekday ?? '').trim(),
     time: String(input.time ?? '').trim(),
-    capacity: Math.max(1, Math.min(100, Math.floor(input.capacity ?? 12))),
+    capacity: Math.max(1, Math.min(Math.max(1, Math.min(50, Math.floor(input.capacityMax ?? 12))), Math.floor(input.capacity ?? 12))),
     participants: 0,
     createdAt: serverTimestamp(),
     createdBy: input.actorId,
@@ -1663,7 +1672,7 @@ export async function updateJourneyGroup(input: {
   organizationId: string
   groupId: string
   actorId: string
-  patch: Partial<Pick<JourneyGroupRecord, 'name' | 'leader' | 'leaderId' | 'host' | 'apprentice' | 'neighborhood' | 'weekday' | 'time' | 'capacity' | 'participants'>>
+  patch: Partial<Pick<JourneyGroupRecord, 'name' | 'leader' | 'leaderId' | 'host' | 'hostId' | 'apprentice' | 'apprenticeId' | 'neighborhood' | 'weekday' | 'time' | 'capacity' | 'participants'>>
 }) {
   const firestore = requireDb()
   const groupRef = doc(firestore, `${journeyCollectionPath(input.organizationId, 'groups')}/${input.groupId}`)
