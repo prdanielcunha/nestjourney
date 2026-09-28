@@ -1167,7 +1167,7 @@ service cloud.firestore {
       return capacity is number
         && participants is number
         && capacity >= 1
-        && capacity <= 100
+        && capacity <= 30
         && participants >= 0
         && participants <= capacity;
     }
