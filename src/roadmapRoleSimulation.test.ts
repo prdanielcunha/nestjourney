@@ -8,10 +8,10 @@ import {
 import type { JourneyAccessContext } from './journeyRepository'
 
 function access(input: Partial<JourneyAccessContext> & Pick<JourneyAccessContext,'role'>): JourneyAccessContext {
+  const { role, ...rest } = input
   return {
     organizationId:'org-sim',
-    userId:'user-'+input.role,
-    role:input.role,
+    userId:'user-'+role,
     organizationRole:input.organizationRole ?? 'member',
     permissions:input.permissions ?? {},
     congregationIds:input.congregationIds ?? ['monte-castelo'],
@@ -28,7 +28,8 @@ function access(input: Partial<JourneyAccessContext> & Pick<JourneyAccessContext
     canManagePrivacy:false,
     canManagePastoral:false,
     broadJourneyAccess:false,
-    ...input,
+    ...rest,
+    role,
   }
 }
 
