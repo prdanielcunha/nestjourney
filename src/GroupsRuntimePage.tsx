@@ -17,6 +17,8 @@ import {
   listJourneyGroupMemberships,
   listJourneyGroups,
   listJourneyPeople,
+  listJourneyOrganizationMembers,
+  loadActiveJourneyPlaybook,
   loadJourneyAccess,
   resolveJourneyGroupEntryRequest,
   setJourneyGroupMembership,
@@ -28,6 +30,7 @@ import {
   type JourneyGroupMeetingRecord,
   type JourneyGroupMembership,
   type JourneyGroupRecord,
+  type JourneyOrganizationMember,
   type JourneyPersonRecord,
 } from './journeyRepository'
 import { getInitialLocale, groupsRuntimeCopy, localeLabels, persistLocale, type AppLocale } from './i18n'
@@ -36,6 +39,7 @@ import { emptyGuidance } from './emptyGuidance'
 import { AccessDeniedState } from './AccessDeniedState'
 import { useJourneyLabels } from './journeyLabels'
 import { JourneyAreaFocus } from './JourneyAreaFocus'
+import { groupCapacityState, RAIZ_E_MESA_GROUP_CAPACITY, type GroupCapacityPolicy } from './roadmapReadiness'
 import './JourneyRuntimePages.css'
 
 export default function GroupsRuntimePage() {
@@ -48,6 +52,8 @@ export default function GroupsRuntimePage() {
   const [congregationId, setCongregationId] = useState('')
   const [groups, setGroups] = useState<JourneyGroupRecord[]>([])
   const [people, setPeople] = useState<JourneyPersonRecord[]>([])
+  const [members, setMembers] = useState<JourneyOrganizationMember[]>([])
+  const [capacityPolicy, setCapacityPolicy] = useState<GroupCapacityPolicy>(RAIZ_E_MESA_GROUP_CAPACITY)
   const [rosterGroup, setRosterGroup] = useState<JourneyGroupRecord | null>(null)
   const [roster, setRoster] = useState<JourneyGroupMembership[]>([])
   const [entryRequests, setEntryRequests] = useState<JourneyGroupEntryRequest[]>([])
@@ -80,8 +86,14 @@ export default function GroupsRuntimePage() {
       const nextAccess = await loadJourneyAccess(user.uid, organizationId)
       setAccess(nextAccess)
       if (!(nextAccess.canManageGroups || nextAccess.broadJourneyAccess)) return
-      const units = await listJourneyCongregations(nextAccess)
+      const [units, nextMembers, activePlaybook] = await Promise.all([
+        listJourneyCongregations(nextAccess),
+        listJourneyOrganizationMembers(nextAccess),
+        loadActiveJourneyPlaybook(nextAccess),
+      ])
       setCongregations(units)
+      setMembers(nextMembers)
+      setCapacityPolicy(activePlaybook.groupCapacityPolicy)
       const unitId = resolveActiveJourneyCongregationId(nextAccess.organizationId, units)
       setCongregationId(unitId)
       if (unitId) await refresh(nextAccess, unitId)
@@ -240,9 +252,8 @@ export default function GroupsRuntimePage() {
   const empty=emptyGuidance(locale,canCreateGroup?'groups_none':'groups_unassigned')
   const activeUnit=congregations.find(item=>item.id===congregationId)
   const attentionGroups=groups.filter(group=>{
-    const participants=group.participants??0
-    const capacity=Math.max(1,group.capacity??12)
-    return participants/capacity>=.85
+    const state=groupCapacityState(group.participants??0,group.capacity??capacityPolicy.maximum,capacityPolicy)
+    return state==='attention'||state==='over_capacity'
   })
   const totalParticipants=groups.reduce((sum,group)=>sum+(group.participants??0),0)
   const focusTitle=!groups.length
@@ -291,10 +302,16 @@ export default function GroupsRuntimePage() {
     {congregations.length>1?<section className="journey-area-toolbar"><label><span>{t.congregation}</span><select value={congregationId} disabled={busy} onChange={(e)=>void selectUnit(e.target.value)}>{congregations.map(x=><option key={x.id} value={x.id}>{x.name}{x.city?` · ${x.city}`:''}</option>)}</select></label></section>:null}
     <section className="runtime-grid" id="groups-list">
       {groups.map(group=>{
-        const participants=group.participants??0, capacity=Math.max(1,group.capacity??12), ratio=participants/capacity
+        const participants=group.participants??0, capacity=Math.max(1,group.capacity??capacityPolicy.maximum)
+        const capacityState=groupCapacityState(participants,capacity,capacityPolicy)
         const canRoster=Boolean(access&&canManageJourneyGroupRoster(access,group))
+        const capacityLabel=capacityState==='over_capacity'||capacityState==='attention'
+          ?t.nearCapacity
+          :capacityState==='forming'
+            ?(locale==='en'?'Forming':locale==='es'?'En formación':'Em formação')
+            :t.healthy
         return <article className="runtime-panel runtime-card" key={group.id}>
-          <div className="runtime-card-head"><span className="runtime-icon"><House size={18}/></span><div><h2>{group.name}</h2><p>{[group.neighborhood,group.weekday,group.time].filter(Boolean).join(' · ')||'—'}</p></div><span className={ratio>=.85?'runtime-badge attention':'runtime-badge'}>{ratio>=.85?t.nearCapacity:t.healthy}</span></div>
+          <div className="runtime-card-head"><span className="runtime-icon"><House size={18}/></span><div><h2>{group.name}</h2><p>{[group.neighborhood,group.weekday,group.time].filter(Boolean).join(' · ')||'—'}</p></div><span className={capacityState==='attention'||capacityState==='over_capacity'?'runtime-badge attention':'runtime-badge'}>{capacityLabel}</span></div>
           <div className="runtime-facts"><span><small>{t.leader}</small><b>{group.leader||'—'}</b></span><span><small>{t.host}</small><b>{group.host||'—'}</b></span><span><small>{t.apprentice}</small><b>{group.apprentice||'—'}</b></span></div>
           <div className="runtime-count"><Users size={17}/><span><small>{t.participants}</small><strong>{participants} / {capacity}</strong></span>{canRoster?<button className="runtime-button compact" disabled={busy} onClick={()=>void openRoster(group)}>{t.manageRoster}</button>:<small className="runtime-count-note">{t.rosterRestricted}</small>}</div>
         </article>
@@ -303,12 +320,13 @@ export default function GroupsRuntimePage() {
     </section>
     <p className="runtime-rule"><ShieldCheck size={15}/>{t.sourceRule}</p>
   </div>
-  {showNew ? <NewGroupModal locale={locale} close={()=>setShowNew(false)} save={async data=>{
+  {showNew ? <NewGroupModal locale={locale} members={members} congregationId={congregationId} capacityPolicy={capacityPolicy} close={()=>setShowNew(false)} save={async data=>{
     if(!access)return;setBusy(true);setError('')
     try{
       await createJourneyGroup({
         organizationId:access.organizationId,congregationId,actorId:access.userId,
-        leaderId:access.role==='group_leader'?access.userId:'',...data,
+        capacityPolicy,
+        ...data,
       })
       setShowNew(false);await refresh(access,congregationId)
     } catch(cause){console.error(cause);setError(t.error)}finally{setBusy(false)}
@@ -334,12 +352,30 @@ export default function GroupsRuntimePage() {
   </main>
 }
 
-function NewGroupModal({locale,close,save}:{locale:AppLocale;close:()=>void;save:(data:{name:string;leader:string;host:string;apprentice:string;neighborhood:string;weekday:string;time:string;capacity:number})=>Promise<void>}){
+function NewGroupModal({locale,members,congregationId,capacityPolicy,close,save}:{locale:AppLocale;members:JourneyOrganizationMember[];congregationId:string;capacityPolicy:GroupCapacityPolicy;close:()=>void;save:(data:{name:string;leader:string;leaderId:string;host:string;hostId:string;apprentice:string;apprenticeId:string;neighborhood:string;weekday:string;time:string;capacity:number})=>Promise<void>}){
   const t=groupsRuntimeCopy[locale]
-  const [name,setName]=useState(''),[leader,setLeader]=useState(''),[host,setHost]=useState(''),[apprentice,setApprentice]=useState(''),[neighborhood,setNeighborhood]=useState(''),[weekday,setWeekday]=useState(''),[time,setTime]=useState(''),[capacity,setCapacity]=useState(12)
+  const scoped=members.filter(member=>member.status==='active'&&(member.congregationIds.length===0||member.congregationIds.includes(congregationId)))
+  const effectiveRole=(member:JourneyOrganizationMember)=>member.journeyRole==='member'?member.organizationRole:member.journeyRole
+  const leaders=scoped.filter(member=>['group_leader','coordinator','pastor','admin','owner'].includes(effectiveRole(member)))
+  const helpers=scoped.filter(member=>effectiveRole(member)!=='member'||['admin','pastor','owner'].includes(member.organizationRole))
+  const [name,setName]=useState(''),[leaderId,setLeaderId]=useState(leaders[0]?.id??''),[hostId,setHostId]=useState(''),[apprenticeId,setApprenticeId]=useState(''),[neighborhood,setNeighborhood]=useState(''),[weekday,setWeekday]=useState(''),[time,setTime]=useState(''),[capacity,setCapacity]=useState(capacityPolicy.maximum)
+  const leader=leaders.find(member=>member.id===leaderId)
+  const host=helpers.find(member=>member.id===hostId)
+  const apprentice=helpers.find(member=>member.id===apprenticeId)
+  const policyHint=locale==='en'
+    ?`Raiz e Mesa ideal: ${capacityPolicy.idealMin}–${capacityPolicy.idealMax}; configured maximum: ${capacityPolicy.maximum}.`
+    :locale==='es'
+      ?`Ideal de Raiz e Mesa: ${capacityPolicy.idealMin}–${capacityPolicy.idealMax}; máximo configurado: ${capacityPolicy.maximum}.`
+      :`Ideal do Raiz e Mesa: ${capacityPolicy.idealMin}–${capacityPolicy.idealMax}; máximo configurado: ${capacityPolicy.maximum}.`
+  const teamHint=locale==='en'?'Leaders and hosts come from the authorized team for this campus.':locale==='es'?'Líderes y anfitriones salen del equipo autorizado de esta sede.':'Líderes e anfitriões vêm da equipe autorizada desta unidade.'
   return <div className="runtime-modal-backdrop" onMouseDown={close}><section className="runtime-panel runtime-modal" onMouseDown={e=>e.stopPropagation()}><div className="runtime-modal-head"><h2>{t.newGroup}</h2><button className="runtime-button" onClick={close}><X size={17}/></button></div><div className="runtime-form">
-    <label><span>{t.name}</span><input autoFocus value={name} onChange={e=>setName(e.target.value)}/></label><label><span>{t.leader}</span><input value={leader} onChange={e=>setLeader(e.target.value)}/></label><label><span>{t.host}</span><input value={host} onChange={e=>setHost(e.target.value)}/></label><label><span>{t.apprentice}</span><input value={apprentice} onChange={e=>setApprentice(e.target.value)}/></label><label><span>{t.neighborhood}</span><input value={neighborhood} onChange={e=>setNeighborhood(e.target.value)}/></label><label><span>{t.weekday}</span><input value={weekday} onChange={e=>setWeekday(e.target.value)}/></label><label><span>{t.time}</span><input value={time} onChange={e=>setTime(e.target.value)}/></label><label><span>{t.capacity}</span><input type="number" min={1} max={100} value={capacity} onChange={e=>setCapacity(Number(e.target.value))}/></label>
-  </div><div className="runtime-modal-actions"><button className="runtime-button" onClick={close}>{t.cancel}</button><button className="runtime-button primary" disabled={!name.trim()} onClick={()=>void save({name,leader,host,apprentice,neighborhood,weekday,time,capacity})}>{t.create}</button></div></section></div>
+    <label><span>{t.name}</span><input autoFocus value={name} onChange={e=>setName(e.target.value)}/></label>
+    <label><span>{t.leader}</span><select value={leaderId} onChange={e=>setLeaderId(e.target.value)}><option value="">{locale==='en'?'Select a leader':locale==='es'?'Selecciona un líder':'Selecione um líder'}</option>{leaders.map(member=><option value={member.id} key={member.id}>{member.name}</option>)}</select></label>
+    <label><span>{t.host}</span><select value={hostId} onChange={e=>setHostId(e.target.value)}><option value="">{locale==='en'?'Select a host':locale==='es'?'Selecciona un anfitrión':'Selecione um anfitrião'}</option>{helpers.map(member=><option value={member.id} key={member.id}>{member.name}</option>)}</select></label>
+    <label><span>{t.apprentice}</span><select value={apprenticeId} onChange={e=>setApprenticeId(e.target.value)}><option value="">{locale==='en'?'Optional':locale==='es'?'Opcional':'Opcional'}</option>{helpers.map(member=><option value={member.id} key={member.id}>{member.name}</option>)}</select></label>
+    <p className="runtime-muted">{teamHint}</p>
+    <label><span>{t.neighborhood}</span><input value={neighborhood} onChange={e=>setNeighborhood(e.target.value)}/></label><label><span>{t.weekday}</span><input value={weekday} onChange={e=>setWeekday(e.target.value)}/></label><label><span>{t.time}</span><input type="time" value={time} onChange={e=>setTime(e.target.value)}/></label><label><span>{t.capacity}</span><input type="number" min={capacityPolicy.minimum} max={capacityPolicy.maximum} value={capacity} onChange={e=>setCapacity(Number(e.target.value))}/><small>{policyHint}</small></label>
+  </div><div className="runtime-modal-actions"><button className="runtime-button" onClick={close}>{t.cancel}</button><button className="runtime-button primary" disabled={!name.trim()||!leader||!host||!weekday.trim()||!time} onClick={()=>leader&&host&&void save({name,leader:leader.name,leaderId:leader.id,host:host.name,hostId:host.id,apprentice:apprentice?.name??'',apprenticeId:apprentice?.id??'',neighborhood,weekday,time,capacity})}>{t.create}</button></div></section></div>
 }
 
 function RosterModal({

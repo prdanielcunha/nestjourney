@@ -63,13 +63,28 @@ export function buildMyTodayItems(input: {
     if (ratio >= 0.85) items.push({ id: `group:${group.id}`, kind: 'group_attention', priority: 3, titleRef: group.name, targetId: group.id, ratio })
   }
 
+  const nowMs = input.now?.getTime() ?? Date.now()
   for (const relation of input.discipleships) {
-    if (relation.status !== 'active' || !relation.nextMeeting) continue
+    if (relation.status !== 'active') continue
     const person = people.get(relation.personId)
+    const scheduledAt = relation.nextMeetingStatus === 'scheduled' && relation.nextMeetingAt
+      ? Date.parse(relation.nextMeetingAt)
+      : Number.NaN
+    const scheduled = Number.isFinite(scheduledAt)
+    const priority = scheduled
+      ? scheduledAt <= nowMs ? 2 : scheduledAt <= nowMs + 48 * 60 * 60 * 1000 ? 3 : 5
+      : 4
+    const titleRef = scheduled
+      ? relation.nextMeetingAt!
+      : relation.nextMeetingStatus === 'cancelled'
+        ? 'A combinar'
+        : relation.nextMeeting || 'A combinar'
     items.push({
-      id: `discipleship:${relation.id}`, kind: 'discipleship_next', priority: 4,
+      id: `discipleship:${relation.id}`, kind: 'discipleship_next', priority,
       personId: relation.personId, personName: person?.name || relation.personName,
-      titleRef: relation.nextMeeting, targetId: relation.id, meeting: relation.meeting,
+      titleRef, targetId: relation.id, meeting: relation.meeting,
+      dueAt: scheduled ? relation.nextMeetingAt : undefined,
+      detailRef: scheduled ? 'scheduled' : 'to_be_agreed',
     })
   }
 

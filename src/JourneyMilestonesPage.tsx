@@ -33,7 +33,7 @@ const copy={
     start:'Iniciar etapa',complete:'Concluir etapa',started:'Etapa iniciada',done:'Etapa concluída',
     noStages:'Esta jornada não possui etapas adicionais configuradas.',noPeople:'Nenhuma pessoa disponível neste escopo.',
     choose:'Escolha uma pessoa para ver os próximos passos.',entry:'Quando começa',completion:'Quando termina',
-    responsibility:'Responsabilidade',privacy:'Registre somente o marco factual. Não use esta área para relatos íntimos, avaliações espirituais ou diagnósticos.',
+    responsibility:'Responsabilidade',required:'Dados mínimos',nextAction:'Próxima ação',missing:'Falta antes de iniciar',privacy:'Registre somente o marco factual. Não use esta área para relatos íntimos, avaliações espirituais ou diagnósticos.',
     noAccess:'Seu papel não possui acesso aos próximos passos configuráveis.',error:'Não foi possível concluir a operação.',
   },
   en:{
@@ -43,7 +43,7 @@ const copy={
     start:'Start stage',complete:'Complete stage',started:'Stage started',done:'Stage completed',
     noStages:'This journey has no additional stages configured.',noPeople:'No people are available in this scope.',
     choose:'Choose a person to see the next steps.',entry:'When it starts',completion:'When it ends',
-    responsibility:'Responsibility',privacy:'Record only the factual milestone. Do not use this area for intimate stories, spiritual ratings, or diagnoses.',
+    responsibility:'Responsibility',required:'Minimum data',nextAction:'Next action',missing:'Missing before start',privacy:'Record only the factual milestone. Do not use this area for intimate stories, spiritual ratings, or diagnoses.',
     noAccess:'Your role does not have access to configurable next steps.',error:'The operation could not be completed.',
   },
   es:{
@@ -53,7 +53,7 @@ const copy={
     start:'Iniciar etapa',complete:'Concluir etapa',started:'Etapa iniciada',done:'Etapa concluida',
     noStages:'Esta jornada no tiene etapas adicionales configuradas.',noPeople:'No hay personas disponibles en este alcance.',
     choose:'Elige una persona para ver los próximos pasos.',entry:'Cuándo comienza',completion:'Cuándo termina',
-    responsibility:'Responsabilidad',privacy:'Registra solo el hito factual. No uses esta área para relatos íntimos, evaluaciones espirituales ni diagnósticos.',
+    responsibility:'Responsabilidad',required:'Datos mínimos',nextAction:'Próxima acción',missing:'Falta antes de iniciar',privacy:'Registra solo el hito factual. No uses esta área para relatos íntimos, evaluaciones espirituales ni diagnósticos.',
     noAccess:'Tu papel no tiene acceso a los próximos pasos configurables.',error:'No se pudo completar la operación.',
   },
 } as const
@@ -64,6 +64,17 @@ function isExtendedStage(stage:JourneyPlaybookStage){
 
 function statusFor(milestone:JourneyMilestoneRecord|undefined){
   return milestone?.status??'not_started'
+}
+
+function missingRequiredFields(stage:JourneyPlaybookStage,person:JourneyPersonRecord|undefined){
+  if(!person)return stage.requiredFields
+  return stage.requiredFields.filter(field=>{
+    if(field==='name')return !person.name.trim()
+    if(field==='phone')return !person.phone?.trim()
+    if(field==='consent')return person.consent!==true
+    if(field==='firstVisit')return !person.firstVisit
+    return false
+  })
 }
 
 export default function JourneyMilestonesPage(){
@@ -178,6 +189,7 @@ export default function JourneyMilestonesPage(){
         {visibleStages.map(stage=>{
           const milestone=selectedMilestones.get(stage.id)
           const status=statusFor(milestone)
+          const missing=missingRequiredFields(stage,selected)
           return <article className="runtime-panel runtime-card" key={stage.id}>
             <div className="runtime-card-head">
               <span className="runtime-icon">{status==='completed'?<CheckCircle2 size={18}/>:<CircleDot size={18}/>}</span>
@@ -188,9 +200,12 @@ export default function JourneyMilestonesPage(){
               <div><small>{t.entry}</small><strong>{stage.entryCriteria||'—'}</strong></div>
               <div><small>{t.completion}</small><strong>{stage.completionCriteria||'—'}</strong></div>
               <div><small>{t.responsibility}</small><strong>{stage.responsibleRoles.join(' · ')||'—'}</strong></div>
+              <div><small>{t.required}</small><strong>{stage.requiredFields.join(' · ')||'—'}</strong></div>
+              <div><small>{t.nextAction}</small><strong>{stage.nextAction||stage.completionCriteria||'—'}</strong></div>
             </div>
+            {missing.length?<p className="runtime-rule"><ShieldCheck size={15}/>{t.missing}: {missing.join(' · ')}</p>:null}
             <div className="runtime-card-actions">
-              {!milestone?<button className="runtime-button primary" disabled={busy||!selected} onClick={()=>void start(stage)}><Flag size={16}/>{t.start}</button>:milestone.status==='active'?<button className="runtime-button primary" disabled={busy} onClick={()=>void complete(stage,milestone)}><CheckCircle2 size={16}/>{t.complete}</button>:<span className="runtime-muted">{t.done}</span>}
+              {!milestone?<button className="runtime-button primary" disabled={busy||!selected||missing.length>0} onClick={()=>void start(stage)}><Flag size={16}/>{t.start}</button>:milestone.status==='active'?<button className="runtime-button primary" disabled={busy||missing.length>0} onClick={()=>void complete(stage,milestone)}><CheckCircle2 size={16}/>{t.complete}</button>:<span className="runtime-muted">{t.done}</span>}
             </div>
           </article>
         })}

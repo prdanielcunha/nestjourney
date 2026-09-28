@@ -144,8 +144,10 @@ export default function FollowupRuntimePage() {
     if (!access) return
     setBusy(true); setError('')
     try {
+      const person = peopleById.get(request.personId)
+      if (!person?.preferredContactChannel) throw new Error('followup_contact_not_ready')
       const followupId = await startJourneyFollowup({ access, request })
-      window.location.assign(buildConnectFollowupLaunchUrl(followupId))
+      window.location.assign(buildConnectFollowupLaunchUrl(followupId, person.preferredContactChannel))
     } catch (cause) {
       console.error(cause)
       const code = cause instanceof Error ? cause.message : ''
@@ -242,8 +244,8 @@ export default function FollowupRuntimePage() {
           const mine=request.ownerRef===access.userId
           return <article className={`followup-panel followup-card ${request.id===requestedCareId?'highlight':''}`} key={request.id}>
             <div className="followup-card-head"><span className="followup-icon"><HeartHandshake size={18}/></span><div><h3>{person?.name??t.unknownPerson}</h3><p>{t.due}: {formatDate(request.dueAt,locale)}</p></div><span className="followup-badge">{mine?t.yours:t.assigned}</span></div>
-            <div className="followup-facts"><span><small>{t.contact}</small><b>{person?.consent&&person.phone?person.phone:t.contactUnavailable}</b></span><span><small>{t.promise}</small><b>{request.promiseHours}h</b></span></div>
-            <button className="followup-button primary" disabled={busy||!mine||!person?.consent||!person.phone} onClick={()=>void start(request)}><UserCheck size={16}/>{mine?t.start:t.onlyOwner}</button>
+            <div className="followup-facts"><span><small>{t.contact}</small><b>{person?.consent&&person.phone?person.phone:t.contactUnavailable}</b></span><span><small>{locale==='en'?'Authorized channel':locale==='es'?'Canal autorizado':'Canal autorizado'}</small><b>{person?.preferredContactChannel==='whatsapp'?'WhatsApp':person?.preferredContactChannel==='phone'?(locale==='en'?'Phone call':locale==='es'?'Llamada':'Ligação'):t.contactUnavailable}</b></span><span><small>{t.promise}</small><b>{request.promiseHours}h</b></span></div>
+            <button className="followup-button primary" disabled={busy||!mine||!person?.consent||!person.phone||!person.preferredContactChannel} onClick={()=>void start(request)}><UserCheck size={16}/>{mine?t.start:t.onlyOwner}</button>
           </article>
         })}
         {!ready.length?<div className="followup-panel"><GuidedEmptyState icon={UserCheck} title={readyEmpty.title} body={readyEmpty.body} primary={{label:readyEmpty.primary,href:'/care-integrity'}} secondary={{label:readyEmpty.secondary||t.back,href:'/my-today'}} compact/></div>:null}
@@ -256,13 +258,13 @@ export default function FollowupRuntimePage() {
         {pending.map((item)=>{
           const person=peopleById.get(item.personId)
           const mine=item.ownerRef===access.userId
-          const contactAllowed=Boolean(person?.consent&&person.phone)
+          const contactAllowed=Boolean(person?.consent&&person.phone&&person.preferredContactChannel)
           return <article className="followup-panel followup-card" key={item.id}>
             <div className="followup-card-head"><span className="followup-icon warning"><Clock3 size={18}/></span><div><h3>{person?.name??t.unknownPerson}</h3><p>{t.due}: {formatDate(item.dueAt,locale)}</p></div><span className="followup-badge attention">{t.pending}</span></div>
-            <div className="followup-facts"><span><small>{t.contact}</small><b>{contactAllowed?person?.phone:t.contactUnavailable}</b></span><span><small>{t.source}</small><b>{t.firstContact}</b></span></div>
+            <div className="followup-facts"><span><small>{t.contact}</small><b>{contactAllowed?person?.phone:t.contactUnavailable}</b></span><span><small>{locale==='en'?'Authorized channel':locale==='es'?'Canal autorizado':'Canal autorizado'}</small><b>{person?.preferredContactChannel==='whatsapp'?'WhatsApp':person?.preferredContactChannel==='phone'?(locale==='en'?'Phone call':locale==='es'?'Llamada':'Ligação'):t.contactUnavailable}</b></span><span><small>{t.source}</small><b>{t.firstContact}</b></span></div>
             {!contactAllowed?<p className="followup-revoked-note"><ShieldCheck size={15}/>{t.revokedHint}</p>:null}
             <div className="followup-card-actions">
-              {contactAllowed?<a className="followup-button" aria-disabled={!mine} href={mine?buildConnectFollowupLaunchUrl(item.id):undefined} onClick={(event)=>{if(!mine)event.preventDefault()}}><MessageCircle size={16}/>{t.openConnect}</a>:null}
+              {contactAllowed?<a className="followup-button" aria-disabled={!mine} href={mine?buildConnectFollowupLaunchUrl(item.id,person?.preferredContactChannel):undefined} onClick={(event)=>{if(!mine)event.preventDefault()}}><MessageCircle size={16}/>{t.openConnect}</a>:null}
               {contactAllowed?<button className="followup-button primary" disabled={busy||!mine} onClick={()=>setResolving(item)}><CheckCircle2 size={16}/>{t.recordOutcome}</button>:null}
               {!contactAllowed?<button className="followup-button primary span-all" disabled={busy||!mine} onClick={()=>void closeRevoked(item)}><ShieldCheck size={16}/>{t.closeRevoked}</button>:null}
             </div>
