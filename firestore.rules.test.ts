@@ -873,12 +873,14 @@ describe('Groups and Discipleship runtime rules', () => {
     const ref = doc(db, 'organizations/org-a/products/raiz_e_mesa/groups/group-a')
     await assertSucceeds(setDoc(ref, {
       organizationId: 'org-a', congregationId: 'unit-a', name: 'Casa Norte',
+      leaderId: 'leader-a', hostId: 'leader-a', apprenticeId: '',
       capacity: 12, participants: 0, createdAt: serverTimestamp(), createdBy: 'leader-a',
     }))
     await assertSucceeds(updateDoc(ref, { participants: 7 }))
     await assertFails(updateDoc(ref, { participants: 13 }))
     await assertFails(setDoc(doc(db, 'organizations/org-a/products/raiz_e_mesa/groups/group-b'), {
       organizationId: 'org-a', congregationId: 'unit-b', name: 'Casa Fora',
+      leaderId: 'leader-a', hostId: 'leader-a', apprenticeId: '',
       capacity: 12, participants: 0, createdAt: serverTimestamp(), createdBy: 'leader-a',
     }))
   })
