@@ -29,6 +29,8 @@ export interface JourneyImplementationPhaseDefinition {
   title: string
   objective: string
   items: string[]
+  targetWeek: number
+  responsibleRoles: string[]
 }
 
 export interface JourneyPlaybookDefinition {
@@ -127,14 +129,14 @@ export function createRaizEMesaPlaybook(organizationId: string): JourneyPlaybook
     indicators: ['care_debt','unassigned_care','open_presence_sessions','group_capacity','active_discipleships','pastoral_handoffs'],
     routingRules: ['visitor_to_first_contact','confirmed_absence_to_care','care_to_pastoral_handoff','group_interest_to_entry_request'],
     implementationPhases: [
-      { id: 'preparation', title: 'Preparação', objective: 'Preparar liderança, responsabilidades, ambiente e piloto.', items: ['Preparação do núcleo e responsáveis'] },
-      { id: 'week-1', title: 'Semana 1 · Coração, missão e cultura', objective: 'Cristo e missão antes da tarefa.', items: ['Treinamento e prática da semana 1'] },
-      { id: 'week-2', title: 'Semana 2 · Presença e Mesa', objective: 'Ativar acolhimento e Mesa.', items: ['Treinamento e prática da semana 2'] },
-      { id: 'week-3', title: 'Semana 3 · Cuidado e conexão', objective: 'Ativar o cuidado 24–48h com consentimento.', items: ['Treinamento e prática da semana 3'] },
-      { id: 'week-4', title: 'Semana 4 · Casa de Paz', objective: 'Preparar e operar a primeira Casa.', items: ['Treinamento e prática da semana 4'] },
-      { id: 'week-5', title: 'Semana 5 · Raiz', objective: 'Iniciar discipulado quando houver pessoas prontas.', items: ['Treinamento e prática da semana 5'] },
-      { id: 'week-6', title: 'Semana 6 · Serviço, multiplicação e segurança', objective: 'Formar com caráter e limites.', items: ['Treinamento e prática da semana 6'] },
-      { id: 'week-7', title: 'Semana 7 · Consolidação e envio', objective: 'Consolidar responsáveis e os próximos 90 dias.', items: ['Treinamento e prática da semana 7'] },
+      { id: 'preparation', title: 'Preparação', objective: 'Preparar liderança, responsabilidades, ambiente e piloto.', items: ['Preparação do núcleo e responsáveis'], targetWeek: 0, responsibleRoles: ['pastor','coordinator'] },
+      { id: 'week-1', title: 'Semana 1 · Coração, missão e cultura', objective: 'Cristo e missão antes da tarefa.', items: ['Treinamento e prática da semana 1'], targetWeek: 1, responsibleRoles: ['pastor','coordinator'] },
+      { id: 'week-2', title: 'Semana 2 · Presença e Mesa', objective: 'Ativar acolhimento e Mesa.', items: ['Treinamento e prática da semana 2'], targetWeek: 2, responsibleRoles: ['presence_host','mesa_team','coordinator'] },
+      { id: 'week-3', title: 'Semana 3 · Cuidado e conexão', objective: 'Ativar o cuidado 24–48h com consentimento.', items: ['Treinamento e prática da semana 3'], targetWeek: 3, responsibleRoles: ['caregiver','coordinator'] },
+      { id: 'week-4', title: 'Semana 4 · Casa de Paz', objective: 'Preparar e operar a primeira Casa.', items: ['Treinamento e prática da semana 4'], targetWeek: 4, responsibleRoles: ['group_leader','coordinator'] },
+      { id: 'week-5', title: 'Semana 5 · Raiz', objective: 'Iniciar discipulado quando houver pessoas prontas.', items: ['Treinamento e prática da semana 5'], targetWeek: 5, responsibleRoles: ['discipler','coordinator'] },
+      { id: 'week-6', title: 'Semana 6 · Serviço, multiplicação e segurança', objective: 'Formar com caráter e limites.', items: ['Treinamento e prática da semana 6'], targetWeek: 6, responsibleRoles: ['pastor','coordinator'] },
+      { id: 'week-7', title: 'Semana 7 · Consolidação e envio', objective: 'Consolidar responsáveis e os próximos 90 dias.', items: ['Treinamento e prática da semana 7'], targetWeek: 7, responsibleRoles: ['pastor','coordinator'] },
     ],
     implementationKeys: [...IMPLEMENTATION_REQUIRED_KEYS],
   }
@@ -170,6 +172,8 @@ export function normalizeJourneyPlaybook(input: Partial<JourneyPlaybookDefinitio
       title: cleanText(source.title, 80) || `Fase ${index + 1}`,
       objective: cleanText(source.objective, 280),
       items: boundedList(source.items, 20, 180),
+      targetWeek: boundedNumber(source.targetWeek, Math.min(7, index), 0, 52),
+      responsibleRoles: boundedList(source.responsibleRoles, 9, 40).filter((role) => (JOURNEY_PLAYBOOK_ROLES as readonly string[]).includes(role)),
     }
   }).filter((phase) => phase.items.length > 0)
 
