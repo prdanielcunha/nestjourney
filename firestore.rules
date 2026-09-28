@@ -1650,7 +1650,12 @@ service cloud.firestore {
       allow create, update, delete: if false;
 
       match /members/{uid} {
-        allow read: if signedIn() && (request.auth.uid == uid || isOrgAdmin(orgId));
+        allow read: if signedIn() && (
+          request.auth.uid == uid
+          || isOrgAdmin(orgId)
+          || journeyRole(orgId, ['coordinator'])
+          || hasPermission(orgId, 'canCoordinateJourney')
+        );
         allow write: if false;
       }
       match /products/raiz_e_mesa {
