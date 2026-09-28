@@ -29,6 +29,20 @@ describe('Raiz e Mesa roadmap readiness', () => {
     expect(groupCapacityState(11, 12)).toBe('attention')
   })
 
+
+  it('simulates Houses at forming, healthy and attention states without inventing production records', () => {
+    const groups = [
+      { name: 'Casa Simulada A', participants: 4, capacity: 12 },
+      { name: 'Casa Simulada B', participants: 8, capacity: 12 },
+      { name: 'Casa Simulada C', participants: 11, capacity: 12 },
+    ]
+    expect(groups.map(group => groupCapacityState(group.participants, group.capacity))).toEqual([
+      'forming',
+      'healthy',
+      'attention',
+    ])
+  })
+
   it('moves the seven-week implementation clock without scoring people', () => {
     const start = Date.parse('2026-09-01T00:00:00Z')
     expect(implementationExpectedWeek(new Date(start).toISOString(), start)).toBe(1)
