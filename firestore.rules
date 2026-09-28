@@ -873,17 +873,29 @@ service cloud.firestore {
 
     function validCareClaim(orgId) {
       return resource.data.get('status', '') == 'open'
+        && resource.data.get('ownerRef', '') == ''
         && tenantUnchanged(orgId)
         && congregationUnchanged()
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['ownerRef', 'assignedAt', 'assignedBy'])
+        && request.resource.data.get('ownerRef', '') == request.auth.uid
+        && request.resource.data.get('assignedAt', null) == request.time
+        && request.resource.data.get('assignedBy', '') == request.auth.uid;
+    }
+    function validCareReassign(orgId) {
+      return resource.data.get('status', '') == 'open'
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['ownerRef', 'assignedAt', 'assignedBy'])
         && request.resource.data.get('ownerRef', '') is string
         && request.resource.data.get('ownerRef', '').size() > 0
+        && request.resource.data.get('ownerRef', '') != resource.data.get('ownerRef', '')
+        && tenantUnchanged(orgId)
+        && congregationUnchanged()
         && request.resource.data.get('assignedAt', null) == request.time
         && request.resource.data.get('assignedBy', '') == request.auth.uid
         && (
-          (resource.data.get('ownerRef', '') == '' && request.resource.data.get('ownerRef', '') == request.auth.uid)
-          || isOrgAdmin(orgId)
-          || role(orgId, ['coordinator', 'pastor'])
+          isSystemAdmin()
+          || isOwner(orgId)
+          || role(orgId, ['owner','admin','pastor','coordinator'])
+          || hasPermission(orgId, 'canCoordinateJourney')
         );
     }
     function validRevokedCareResolve(orgId) {
@@ -1748,7 +1760,7 @@ service cloud.firestore {
             && (
               request.resource.data.get('resolutionCode', '') == 'consent_revoked'
                 ? validRevokedCareResolve(orgId)
-                : (validCareClaim(orgId) || validCareResolve(orgId))
+                : (validCareClaim(orgId) || validCareReassign(orgId) || validCareResolve(orgId))
             );
           allow delete: if false;
         }
