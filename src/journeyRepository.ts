@@ -7,6 +7,7 @@ import { journeyCollectionPath } from './productIdentity'
 import { createRaizEMesaPlaybook, JOURNEY_PLAYBOOK_DEFAULT_ID, normalizeJourneyPlaybook, type JourneyPlaybookDefinition } from './playbookEngine'
 import { planFollowupOutcome, type FollowupNextActionCode, type FollowupOutcomeCode } from './followup'
 import { calculatePresenceCoverage, canUseAbsenceEvidence, type CarePromise, type PresenceCheck, type PresenceSession, type PresenceSource, type PresenceVerificationState } from './intelligence'
+import { evaluateAuthorizedContact, normalizeGroupCapacity, type GroupCapacityPolicy, type PreferredContactChannel } from './roadmapReadiness'
 
 const HUB_API_BASE = (import.meta.env.VITE_MILLIONSNEST_URL || 'https://www.millionsnest.com').replace(/\/$/, '')
 const SYSTEM_ROLES = new Set(['ceo', 'global_admin', 'ecosystem_owner', 'founder'])
@@ -222,7 +223,7 @@ export interface PresencePerson {
   photoUrl?: string
   phone?: string
   consent?: boolean
-  preferredContactChannel?: 'whatsapp' | 'phone'
+  preferredContactChannel?: PreferredContactChannel
   visits?: number
   bondHostRef?: string
   bondAssignedAt?: string
@@ -261,7 +262,9 @@ export interface JourneyGroupRecord {
   leader?: string
   leaderId?: string
   host?: string
+  hostId?: string
   apprentice?: string
+  apprenticeId?: string
   neighborhood?: string
   weekday?: string
   time?: string
@@ -406,7 +409,7 @@ export interface MinimalVisitorInput {
   name: string
   phone?: string
   consent: boolean
-  preferredContactChannel?: 'whatsapp' | 'phone'
+  preferredContactChannel?: PreferredContactChannel
 }
 
 export type CareType =
@@ -858,8 +861,12 @@ export async function ensureDefaultJourneyPlaybook(access: JourneyAccessContext)
     const current = playbookFromSnapshot(access.organizationId, snapshot.id, snapshot.data())
     const data = snapshot.data()
     const hasStageIndexes = Array.isArray(data.stageIds) && data.stageRoles && typeof data.stageRoles === 'object'
-    if (!hasStageIndexes && canConfigureJourneyPlaybooks(access)) {
+    const hasRoadmapFields = data.groupCapacityPolicy && typeof data.groupCapacityPolicy === 'object'
+      && Array.isArray(data.stages) && data.stages.every((stage: unknown) => Boolean(stage && typeof stage === 'object' && 'nextAction' in (stage as Record<string, unknown>)))
+    if ((!hasStageIndexes || !hasRoadmapFields) && canConfigureJourneyPlaybooks(access)) {
       await updateDoc(ref, {
+        groupCapacityPolicy: current.groupCapacityPolicy,
+        stages: current.stages,
         stageIds: current.stages.map((stage) => stage.id),
         stageRoles: Object.fromEntries(current.stages.map((stage) => [stage.id, stage.responsibleRoles])),
         updatedAt: serverTimestamp(),
@@ -900,6 +907,7 @@ export async function saveJourneyPlaybook(access: JourneyAccessContext, input: J
     status: playbook.status,
     carePromiseHours: playbook.carePromiseHours,
     discipleshipMeetingCount: playbook.discipleshipMeetingCount,
+    groupCapacityPolicy: playbook.groupCapacityPolicy,
     areaLabels: playbook.areaLabels,
     stages: playbook.stages,
     stageIds: playbook.stages.map((stage) => stage.id),
@@ -1138,7 +1146,9 @@ export async function listJourneyGroups(organizationId: string, congregationId: 
       leader: asString(data.leader || data.leaderName) || undefined,
       leaderId: asString(data.leaderId) || undefined,
       host: asString(data.host) || undefined,
+      hostId: asString(data.hostId) || undefined,
       apprentice: asString(data.apprentice) || undefined,
+      apprenticeId: asString(data.apprenticeId) || undefined,
       neighborhood: asString(data.neighborhood) || undefined,
       weekday: asString(data.weekday) || undefined,
       time: asString(data.time) || undefined,
@@ -1621,11 +1631,14 @@ export async function createJourneyGroup(input: {
   leader?: string
   leaderId?: string
   host?: string
+  hostId?: string
   apprentice?: string
+  apprenticeId?: string
   neighborhood?: string
   weekday?: string
   time?: string
   capacity?: number
+  capacityPolicy?: GroupCapacityPolicy
 }) {
   const firestore = requireDb()
   const groupRef = doc(collection(firestore, journeyCollectionPath(input.organizationId, 'groups')))
@@ -1637,11 +1650,13 @@ export async function createJourneyGroup(input: {
     leader: String(input.leader ?? '').trim(),
     leaderId: String(input.leaderId ?? '').trim(),
     host: String(input.host ?? '').trim(),
+    hostId: String(input.hostId ?? '').trim(),
     apprentice: String(input.apprentice ?? '').trim(),
+    apprenticeId: String(input.apprenticeId ?? '').trim(),
     neighborhood: String(input.neighborhood ?? '').trim(),
     weekday: String(input.weekday ?? '').trim(),
     time: String(input.time ?? '').trim(),
-    capacity: Math.max(4, Math.min(12, Math.floor(input.capacity ?? 12))),
+    capacity: normalizeGroupCapacity(input.capacity ?? input.capacityPolicy?.maximum ?? 12, input.capacityPolicy),
     participants: 0,
     createdAt: serverTimestamp(),
     createdBy: input.actorId,
@@ -1656,14 +1671,15 @@ export async function updateJourneyGroup(input: {
   organizationId: string
   groupId: string
   actorId: string
-  patch: Partial<Pick<JourneyGroupRecord, 'name' | 'leader' | 'leaderId' | 'host' | 'apprentice' | 'neighborhood' | 'weekday' | 'time' | 'capacity' | 'participants'>>
+  patch: Partial<Pick<JourneyGroupRecord, 'name' | 'leader' | 'leaderId' | 'host' | 'hostId' | 'apprentice' | 'apprenticeId' | 'neighborhood' | 'weekday' | 'time' | 'capacity' | 'participants'>>
+  capacityPolicy?: GroupCapacityPolicy
 }) {
   const firestore = requireDb()
   const groupRef = doc(firestore, `${journeyCollectionPath(input.organizationId, 'groups')}/${input.groupId}`)
   const patch: Record<string, unknown> = { updatedAt: serverTimestamp(), updatedBy: input.actorId }
   for (const [key, value] of Object.entries(input.patch)) {
     if (value === undefined) continue
-    if (key === 'capacity') patch[key] = Math.max(4, Math.min(12, Math.floor(Number(value))))
+    if (key === 'capacity') patch[key] = normalizeGroupCapacity(Number(value), input.capacityPolicy)
     else if (key === 'participants') patch[key] = Math.max(0, Math.floor(Number(value)))
     else patch[key] = typeof value === 'string' ? value.trim() : value
   }
@@ -1684,6 +1700,14 @@ export async function createJourneyDiscipleship(input: {
 }) {
   const firestore = requireDb()
   const relationRef = doc(collection(firestore, journeyCollectionPath(input.organizationId, 'discipleships')))
+  const existingRelations = await getDocs(query(
+    collection(firestore, journeyCollectionPath(input.organizationId, 'discipleships')),
+    where('congregationId', '==', input.congregationId),
+  ))
+  if (existingRelations.docs.some((item) => {
+    const data = item.data()
+    return asString(data.personId) === input.person.id && asString(data.status) !== 'completed'
+  })) throw new Error('discipleship_already_active')
   const targetDisciplerId = String(input.disciplerId || input.actorId).trim()
   if (!targetDisciplerId) throw new Error('missing_discipler')
   const targetMeetings = Math.max(1, Math.min(24, Math.floor(input.targetMeetings ?? 7)))
@@ -2380,9 +2404,9 @@ export async function createMinimalVisitor(input: MinimalVisitorInput) {
   if (!name) throw new Error('visitor_name_required')
   const consent = Boolean(input.consent)
   const phone = String(input.phone ?? '').trim()
-  const phoneDigits = phone.replace(/\D/g, '')
-  const preferredContactChannel = input.preferredContactChannel === 'phone' ? 'phone' : input.preferredContactChannel === 'whatsapp' ? 'whatsapp' : undefined
-  if (consent && (phoneDigits.length < 8 || !preferredContactChannel)) throw new Error('visitor_contact_required')
+  const readiness = evaluateAuthorizedContact({ consent, phone, preferredContactChannel: input.preferredContactChannel })
+  if (!readiness.ok) throw new Error('visitor_contact_required')
+  const preferredContactChannel = readiness.preferredContactChannel
   const personRef = doc(collection(firestore, journeyCollectionPath(input.organizationId, 'people')))
   const factRef = doc(firestore, `${journeyCollectionPath(input.organizationId, 'facts')}/visitor-${personRef.id}`)
   const careRef = input.consent ? doc(collection(firestore, journeyCollectionPath(input.organizationId, 'careRequests'))) : null
@@ -2656,6 +2680,15 @@ export async function createCareRequest(input: {
   organizationId: string; congregationId: string; personId: string; actorId: string; careType: CareType; summary?: string; promiseHours?: number
 }) {
   const firestore = requireDb()
+  const existing = await getDocs(query(
+    collection(firestore, journeyCollectionPath(input.organizationId, 'careRequests')),
+    where('congregationId', '==', input.congregationId),
+  ))
+  const duplicate = existing.docs.find((item) => {
+    const data = item.data()
+    return asString(data.personId) === input.personId && asString(data.careType) === input.careType && asString(data.status) === 'open'
+  })
+  if (duplicate) return duplicate.id
   const requestRef = doc(collection(firestore, journeyCollectionPath(input.organizationId, 'careRequests')))
   const requestedFactRef = doc(firestore, `${journeyCollectionPath(input.organizationId, 'facts')}/care-requested-${requestRef.id}`)
   const assignedFactRef = doc(firestore, `${journeyCollectionPath(input.organizationId, 'facts')}/care-assigned-${requestRef.id}`)
@@ -2812,6 +2845,14 @@ export async function assignCareRequest(input: {
   if (input.request.status !== 'open') throw new Error('care_request_closed')
   const ownerRef = input.ownerRef.trim()
   if (!ownerRef) throw new Error('care_owner_required')
+  const member = await getDoc(doc(firestore, `organizations/${input.organizationId}/members/${ownerRef}`))
+  if (!member.exists()) throw new Error('care_owner_not_member')
+  const memberData = member.data()
+  const memberRole = asString(memberData.journeyRole || memberData.organizationRole || memberData.role)
+  const memberUnits = asStringArray(memberData.congregationIds)
+  if (['removed','inactive','suspended','revoked','deleted'].includes(asString(memberData.status))) throw new Error('care_owner_inactive')
+  if (memberUnits.length && !memberUnits.includes(input.request.congregationId)) throw new Error('care_owner_wrong_scope')
+  if (!['owner','admin','pastor','coordinator','care','caregiver'].includes(memberRole)) throw new Error('care_owner_wrong_role')
   const requestRef = doc(firestore, `${journeyCollectionPath(input.organizationId, 'careRequests')}/${input.request.id}`)
   await updateDoc(requestRef, {
     ownerRef,
