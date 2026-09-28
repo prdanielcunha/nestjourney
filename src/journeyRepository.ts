@@ -2554,6 +2554,15 @@ export async function startJourneyFollowup(input: {
   if (input.request.ownerRef !== input.access.userId) throw new Error('followup_owner_required')
 
   const firestore = requireDb()
+  const person = await getDoc(doc(firestore, `${journeyCollectionPath(input.access.organizationId, 'people')}/${input.request.personId}`))
+  if (!person.exists()) throw new Error('followup_person_missing')
+  const personData = person.data()
+  const contact = evaluateAuthorizedContact({
+    consent: Boolean(personData.consent),
+    phone: asString(personData.phone),
+    preferredContactChannel: personData.preferredContactChannel === 'phone' ? 'phone' : personData.preferredContactChannel === 'whatsapp' ? 'whatsapp' : undefined,
+  })
+  if (!contact.ok) throw new Error('followup_contact_not_ready')
   const followupId = followupIdForCare(input.request.id)
   const followupRef = doc(firestore, `${journeyCollectionPath(input.access.organizationId, 'followups')}/${followupId}`)
   const factRef = doc(firestore, `${journeyCollectionPath(input.access.organizationId, 'facts')}/followup-created-${followupId}`)
