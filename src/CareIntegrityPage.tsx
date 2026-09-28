@@ -293,7 +293,7 @@ export default function CareIntegrityPage() {
       {visible.map(({ request, evaluation }) => {
         const person = personById.get(request.personId)
         const contactRequired = request.careType === 'first_contact' || request.careType === 'absence_check'
-        const contactAllowed = Boolean(person?.consent && person?.phone)
+        const contactAllowed = Boolean(person?.consent && person?.phone && person?.preferredContactChannel)
         const contactBlocked = request.status === 'open' && contactRequired && !contactAllowed
         const canResolve = Boolean(request.ownerRef === access.userId || access.broadJourneyAccess)
         const canCloseRevoked = Boolean(!request.ownerRef || request.ownerRef === access.userId || access.broadJourneyAccess)
@@ -306,6 +306,7 @@ export default function CareIntegrityPage() {
           <div className="care-card-grid">
             <div><span>{t.promise}</span><strong>{new Date(request.dueAt).toLocaleString(locale)}</strong><small>{evaluation.state === 'debt' ? `${t.overdueBy} ${formatDistance(evaluation.overdueMs)}` : evaluation.state === 'due_soon' ? `${t.remaining} ${formatDistance(evaluation.remainingMs)}` : request.status === 'resolved' ? t.promiseResolved : `${request.promiseHours}h`}</small></div>
             <div><span>{t.owner}</span><strong>{request.ownerRef ? (request.ownerRef === access.userId ? t.you : eligibleOwners.find(member=>member.id===request.ownerRef)?.name || t.assigned) : t.unassigned}</strong><small>{sourceLabel}</small>{canAssign&&request.status==='open'?<select aria-label={t.owner} value={request.ownerRef||''} disabled={busy} onChange={event=>event.target.value&&void assign(request,event.target.value)}><option value="">{t.unassigned}</option>{eligibleOwners.map(member=><option value={member.id} key={member.id}>{member.name}</option>)}</select>:null}</div>
+            {contactRequired?<div><span>{locale==='en'?'Authorized channel':locale==='es'?'Canal autorizado':'Canal autorizado'}</span><strong>{person?.preferredContactChannel==='whatsapp'?'WhatsApp':person?.preferredContactChannel==='phone'?(locale==='en'?'Phone call':locale==='es'?'Llamada':'Ligação'):'—'}</strong><small>{contactAllowed?(locale==='en'?'Ready for contact':locale==='es'?'Listo para contacto':'Pronto para contato'):(locale==='en'?'Contact data incomplete':locale==='es'?'Datos de contacto incompletos':'Dados de contato incompletos')}</small></div>:null}
           </div>
           {request.summary ? <p className="care-summary">{request.summary}</p> : null}
           {contactBlocked ? <div className="care-contact-blocked"><AlertTriangle size={16}/><div><strong>{t.contactBlocked}</strong><p>{t.contactBlockedHint}</p></div></div> : null}
