@@ -792,7 +792,8 @@ service cloud.firestore {
         && personData.get('congregationId', '') == congregationId
         && personData.get('consent', false) == true
         && personData.get('phone', '') is string
-        && personData.get('phone', '').size() > 0;
+        && personData.get('phone', '').size() >= 8
+        && personData.get('preferredContactChannel', '') in ['whatsapp', 'phone'];
     }
 
     function validCareRequestCreate(orgId, careRequestId) {
