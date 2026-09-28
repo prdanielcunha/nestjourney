@@ -836,13 +836,18 @@ service cloud.firestore {
 
     function validCareClaim(orgId) {
       return resource.data.get('status', '') == 'open'
-        && resource.data.get('ownerRef', '') == ''
         && tenantUnchanged(orgId)
         && congregationUnchanged()
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['ownerRef', 'assignedAt', 'assignedBy'])
-        && request.resource.data.get('ownerRef', '') == request.auth.uid
+        && request.resource.data.get('ownerRef', '') is string
+        && request.resource.data.get('ownerRef', '').size() > 0
         && request.resource.data.get('assignedAt', null) == request.time
-        && request.resource.data.get('assignedBy', '') == request.auth.uid;
+        && request.resource.data.get('assignedBy', '') == request.auth.uid
+        && (
+          (resource.data.get('ownerRef', '') == '' && request.resource.data.get('ownerRef', '') == request.auth.uid)
+          || isOrgAdmin(orgId)
+          || role(orgId, ['coordinator', 'pastor'])
+        );
     }
     function validRevokedCareResolve(orgId) {
       let personId = resource.data.get('personId', '');
@@ -1320,7 +1325,12 @@ service cloud.firestore {
         && targetMeetings >= 1
         && targetMeetings <= 24
         && request.resource.data.get('playbookId', '') is string
-        && request.resource.data.get('status', '') == 'active';
+        && request.resource.data.get('status', '') == 'active'
+        && request.resource.data.get('nextMeetingStatus', '') in ['to_be_agreed', 'scheduled', 'cancelled']
+        && (
+          request.resource.data.get('nextMeetingStatus', '') != 'scheduled'
+          || request.resource.data.get('nextMeetingAt', null) is timestamp
+        );
     }
     function validDiscipleshipUpdate() {
       let meeting = request.resource.data.get('meeting', 0);
@@ -1340,6 +1350,11 @@ service cloud.firestore {
         && meeting >= 1
         && meeting <= targetMeetings
         && status in ['active', 'paused', 'completed']
+        && request.resource.data.get('nextMeetingStatus', 'to_be_agreed') in ['to_be_agreed', 'scheduled', 'cancelled']
+        && (
+          request.resource.data.get('nextMeetingStatus', 'to_be_agreed') != 'scheduled'
+          || request.resource.data.get('nextMeetingAt', null) is timestamp
+        )
         && (status != 'completed' || meeting == targetMeetings);
     }
     function validFollowupCanonicalFact(orgId, factId, eventType, payload) {
