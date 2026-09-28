@@ -415,13 +415,14 @@ service cloud.firestore {
           || (
             requestType == 'consent_revocation'
             && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-              'consent', 'phone', 'contactStatus', 'nextActionCode',
+              'consent', 'phone', 'preferredContactChannel', 'contactStatus', 'nextActionCode',
               'consentRevokedAt', 'consentRevokedBy',
               'privacyRequestId', 'privacyUpdatedAt', 'privacyUpdatedBy'
             ])
             && resource.data.get('consent', false) == true
             && request.resource.data.get('consent', true) == false
             && request.resource.data.get('phone', 'x') == ''
+            && request.resource.data.get('preferredContactChannel', 'x') == ''
             && request.resource.data.get('contactStatus', '') == 'closed'
             && request.resource.data.get('nextActionCode', '') == 'WELCOME_ON_NEXT_VISIT'
             && request.resource.data.get('consentRevokedAt', null) == request.time
@@ -481,6 +482,29 @@ service cloud.firestore {
           )
         );
     }
+    function validPersonContactCreate() {
+      let consent = request.resource.data.get('consent', false);
+      let phone = request.resource.data.get('phone', '');
+      let channel = request.resource.data.get('preferredContactChannel', '');
+      return consent is bool
+        && phone is string
+        && channel is string
+        && (
+          (
+            consent == false
+            && phone == ''
+            && channel == ''
+          )
+          ||
+          (
+            consent == true
+            && phone.size() >= 8
+            && phone.size() <= 32
+            && channel in ['whatsapp', 'phone']
+            && request.resource.data.get('consentGrantedAt', null) == request.time
+          )
+        );
+    }
     function personBondEmptyOnCreate() {
       return request.resource.data.get('bondHostRef', '') == ''
         && request.resource.data.get('bondAssignedAt', null) == null
@@ -497,6 +521,7 @@ service cloud.firestore {
 
     function validJourneyPlaybookCore(orgId) {
       let labels = request.resource.data.get('areaLabels', {});
+      let groupPolicy = request.resource.data.get('groupCapacityPolicy', {});
       let stages = request.resource.data.get('stages', []);
       let indicators = request.resource.data.get('indicators', []);
       let routingRules = request.resource.data.get('routingRules', []);
@@ -518,6 +543,17 @@ service cloud.firestore {
         && request.resource.data.get('discipleshipMeetingCount', 0) is number
         && request.resource.data.get('discipleshipMeetingCount', 0) >= 1
         && request.resource.data.get('discipleshipMeetingCount', 0) <= 24
+        && groupPolicy is map
+        && groupPolicy.keys().hasOnly(['minimum', 'idealMin', 'idealMax', 'maximum'])
+        && groupPolicy.get('minimum', 0) is number
+        && groupPolicy.get('idealMin', 0) is number
+        && groupPolicy.get('idealMax', 0) is number
+        && groupPolicy.get('maximum', 0) is number
+        && groupPolicy.get('minimum', 0) >= 2
+        && groupPolicy.get('maximum', 0) <= 30
+        && groupPolicy.get('minimum', 0) <= groupPolicy.get('idealMin', 0)
+        && groupPolicy.get('idealMin', 0) <= groupPolicy.get('idealMax', 0)
+        && groupPolicy.get('idealMax', 0) <= groupPolicy.get('maximum', 0)
         && labels is map
         && labels.keys().hasOnly(['presence', 'table', 'care', 'groups', 'discipleship'])
         && labels.get('presence', '') is string && labels.get('presence', '').size() <= 48
@@ -541,7 +577,7 @@ service cloud.firestore {
         && request.resource.data.get('createdBy', '') == request.auth.uid
         && request.resource.data.keys().hasOnly([
           'organizationId', 'schemaVersion', 'name', 'description', 'status',
-          'carePromiseHours', 'discipleshipMeetingCount', 'areaLabels', 'stages',
+          'carePromiseHours', 'discipleshipMeetingCount', 'groupCapacityPolicy', 'areaLabels', 'stages',
           'stageIds', 'stageRoles', 'indicators', 'routingRules', 'implementationPhases', 'implementationKeys',
           'createdAt', 'createdBy', 'updatedAt', 'updatedBy'
         ]);
@@ -553,7 +589,7 @@ service cloud.firestore {
         && request.resource.data.get('createdBy', '') == resource.data.get('createdBy', '')
         && request.resource.data.keys().hasOnly([
           'organizationId', 'schemaVersion', 'name', 'description', 'status',
-          'carePromiseHours', 'discipleshipMeetingCount', 'areaLabels', 'stages',
+          'carePromiseHours', 'discipleshipMeetingCount', 'groupCapacityPolicy', 'areaLabels', 'stages',
           'stageIds', 'stageRoles', 'indicators', 'routingRules', 'implementationPhases', 'implementationKeys',
           'createdAt', 'createdBy', 'updatedAt', 'updatedBy'
         ]);
@@ -835,12 +871,25 @@ service cloud.firestore {
     }
 
     function validCareClaim(orgId) {
+      let targetOwner = request.resource.data.get('ownerRef', '');
+      let memberPath = /databases/$(database)/documents/organizations/$(orgId)/members/$(targetOwner);
+      let memberData = exists(memberPath) ? get(memberPath).data : {};
+      let memberRole = memberData.get('journeyRole', memberData.get('organizationRole', memberData.get('role', '')));
+      let memberUnits = memberData.get('congregationIds', []);
+      let targetAllowed = exists(memberPath)
+        && !(memberData.get('status', 'active') in ['removed', 'inactive', 'suspended', 'revoked', 'deleted'])
+        && memberRole in ['owner','admin','pastor','coordinator','care','caregiver']
+        && (
+          memberRole in ['owner','admin','pastor']
+          || resource.data.get('congregationId', '') in memberUnits
+        );
       return resource.data.get('status', '') == 'open'
         && tenantUnchanged(orgId)
         && congregationUnchanged()
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['ownerRef', 'assignedAt', 'assignedBy'])
         && request.resource.data.get('ownerRef', '') is string
         && request.resource.data.get('ownerRef', '').size() > 0
+        && targetAllowed
         && request.resource.data.get('assignedAt', null) == request.time
         && request.resource.data.get('assignedBy', '') == request.auth.uid
         && (
@@ -1633,6 +1682,7 @@ service cloud.firestore {
             && request.resource.data.get('deletedAt', null) == null
             && canAccessCongregation(orgId, request.resource.data.get('congregationId', ''))
             && canManagePeople(orgId)
+            && validPersonContactCreate()
             && personBondEmptyOnCreate();
           allow update: if tenantUnchanged(orgId) && congregationUnchanged()
             && canAccessCongregation(orgId, resource.data.get('congregationId', ''))
