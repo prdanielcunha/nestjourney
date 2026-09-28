@@ -543,6 +543,15 @@ service cloud.firestore {
         && request.resource.data.get('discipleshipMeetingCount', 0) is number
         && request.resource.data.get('discipleshipMeetingCount', 0) >= 1
         && request.resource.data.get('discipleshipMeetingCount', 0) <= 24
+        && request.resource.data.get('groupRecommendedMin', 0) is number
+        && request.resource.data.get('groupRecommendedMin', 0) >= 1
+        && request.resource.data.get('groupRecommendedMin', 0) <= 50
+        && request.resource.data.get('groupRecommendedMax', 0) is number
+        && request.resource.data.get('groupRecommendedMax', 0) >= request.resource.data.get('groupRecommendedMin', 0)
+        && request.resource.data.get('groupRecommendedMax', 0) <= 50
+        && request.resource.data.get('groupCapacityMax', 0) is number
+        && request.resource.data.get('groupCapacityMax', 0) >= request.resource.data.get('groupRecommendedMax', 0)
+        && request.resource.data.get('groupCapacityMax', 0) <= 50
         && labels is map
         && labels.keys().hasOnly(['presence', 'table', 'care', 'groups', 'discipleship'])
         && labels.get('presence', '') is string && labels.get('presence', '').size() <= 48
@@ -566,7 +575,7 @@ service cloud.firestore {
         && request.resource.data.get('createdBy', '') == request.auth.uid
         && request.resource.data.keys().hasOnly([
           'organizationId', 'schemaVersion', 'name', 'description', 'status',
-          'carePromiseHours', 'discipleshipMeetingCount', 'areaLabels', 'stages',
+          'carePromiseHours', 'discipleshipMeetingCount', 'groupRecommendedMin', 'groupRecommendedMax', 'groupCapacityMax', 'areaLabels', 'stages',
           'stageIds', 'stageRoles', 'indicators', 'routingRules', 'implementationPhases', 'implementationKeys',
           'createdAt', 'createdBy', 'updatedAt', 'updatedBy'
         ]);
@@ -578,7 +587,7 @@ service cloud.firestore {
         && request.resource.data.get('createdBy', '') == resource.data.get('createdBy', '')
         && request.resource.data.keys().hasOnly([
           'organizationId', 'schemaVersion', 'name', 'description', 'status',
-          'carePromiseHours', 'discipleshipMeetingCount', 'areaLabels', 'stages',
+          'carePromiseHours', 'discipleshipMeetingCount', 'groupRecommendedMin', 'groupRecommendedMax', 'groupCapacityMax', 'areaLabels', 'stages',
           'stageIds', 'stageRoles', 'indicators', 'routingRules', 'implementationPhases', 'implementationKeys',
           'createdAt', 'createdBy', 'updatedAt', 'updatedBy'
         ]);
