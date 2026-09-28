@@ -345,6 +345,18 @@ export interface JourneyDiscipleshipRecord {
   startedAt?: string
 }
 
+export interface JourneyImplementationStepRecord {
+  key: string
+  status: 'pending' | 'completed'
+  ownerRef?: string
+  ownerName?: string
+  dueAt?: string
+  plannedAt?: string
+  plannedBy?: string
+  completedAt?: string
+  completedBy?: string
+}
+
 export interface JourneyImplementationCycle {
   id: string
   organizationId: string
@@ -352,6 +364,7 @@ export interface JourneyImplementationCycle {
   playbookId: string
   status: 'active' | 'completed'
   completedKeys: string[]
+  steps: JourneyImplementationStepRecord[]
   startedAt: string
   createdAt?: string
   createdBy: string
@@ -1955,14 +1968,26 @@ export async function listImplementationCycles(organizationId: string, congregat
   const cycles = await Promise.all(snapshot.docs.map(async (item): Promise<JourneyImplementationCycle> => {
     const data = item.data()
     const playbookId = asString(data.playbookId) || JOURNEY_PLAYBOOK_DEFAULT_ID
-    const [steps, playbook] = await Promise.all([
+    const [stepSnapshot, playbook] = await Promise.all([
       getDocs(collection(firestore, `${basePath}/${item.id}/steps`)),
       getDoc(doc(firestore, `${journeyCollectionPath(organizationId, 'playbooks')}/${playbookId}`)),
     ])
-    const completedKeys = steps.docs
-      .map((step) => asString(step.data().key))
-      .filter(Boolean)
-      .sort()
+    const steps = stepSnapshot.docs.map((step): JourneyImplementationStepRecord => {
+      const raw = step.data()
+      const completed = raw.status === 'completed' || Boolean(raw.completedAt)
+      return {
+        key: asString(raw.key) || step.id,
+        status: completed ? 'completed' : 'pending',
+        ownerRef: asString(raw.ownerRef) || undefined,
+        ownerName: asString(raw.ownerName) || undefined,
+        dueAt: raw.dueAt ? toIso(raw.dueAt) : undefined,
+        plannedAt: raw.plannedAt ? toIso(raw.plannedAt) : undefined,
+        plannedBy: asString(raw.plannedBy) || undefined,
+        completedAt: raw.completedAt ? toIso(raw.completedAt) : undefined,
+        completedBy: asString(raw.completedBy) || undefined,
+      }
+    })
+    const completedKeys = steps.filter(step => step.status === 'completed').map(step => step.key).filter(Boolean).sort()
     const requiredKeys = playbook.exists()
       ? asStringArray(playbook.data().implementationKeys)
       : (playbookId === JOURNEY_PLAYBOOK_DEFAULT_ID ? createRaizEMesaPlaybook(organizationId).implementationKeys : [])
@@ -1974,6 +1999,7 @@ export async function listImplementationCycles(organizationId: string, congregat
       playbookId,
       status: completed ? 'completed' : 'active',
       completedKeys,
+      steps,
       startedAt: toIso(data.startedAt),
       createdAt: data.createdAt ? toIso(data.createdAt) : undefined,
       createdBy: asString(data.createdBy),
@@ -2009,6 +2035,48 @@ export async function createImplementationCycle(input: {
   return cycleRef.id
 }
 
+export async function planImplementationStep(input: {
+  organizationId: string
+  cycle: JourneyImplementationCycle
+  actorId: string
+  key: string
+  requiredKeys: string[]
+  ownerRef: string
+  ownerName: string
+  dueAt: string
+}) {
+  if (!input.requiredKeys.includes(input.key)) throw new Error('invalid_implementation_step')
+  const ownerRef = input.ownerRef.trim()
+  const ownerName = input.ownerName.trim()
+  const dueMs = Date.parse(input.dueAt)
+  if (!ownerRef || !ownerName || !Number.isFinite(dueMs)) throw new Error('invalid_implementation_plan')
+  const firestore = requireDb()
+  const stepRef = doc(
+    firestore,
+    `${journeyCollectionPath(input.organizationId, 'implementationCycles')}/${input.cycle.id}/steps/${input.key}`,
+  )
+  const snapshot = await getDoc(stepRef)
+  if (snapshot.exists() && (snapshot.data().status === 'completed' || snapshot.data().completedAt)) throw new Error('implementation_step_completed')
+  const batch = writeBatch(firestore)
+  const base = {
+    organizationId: input.organizationId,
+    congregationId: input.cycle.congregationId,
+    cycleId: input.cycle.id,
+    playbookId: input.cycle.playbookId,
+    key: input.key,
+    status: 'pending',
+    ownerRef,
+    ownerName,
+    dueAt: Timestamp.fromMillis(dueMs),
+    plannedAt: serverTimestamp(),
+    plannedBy: input.actorId,
+    completedAt: null,
+    completedBy: '',
+  }
+  batch.set(stepRef, base)
+  await batch.commit()
+}
+
 export async function completeImplementationStep(input: {
   organizationId: string
   cycle: JourneyImplementationCycle
@@ -2022,16 +2090,32 @@ export async function completeImplementationStep(input: {
     firestore,
     `${journeyCollectionPath(input.organizationId, 'implementationCycles')}/${input.cycle.id}/steps/${input.key}`,
   )
+  const existing = await getDoc(stepRef)
+  const current = existing.exists() ? existing.data() : null
   const batch = writeBatch(firestore)
-  batch.set(stepRef, {
-    organizationId: input.organizationId,
-    congregationId: input.cycle.congregationId,
-    cycleId: input.cycle.id,
-    playbookId: input.cycle.playbookId,
-    key: input.key,
-    completedAt: serverTimestamp(),
-    completedBy: input.actorId,
-  })
+  if (current && current.status === 'pending') {
+    batch.update(stepRef, {
+      status: 'completed',
+      completedAt: serverTimestamp(),
+      completedBy: input.actorId,
+    })
+  } else {
+    batch.set(stepRef, {
+      organizationId: input.organizationId,
+      congregationId: input.cycle.congregationId,
+      cycleId: input.cycle.id,
+      playbookId: input.cycle.playbookId,
+      key: input.key,
+      status: 'completed',
+      ownerRef: '',
+      ownerName: '',
+      dueAt: null,
+      plannedAt: null,
+      plannedBy: '',
+      completedAt: serverTimestamp(),
+      completedBy: input.actorId,
+    })
+  }
   await batch.commit()
 }
 
