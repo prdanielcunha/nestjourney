@@ -9,11 +9,11 @@ beforeAll(async () => {
     projectId: 'raiz-e-mesa-rules-test',
     firestore: { rules: readFileSync('firestore.rules', 'utf8'), host: '127.0.0.1', port: 8080 },
   })
-})
-afterAll(async () => environment.cleanup())
+}, 30_000)
+afterAll(async () => { if (environment) await environment.cleanup() })
 beforeEach(async () => environment.clearFirestore())
 
-async function seedMembership(uid: string, orgId: string, role: string, congregationIds = ['unit-a'], permissions: Record<string, boolean> = {}) {
+async function seedMembership(uid: string, orgId: string, role: string, congregationIds = ['unit-a'], permissions: Record<string, boolean> = {}, journeyRole?: string) {
   await environment.withSecurityRulesDisabled(async (context) => {
     const db = context.firestore()
     await setDoc(doc(db, `organizations/${orgId}`), {
@@ -21,7 +21,13 @@ async function seedMembership(uid: string, orgId: string, role: string, congrega
       status: 'active',
       apps: { raiz_e_mesa: { status: 'active', plan: 'pilot' } },
     })
-    await setDoc(doc(db, `organizations/${orgId}/members/${uid}`), { status: 'active', organizationRole: role, congregationIds, permissions })
+    await setDoc(doc(db, `organizations/${orgId}/members/${uid}`), {
+      status: 'active',
+      organizationRole: role,
+      ...(journeyRole ? { journeyRole } : {}),
+      congregationIds,
+      permissions,
+    })
   })
 }
 
@@ -401,7 +407,7 @@ describe('Care Integrity persistence and scope', () => {
   async function seedPerson(id = 'person-a', congregationId = 'unit-a') {
     await environment.withSecurityRulesDisabled(async (context) => {
       await setDoc(doc(context.firestore(), `organizations/org-a/products/raiz_e_mesa/people/${id}`), {
-        organizationId: 'org-a', congregationId, name: 'Person', consent: true, phone: '43999999999',
+        organizationId: 'org-a', congregationId, name: 'Person', consent: true, phone: '43999999999', preferredChannel: 'whatsapp',
       })
     })
   }
@@ -1107,7 +1113,8 @@ describe('Implementation Runtime rules', () => {
   function step(uid: string, key = 'prep.1', congregationId = 'unit-a') {
     return {
       organizationId:'org-a', congregationId, cycleId:'cycle-a', playbookId:'raiz_e_mesa_2026',
-      key, completedAt:serverTimestamp(), completedBy:uid,
+      key, status:'completed', ownerRef:'', ownerName:'', dueAt:null, plannedAt:null, plannedBy:'',
+      completedAt:serverTimestamp(), completedBy:uid,
     }
   }
 
@@ -1147,6 +1154,7 @@ describe('Implementation Runtime rules', () => {
       status:'active',
       carePromiseHours:36,
       discipleshipMeetingCount:10,
+      groupRecommendedMin:6,groupRecommendedMax:10,groupCapacityMax:12,
       areaLabels:{presence:'Boas-vindas',table:'Café',care:'Cuidado',groups:'PG',discipleship:'Caminho'},
       stages:[
         {id:'welcome',label:'Chegada',kind:'presence',entryCriteria:'Chegou',completionCriteria:'Acolhido',responsibleRoles:['presence_host'],requiredFields:['name']},
@@ -1182,14 +1190,16 @@ describe('Implementation Runtime rules', () => {
       doc(db,'organizations/org-a/products/raiz_e_mesa/implementationCycles/custom-cycle/steps/phase.prepare.item.1'),
       {
         organizationId:'org-a',congregationId:'unit-a',cycleId:'custom-cycle',playbookId:'custom-care-path',
-        key:'phase.prepare.item.1',completedAt:serverTimestamp(),completedBy:'coord-custom',
+        key:'phase.prepare.item.1',status:'completed',ownerRef:'',ownerName:'',dueAt:null,plannedAt:null,plannedBy:'',
+        completedAt:serverTimestamp(),completedBy:'coord-custom',
       },
     ))
     await assertFails(setDoc(
       doc(db,'organizations/org-a/products/raiz_e_mesa/implementationCycles/custom-cycle/steps/phase.prepare.item.99'),
       {
         organizationId:'org-a',congregationId:'unit-a',cycleId:'custom-cycle',playbookId:'custom-care-path',
-        key:'phase.prepare.item.99',completedAt:serverTimestamp(),completedBy:'coord-custom',
+        key:'phase.prepare.item.99',status:'completed',ownerRef:'',ownerName:'',dueAt:null,plannedAt:null,plannedBy:'',
+        completedAt:serverTimestamp(),completedBy:'coord-custom',
       },
     ))
   })
@@ -1200,6 +1210,7 @@ describe('Implementation Runtime rules', () => {
     await assertFails(setDoc(doc(db,'organizations/org-a/products/raiz_e_mesa/playbooks/not-allowed'),{
       organizationId:'org-a',schemaVersion:1,name:'No',description:'',status:'active',
       carePromiseHours:48,discipleshipMeetingCount:7,
+      groupRecommendedMin:6,groupRecommendedMax:10,groupCapacityMax:12,
       areaLabels:{presence:'P',table:'T',care:'C',groups:'G',discipleship:'D'},
       stages:[{id:'s',label:'S',kind:'custom',entryCriteria:'',completionCriteria:'',responsibleRoles:[],requiredFields:['name']}],
       stageIds:['s'],stageRoles:{s:[]},
@@ -1231,6 +1242,7 @@ describe('Journey milestone rules', () => {
         status:'active',
         carePromiseHours:48,
         discipleshipMeetingCount:7,
+      groupRecommendedMin:6,groupRecommendedMax:10,groupCapacityMax:12,
         areaLabels:{presence:'Recepção',table:'Mesa',care:'Cuidado',groups:'PG',discipleship:'Raiz'},
         stages:[
           {id:'service',label:'Vida & Serviço',kind:'service',entryCriteria:'Interesse explícito',completionCriteria:'Encaminhamento concluído',responsibleRoles:['coordinator'],requiredFields:['name']},
