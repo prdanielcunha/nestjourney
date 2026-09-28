@@ -19,6 +19,7 @@ export interface JourneyPlaybookStage {
   kind: JourneyPlaybookStageKind
   entryCriteria: string
   completionCriteria: string
+  nextAction: string
   responsibleRoles: string[]
   requiredFields: string[]
 }
@@ -39,6 +40,12 @@ export interface JourneyPlaybookDefinition {
   status: JourneyPlaybookStatus
   carePromiseHours: number
   discipleshipMeetingCount: number
+  groupCapacityPolicy: {
+    minimum: number
+    idealMin: number
+    idealMax: number
+    maximum: number
+  }
   areaLabels: Record<JourneyPlaybookAreaKey, string>
   stages: JourneyPlaybookStage[]
   indicators: string[]
@@ -52,13 +59,13 @@ export interface JourneyPlaybookDefinition {
 }
 
 const DEFAULT_STAGE_BLUEPRINT: Omit<JourneyPlaybookStage, 'label'>[] = [
-  { id: 'service', kind: 'presence', entryCriteria: 'Pessoa recebida ou presença registrada.', completionCriteria: 'Próximo passo factual definido quando aplicável.', responsibleRoles: ['presence_host','coordinator','pastor'], requiredFields: ['name'] },
-  { id: 'table', kind: 'table', entryCriteria: 'Convite ou participação registrada.', completionCriteria: 'Participação factual registrada sem inferir interesse espiritual.', responsibleRoles: ['mesa_team','coordinator','pastor'], requiredFields: ['name'] },
-  { id: 'care', kind: 'care', entryCriteria: 'Necessidade ou compromisso de contato explicitamente registrado.', completionCriteria: 'Resultado e próximo passo registrados.', responsibleRoles: ['caregiver','coordinator','pastor'], requiredFields: ['name','consent'] },
-  { id: 'group', kind: 'groups', entryCriteria: 'Interesse ou entrada na comunidade registrado.', completionCriteria: 'Vínculo com grupo registrado ou decisão factual de não seguir agora.', responsibleRoles: ['group_leader','coordinator','pastor'], requiredFields: ['name'] },
-  { id: 'discipleship', kind: 'discipleship', entryCriteria: 'Relação de discipulado iniciada com responsável definido.', completionCriteria: 'Trilha concluída, pausada ou encerrada com estado factual.', responsibleRoles: ['discipler','coordinator','pastor'], requiredFields: ['name'] },
-  { id: 'life_service', kind: 'service', entryCriteria: 'Próximo passo de vida, formação ou serviço explicitamente registrado.', completionCriteria: 'Marco factual registrado sem transformar serviço em obrigação.', responsibleRoles: ['coordinator','pastor'], requiredFields: ['name'] },
-  { id: 'multiplication', kind: 'multiplication', entryCriteria: 'Formação de liderança ou multiplicação explicitamente iniciada.', completionCriteria: 'Marco factual registrado e responsabilidade confirmada.', responsibleRoles: ['coordinator','pastor'], requiredFields: ['name'] },
+  { id: 'service', kind: 'presence', entryCriteria: 'Pessoa recebida ou presença registrada.', completionCriteria: 'Próximo passo factual definido quando aplicável.', nextAction: 'Perceber a pessoa, criar vínculo real e registrar somente o próximo passo necessário.', responsibleRoles: ['presence_host','coordinator','pastor'], requiredFields: ['name'] },
+  { id: 'table', kind: 'table', entryCriteria: 'Convite ou participação registrada.', completionCriteria: 'Participação factual registrada sem inferir interesse espiritual.', nextAction: 'Convidar para permanecer alguns minutos e registrar participação quando ela realmente acontecer.', responsibleRoles: ['mesa_team','coordinator','pastor'], requiredFields: ['name'] },
+  { id: 'care', kind: 'care', entryCriteria: 'Necessidade ou compromisso de contato explicitamente registrado.', completionCriteria: 'Resultado e próximo passo registrados.', nextAction: 'Fazer o contato autorizado dentro do prazo e registrar apenas resultado e próximo passo.', responsibleRoles: ['caregiver','coordinator','pastor'], requiredFields: ['name','consent','phone'] },
+  { id: 'group', kind: 'groups', entryCriteria: 'Interesse ou entrada na comunidade registrado.', completionCriteria: 'Vínculo com grupo registrado ou decisão factual de não seguir agora.', nextAction: 'Combinar uma Casa adequada e facilitar a primeira participação sem pressão.', responsibleRoles: ['group_leader','coordinator','pastor'], requiredFields: ['name'] },
+  { id: 'discipleship', kind: 'discipleship', entryCriteria: 'Relação de discipulado iniciada com responsável definido.', completionCriteria: 'Trilha concluída, pausada ou encerrada com estado factual.', nextAction: 'Realizar o encontro atual e combinar data e hora do próximo, ou deixar explicitamente a combinar.', responsibleRoles: ['discipler','coordinator','pastor'], requiredFields: ['name'] },
+  { id: 'life_service', kind: 'service', entryCriteria: 'Próximo passo de vida, formação ou serviço explicitamente registrado.', completionCriteria: 'Marco factual registrado sem transformar serviço em obrigação.', nextAction: 'Combinar um próximo passo compatível com maturidade, dons e acompanhamento pastoral.', responsibleRoles: ['coordinator','pastor'], requiredFields: ['name'] },
+  { id: 'multiplication', kind: 'multiplication', entryCriteria: 'Formação de liderança ou multiplicação explicitamente iniciada.', completionCriteria: 'Marco factual registrado e responsabilidade confirmada.', nextAction: 'Confirmar formação, supervisão e responsabilidade antes de iniciar cuidado ou liderança de outros.', responsibleRoles: ['coordinator','pastor'], requiredFields: ['name'] },
 ]
 
 const DEFAULT_STAGE_LABELS = ['Culto','Mesa Aberta','Cuidado','Casa de Paz','Raiz','Vida & Serviço','Multiplicação']
@@ -114,6 +121,7 @@ export function createRaizEMesaPlaybook(organizationId: string): JourneyPlaybook
     status: 'active',
     carePromiseHours: 48,
     discipleshipMeetingCount: 7,
+    groupCapacityPolicy: { minimum: 4, idealMin: 6, idealMax: 10, maximum: 12 },
     areaLabels,
     stages: DEFAULT_STAGE_BLUEPRINT.map((stage, index) => ({ ...stage, label: DEFAULT_STAGE_LABELS[index] })),
     indicators: ['care_debt','unassigned_care','open_presence_sessions','group_capacity','active_discipleships','pastoral_handoffs'],
@@ -148,6 +156,7 @@ export function normalizeJourneyPlaybook(input: Partial<JourneyPlaybookDefinitio
       kind,
       entryCriteria: cleanText(source.entryCriteria, 280),
       completionCriteria: cleanText(source.completionCriteria, 280),
+      nextAction: cleanText(source.nextAction, 280) || cleanText(source.completionCriteria, 280),
       responsibleRoles: boundedList(source.responsibleRoles, 9, 40).filter((role) => (JOURNEY_PLAYBOOK_ROLES as readonly string[]).includes(role)),
       requiredFields: boundedList(source.requiredFields, 4, 32).filter((field) => (JOURNEY_PLAYBOOK_REQUIRED_FIELDS as readonly string[]).includes(field)),
     }
@@ -165,6 +174,11 @@ export function normalizeJourneyPlaybook(input: Partial<JourneyPlaybookDefinitio
   }).filter((phase) => phase.items.length > 0)
 
   const labels = input.areaLabels ?? {} as JourneyPlaybookDefinition['areaLabels']
+  const rawPolicy = input.groupCapacityPolicy ?? { minimum: 4, idealMin: 6, idealMax: 10, maximum: 12 }
+  const minimum = boundedNumber(rawPolicy.minimum, 4, 2, 30)
+  const maximum = boundedNumber(rawPolicy.maximum, 12, minimum, 30)
+  const idealMin = boundedNumber(rawPolicy.idealMin, 6, minimum, maximum)
+  const idealMax = boundedNumber(rawPolicy.idealMax, 10, idealMin, maximum)
   const normalized: JourneyPlaybookDefinition = {
     id: safeId(input.id, fallbackId),
     organizationId,
@@ -174,6 +188,7 @@ export function normalizeJourneyPlaybook(input: Partial<JourneyPlaybookDefinitio
     status: input.status === 'archived' ? 'archived' : input.status === 'active' ? 'active' : 'draft',
     carePromiseHours: boundedNumber(input.carePromiseHours, 48, 1, 168),
     discipleshipMeetingCount: boundedNumber(input.discipleshipMeetingCount, 7, 1, 24),
+    groupCapacityPolicy: { minimum, idealMin, idealMax, maximum },
     areaLabels: {
       presence: cleanText(labels.presence, 48) || 'Recepção',
       table: cleanText(labels.table, 48) || 'Mesa',
