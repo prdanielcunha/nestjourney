@@ -28,6 +28,7 @@ describe('Journey playbook engine', () => {
       status: 'active',
       carePromiseHours: 36,
       discipleshipMeetingCount: 10,
+      groupCapacityPolicy: { minimum: 4, idealMin: 5, idealMax: 9, maximum: 11 },
       areaLabels: {
         presence: 'Boas-vindas',
         table: 'Café da Família',
@@ -42,6 +43,7 @@ describe('Journey playbook engine', () => {
           kind: 'presence',
           entryCriteria: 'Chegou',
           completionCriteria: 'Foi acolhido',
+          nextAction: 'Convidar para a próxima etapa.',
           responsibleRoles: ['presence_host'],
           requiredFields: ['name'],
         },
@@ -51,6 +53,7 @@ describe('Journey playbook engine', () => {
           kind: 'groups',
           entryCriteria: 'Desejou conhecer',
           completionCriteria: 'Entrou em um PG',
+          nextAction: 'Combinar a primeira participação.',
           responsibleRoles: ['group_leader'],
           requiredFields: ['name'],
         },
@@ -58,13 +61,16 @@ describe('Journey playbook engine', () => {
       indicators: ['care_debt'],
       routingRules: ['visitor_to_first_contact'],
       implementationPhases: [
-        { id: 'prepare', title: 'Preparar', objective: 'Preparar equipe', items: ['Definir responsáveis','Treinar acolhimento'] },
-        { id: 'launch', title: 'Lançar', objective: 'Começar', items: ['Abrir a jornada'] },
+        { id: 'prepare', title: 'Preparar', objective: 'Preparar equipe', items: ['Definir responsáveis','Treinar acolhimento'], targetWeek: 0, responsibleRoles: ['coordinator'] },
+        { id: 'launch', title: 'Lançar', objective: 'Começar', items: ['Abrir a jornada'], targetWeek: 1, responsibleRoles: ['presence_host'] },
       ],
       implementationKeys: [],
     })
     expect(playbook.areaLabels.table).toBe('Café da Família')
     expect(playbook.discipleshipMeetingCount).toBe(10)
+    expect(playbook.groupCapacityPolicy.maximum).toBe(11)
+    expect(playbook.stages[0].nextAction).toBe('Convidar para a próxima etapa.')
+    expect(playbook.implementationPhases[1].responsibleRoles).toEqual(['presence_host'])
     expect(playbook.stages).toHaveLength(2)
     expect(playbook.implementationKeys).toEqual([
       'phase.prepare.item.1',
@@ -75,7 +81,7 @@ describe('Journey playbook engine', () => {
   })
 
   it('bounds free-form configuration and rejects invalid tenant identity', () => {
-    const keys = implementationKeysForPhases([{ id: 'A B', title: 'A', objective: '', items: ['1','2'] }])
+    const keys = implementationKeysForPhases([{ id: 'A B', title: 'A', objective: '', items: ['1','2'], targetWeek: 1, responsibleRoles: ['coordinator'] }])
     expect(keys).toEqual(['phase.a-b.item.1','phase.a-b.item.2'])
     expect(() => normalizeJourneyPlaybook({ organizationId: '../other' })).toThrow('invalid_organization_id')
   })
