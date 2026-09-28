@@ -351,7 +351,11 @@ export default function MyTodayPage(){
             :item.kind==='presence_open'?t.goPresence
             :item.kind==='group_attention'?t.capacity+': '+Math.round((item.ratio??0)*100)+'%'
             :item.kind==='pastoral_handoff'?t.pastoralMarker
-            :t.meeting+': '+String(item.meeting??'—')+' · '+item.titleRef
+            :item.kind==='discipleship_next'
+              ?t.meeting+': '+String(item.meeting??'—')+' · '+(item.detailRef==='scheduled'&&item.dueAt
+                ?new Date(item.dueAt).toLocaleString(locale)
+                :(locale==='en'?'Next meeting to be agreed':locale==='es'?'Próximo encuentro por acordar':'Próximo encontro a combinar'))
+              :t.meeting+': '+String(item.meeting??'—')+' · '+item.titleRef
           return <article className="today-action-row" key={item.id}>
             <span className={'today-action-icon '+tone}><Icon size={17}/></span>
             <div><span>{label}</span><h3>{item.personName||item.titleRef}</h3><p>{detail}</p></div>

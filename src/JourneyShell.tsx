@@ -95,6 +95,7 @@ export function JourneyShell({children}:{children:ReactNode}){
   const [pathname,setPathname]=useState(()=>window.location.pathname)
   const [online,setOnline]=useState(()=>navigator.onLine)
   const [accessOpen,setAccessOpen]=useState(false)
+  const [showFirstRun,setShowFirstRun]=useState(false)
   const [collapsed,setCollapsed]=useState(()=>{try{return localStorage.getItem('nestjourney_sidebar_collapsed')==='1'}catch{return false}})
   const [organizationName,setOrganizationName]=useState('')
   const [unitName,setUnitName]=useState('')
@@ -214,6 +215,20 @@ export function JourneyShell({children}:{children:ReactNode}){
   }
 
   const responsibility=access?resolveJourneyResponsibility(access):'member'
+  useEffect(()=>{
+    if(!access)return
+    const key=`nestjourney_onboarding_v1:${access.organizationId}:${responsibility}`
+    try{setShowFirstRun(localStorage.getItem(key)!=='done')}catch{setShowFirstRun(true)}
+  },[access?.organizationId,responsibility])
+
+  const dismissFirstRun=()=>{
+    if(access){
+      const key=`nestjourney_onboarding_v1:${access.organizationId}:${responsibility}`
+      try{localStorage.setItem(key,'done')}catch{}
+    }
+    setShowFirstRun(false)
+  }
+
   const roleShortcut=
     responsibility==='presence_host'?{href:'/presence-assist',label:names.presence,icon:UserCheck}
     :responsibility==='mesa_team'?{href:'/mesa-runtime',label:names.mesa,icon:UsersRound}
@@ -329,6 +344,18 @@ export function JourneyShell({children}:{children:ReactNode}){
       <div><strong>{activeLabel}</strong><span>{scopeLabel}</span></div>
       <span className="journey-context-role">{displayRole}</span>
     </div>
+
+    {access&&showFirstRun?<section className="journey-first-run" role="dialog" aria-modal="true" aria-labelledby="journey-first-run-title">
+      <div className="journey-first-run-card">
+        <div className="journey-first-run-head"><span className="journey-section-kicker">NestJourney</span><h2 id="journey-first-run-title">{locale==='en'?'Your first three steps':locale==='es'?'Tus primeros tres pasos':'Seus primeiros três passos'}</h2><p>{locale==='en'?'MillionsNest manages who you are and what you may access. NestJourney is where you do the care work.':locale==='es'?'MillionsNest administra quién eres y qué puedes acceder. NestJourney es donde realizas el cuidado.':'O MillionsNest gerencia quem você é e o que pode acessar. O NestJourney é onde você realiza o cuidado.'}</p></div>
+        <ol className="journey-first-run-steps">
+          <li><b>1</b><span><strong>{locale==='en'?'Confirm your context':locale==='es'?'Confirma tu contexto':'Confirme seu contexto'}</strong><small>{[organizationName,unitName,displayRole].filter(Boolean).join(' · ')||scopeLabel}</small></span></li>
+          <li><b>2</b><span><strong>{locale==='en'?'Start in Today':locale==='es'?'Empieza en Hoy':'Comece em Hoje'}</strong><small>{locale==='en'?'Today shows only the actions that actually need your role.':locale==='es'?'Hoy muestra solamente las acciones que realmente necesita tu función.':'Hoje mostra somente as ações que realmente precisam do seu papel.'}</small></span></li>
+          <li><b>3</b><span><strong>{locale==='en'?'Get help without guessing':locale==='es'?'Pide ayuda sin adivinar':'Peça ajuda sem adivinhar'}</strong><small>{locale==='en'?'If a person, campus, or permission is missing, open Help. Access changes are made in MillionsNest Hub.':locale==='es'?'Si falta una persona, sede o permiso, abre Ayuda. Los cambios de acceso se hacen en MillionsNest Hub.':'Se faltar pessoa, unidade ou permissão, abra Ajuda. Mudanças de acesso são feitas no MillionsNest Hub.'}</small></span></li>
+        </ol>
+        <div className="journey-first-run-actions"><button onClick={()=>{dismissFirstRun();navigate('/help')}}>{locale==='en'?'Open Help':locale==='es'?'Abrir Ayuda':'Abrir Ajuda'}</button><button className="primary" onClick={()=>{dismissFirstRun();navigate('/my-today')}}>{locale==='en'?'Go to Today':locale==='es'?'Ir a Hoy':'Ir para Hoje'}</button></div>
+      </div>
+    </section>:null}
 
     <section className="journey-app-content">{children}</section>
 

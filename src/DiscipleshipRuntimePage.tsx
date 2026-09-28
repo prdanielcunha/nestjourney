@@ -10,6 +10,7 @@ import {
   loadActiveJourneyPlaybook,
   loadJourneyAccess,
   updateJourneyDiscipleship,
+  setJourneyDiscipleshipNextMeeting,
   subscribeJourneyLiveChanges,
   type JourneyAccessContext,
   type JourneyCongregation,
@@ -30,7 +31,7 @@ export default function DiscipleshipRuntimePage(){
   const { labels } = useJourneyLabels()
   const t={...baseCopy,title:labels.discipleship||baseCopy.title}
   const [access,setAccess]=useState<JourneyAccessContext|null>(null),[congregations,setCongregations]=useState<JourneyCongregation[]>([]),[congregationId,setCongregationId]=useState('')
-  const [people,setPeople]=useState<JourneyPersonRecord[]>([]),[items,setItems]=useState<JourneyDiscipleshipRecord[]>([]),[loading,setLoading]=useState(true),[busy,setBusy]=useState(false),[error,setError]=useState(''),[showNew,setShowNew]=useState(false)
+  const [people,setPeople]=useState<JourneyPersonRecord[]>([]),[items,setItems]=useState<JourneyDiscipleshipRecord[]>([]),[loading,setLoading]=useState(true),[busy,setBusy]=useState(false),[error,setError]=useState(''),[showNew,setShowNew]=useState(false),[scheduling,setScheduling]=useState<JourneyDiscipleshipRecord|null>(null)
   const [playbookId,setPlaybookId]=useState(''),[meetingCount,setMeetingCount]=useState(7)
   const activePersonIds=useMemo(()=>new Set(items.filter(x=>x.status!=='completed').map(x=>x.personId)),[items])
 
@@ -63,7 +64,7 @@ export default function DiscipleshipRuntimePage(){
   },[access,congregationId,refresh])
 
   async function selectUnit(unitId:string){if(!access)return;setCongregationId(unitId);setActiveJourneyCongregationId(access.organizationId,unitId);setBusy(true);setError('');try{await refresh(access,unitId)}catch(cause){console.error(cause);setError(t.error)}finally{setBusy(false)}}
-  async function act(item:JourneyDiscipleshipRecord,action:'advance'|'pause'|'resume'){if(!access)return;setBusy(true);setError('');try{await updateJourneyDiscipleship({organizationId:access.organizationId,relation:item,actorId:access.userId,action});await refresh(access,congregationId)}catch(cause){console.error(cause);setError(t.error)}finally{setBusy(false)}}
+  async function act(item:JourneyDiscipleshipRecord,action:'advance'|'pause'|'resume'){if(!access)return;setBusy(true);setError('');try{await updateJourneyDiscipleship({organizationId:access.organizationId,relation:item,actorId:access.userId,action});await refresh(access,congregationId);if(action==='advance'&&item.meeting<(item.targetMeetings??7))setScheduling({...item,meeting:Math.min(item.meeting+1,item.targetMeetings??7),nextMeeting:'A combinar',nextMeetingAt:undefined,nextMeetingStatus:'to_be_agreed'})}catch(cause){console.error(cause);setError(t.error)}finally{setBusy(false)}}
 
   const empty=emptyGuidance(locale,'discipleship_none')
   const availablePeople=people.filter(person=>!activePersonIds.has(person.id))
@@ -127,13 +128,14 @@ export default function DiscipleshipRuntimePage(){
             ? {title:'Prepara este encuentro',items:['Ora antes de la conversación','Revisa el material oficial de este encuentro','Prepara preguntas abiertas y escucha sin prisa','No registres relatos íntimos o sensibles']}
             : {title:'Prepare este encontro',items:['Ore antes da conversa','Revise o material oficial deste encontro','Prepare perguntas abertas e escute sem pressa','Não registre relatos íntimos ou sensíveis']}
         return <article className="runtime-panel runtime-card" id={"discipleship-"+item.id} key={item.id}><div className="runtime-card-head"><span className="runtime-icon"><Leaf size={18}/></span><div><h2>{item.personName||item.personId}</h2><p>{t.discipler}: {item.disciplerName||item.disciplerId}</p></div><span className={`runtime-badge ${item.status==='paused'?'attention':''}`}>{item.status==='completed'?t.completed:item.status==='paused'?t.paused:t.active}</span></div>
-        <div className="runtime-progress"><span><small>{t.meeting}</small><strong>{item.meeting}/{item.targetMeetings??7}</strong></span><div><i style={{width:`${Math.min(100,item.meeting/(item.targetMeetings??7)*100)}%`}}/></div></div><p className="runtime-next"><b>{t.next}:</b> {item.nextMeeting||'—'}</p>
+        <div className="runtime-progress"><span><small>{t.meeting}</small><strong>{item.meeting}/{item.targetMeetings??7}</strong></span><div><i style={{width:`${Math.min(100,item.meeting/(item.targetMeetings??7)*100)}%`}}/></div></div><p className="runtime-next"><b>{t.next}:</b> {item.nextMeetingStatus==='scheduled'&&item.nextMeetingAt?new Date(item.nextMeetingAt).toLocaleString(locale):item.nextMeetingStatus==='cancelled'?(locale==='en'?'Cancelled':locale==='es'?'Cancelado':'Cancelado'):(locale==='en'?'To be agreed':locale==='es'?'A acordar':'A combinar')}</p>
         {item.status!=='completed'?<div className="runtime-preparation"><span><BookOpen size={15}/><strong>{prep.title} · {item.meeting}/{item.targetMeetings??7}</strong></span><ul>{prep.items.map(step=><li key={step}>{step}</li>)}</ul></div>:null}
-        <div className="runtime-card-actions">{item.status!=='completed'?<><button className="runtime-button primary" disabled={busy||item.status==='paused'} onClick={()=>void act(item,'advance')}><CheckCircle2 size={16}/>{t.advance}</button>{item.status==='paused'?<button className="runtime-button" disabled={busy} onClick={()=>void act(item,'resume')}><Play size={16}/>{t.resume}</button>:<button className="runtime-button" disabled={busy} onClick={()=>void act(item,'pause')}><Pause size={16}/>{t.pause}</button>}</>:null}</div>
+        <div className="runtime-card-actions">{item.status!=='completed'?<><button className="runtime-button primary" disabled={busy||item.status==='paused'} onClick={()=>void act(item,'advance')}><CheckCircle2 size={16}/>{t.advance}</button><button className="runtime-button" disabled={busy||item.status==='paused'} onClick={()=>setScheduling(item)}>{locale==='en'?'Set next meeting':locale==='es'?'Acordar próximo encuentro':'Combinar próximo encontro'}</button>{item.status==='paused'?<button className="runtime-button" disabled={busy} onClick={()=>void act(item,'resume')}><Play size={16}/>{t.resume}</button>:<button className="runtime-button" disabled={busy} onClick={()=>void act(item,'pause')}><Pause size={16}/>{t.pause}</button>}</>:null}</div>
       </article>})}
       {!items.length?<div className="runtime-panel"><GuidedEmptyState icon={Leaf} title={empty.title} body={empty.body} primary={availablePeople.length?{label:empty.primary,onClick:()=>setShowNew(true)}:{label:locale==='en'?'View People':locale==='es'?'Ver Personas':'Ver Pessoas',href:'/journey-profile'}} secondary={{label:empty.secondary||t.empty,href:'/journey-profile'}}/></div>:null}
     </section><p className="runtime-rule"><ShieldCheck size={15}/>{t.sourceRule}</p>
   </div>
+  {scheduling&&access?<ScheduleMeetingModal locale={locale} relation={scheduling} close={()=>setScheduling(null)} save={async(status,nextMeetingAt)=>{setBusy(true);setError('');try{await setJourneyDiscipleshipNextMeeting({organizationId:access.organizationId,relation:scheduling,actorId:access.userId,status,nextMeetingAt});setScheduling(null);await refresh(access,congregationId)}catch(cause){console.error(cause);setError(t.error)}finally{setBusy(false)}}}/>:null}
   {showNew?<NewRelationModal locale={locale} people={people} activePersonIds={activePersonIds} close={()=>setShowNew(false)} save={async person=>{
     if(!access)return;setBusy(true);setError('')
     try{await createJourneyDiscipleship({organizationId:access.organizationId,congregationId,person,actorId:access.userId,disciplerName:auth?.currentUser?.displayName||'',targetMeetings:meetingCount,playbookId});setShowNew(false);await refresh(access,congregationId)}
@@ -145,4 +147,17 @@ function NewRelationModal({locale,people,activePersonIds,close,save}:{locale:App
   const t=discipleshipRuntimeCopy[locale],available=people.filter(x=>!activePersonIds.has(x.id)),[personId,setPersonId]=useState(available[0]?.id??'')
   const person=available.find(x=>x.id===personId)
   return <div className="runtime-modal-backdrop" onMouseDown={close}><section className="runtime-panel runtime-modal" onMouseDown={e=>e.stopPropagation()}><div className="runtime-modal-head"><h2>{t.newRelation}</h2><button className="runtime-button" onClick={close}><X size={17}/></button></div><div className="runtime-form"><label><span>{t.choosePerson}</span><select value={personId} onChange={e=>setPersonId(e.target.value)}>{available.map(x=><option key={x.id} value={x.id}>{x.name}</option>)}</select></label>{!available.length?<p className="runtime-muted">{t.duplicate}</p>:null}</div><div className="runtime-modal-actions"><button className="runtime-button" onClick={close}>{t.cancel}</button><button className="runtime-button primary" disabled={!person} onClick={()=>person&&void save(person)}>{t.start}</button></div></section></div>
+}
+
+
+function ScheduleMeetingModal({locale,relation,close,save}:{locale:AppLocale;relation:JourneyDiscipleshipRecord;close:()=>void;save:(status:'to_be_agreed'|'scheduled'|'cancelled',nextMeetingAt?:string)=>Promise<void>}){
+  const initial=relation.nextMeetingAt?new Date(relation.nextMeetingAt):new Date(Date.now()+7*24*60*60*1000)
+  const localValue=new Date(initial.getTime()-initial.getTimezoneOffset()*60000).toISOString().slice(0,16)
+  const [when,setWhen]=useState(localValue)
+  const title=locale==='en'?'Agree next meeting':locale==='es'?'Acordar próximo encuentro':'Combinar próximo encontro'
+  const scheduled=locale==='en'?'Save date and time':locale==='es'?'Guardar fecha y hora':'Salvar data e hora'
+  const later=locale==='en'?'Leave to be agreed':locale==='es'?'Dejar por acordar':'Deixar a combinar'
+  const cancel=locale==='en'?'Cancel next meeting':locale==='es'?'Cancelar próximo encuentro':'Cancelar próximo encontro'
+  const closeLabel=locale==='en'?'Close':locale==='es'?'Cerrar':'Fechar'
+  return <div className="runtime-modal-backdrop" onMouseDown={close}><section className="runtime-panel runtime-modal" onMouseDown={e=>e.stopPropagation()}><div className="runtime-modal-head"><div><h2>{title}</h2><p className="runtime-muted">{relation.personName||relation.personId}</p></div><button className="runtime-button" onClick={close}><X size={17}/></button></div><div className="runtime-form"><label><span>{locale==='en'?'Date and time':locale==='es'?'Fecha y hora':'Data e hora'}</span><input type="datetime-local" value={when} onChange={e=>setWhen(e.target.value)}/></label></div><div className="runtime-modal-actions"><button className="runtime-button" onClick={close}>{closeLabel}</button><button className="runtime-button" onClick={()=>void save('to_be_agreed')}>{later}</button><button className="runtime-button" onClick={()=>void save('cancelled')}>{cancel}</button><button className="runtime-button primary" disabled={!when||Date.parse(when)<=Date.now()-5*60*1000} onClick={()=>void save('scheduled',new Date(when).toISOString())}>{scheduled}</button></div></section></div>
 }

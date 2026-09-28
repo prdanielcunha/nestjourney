@@ -9,9 +9,9 @@ beforeAll(async () => {
     projectId: 'raiz-e-mesa-rules-test',
     firestore: { rules: readFileSync('firestore.rules', 'utf8'), host: '127.0.0.1', port: 8080 },
   })
-})
-afterAll(async () => environment.cleanup())
-beforeEach(async () => environment.clearFirestore())
+}, 30_000)
+afterAll(async () => { if (environment) await environment.cleanup() }, 30_000)
+beforeEach(async () => environment.clearFirestore(), 15_000)
 
 async function seedMembership(uid: string, orgId: string, role: string, congregationIds = ['unit-a'], permissions: Record<string, boolean> = {}) {
   await environment.withSecurityRulesDisabled(async (context) => {
@@ -401,7 +401,7 @@ describe('Care Integrity persistence and scope', () => {
   async function seedPerson(id = 'person-a', congregationId = 'unit-a') {
     await environment.withSecurityRulesDisabled(async (context) => {
       await setDoc(doc(context.firestore(), `organizations/org-a/products/raiz_e_mesa/people/${id}`), {
-        organizationId: 'org-a', congregationId, name: 'Person', consent: true, phone: '43999999999',
+        organizationId: 'org-a', congregationId, name: 'Person', consent: true, phone: '43999999999', preferredContactChannel: 'whatsapp',
       })
     })
   }
@@ -578,7 +578,7 @@ describe('Care Integrity persistence and scope', () => {
       const db = context.firestore()
       await setDoc(doc(db, 'organizations/org-a/products/raiz_e_mesa/people/person-followup'), {
         organizationId: 'org-a', congregationId: 'unit-a', name: 'Pessoa Follow-up',
-        consent: true, phone: '43999999999',
+        consent: true, phone: '43999999999', preferredContactChannel: 'whatsapp',
       })
       await setDoc(doc(db, 'organizations/org-a/products/raiz_e_mesa/careRequests/care-followup'), {
         organizationId: 'org-a', congregationId: 'unit-a', personId: 'person-followup',
@@ -702,7 +702,7 @@ describe('Care Integrity persistence and scope', () => {
       const db = context.firestore()
       await setDoc(doc(db, 'organizations/org-a/products/raiz_e_mesa/people/person-absence'), {
         organizationId: 'org-a', congregationId: 'unit-a', name: 'Pessoa Ausente',
-        consent: true, phone: '43999999999',
+        consent: true, phone: '43999999999', preferredContactChannel: 'whatsapp',
       })
       await setDoc(doc(db, 'organizations/org-a/products/raiz_e_mesa/presenceSessions/session-absence'), {
         organizationId: 'org-a', congregationId: 'unit-a', eventRef: 'event:absence',
@@ -766,7 +766,7 @@ describe('Care Integrity persistence and scope', () => {
         organizationId: 'org-a', congregationId: 'unit-a', name: 'Revogado', consent: false, phone: '',
       })
       await setDoc(doc(db, 'organizations/org-a/products/raiz_e_mesa/people/person-authorized'), {
-        organizationId: 'org-a', congregationId: 'unit-a', name: 'Autorizado', consent: true, phone: '43999999999',
+        organizationId: 'org-a', congregationId: 'unit-a', name: 'Autorizado', consent: true, phone: '43999999999', preferredContactChannel: 'whatsapp',
       })
       for (const [id, personId] of [['care-revoked', 'person-revoked'], ['care-authorized', 'person-authorized']]) {
         await setDoc(doc(db, `organizations/org-a/products/raiz_e_mesa/careRequests/${id}`), {
@@ -873,12 +873,14 @@ describe('Groups and Discipleship runtime rules', () => {
     const ref = doc(db, 'organizations/org-a/products/raiz_e_mesa/groups/group-a')
     await assertSucceeds(setDoc(ref, {
       organizationId: 'org-a', congregationId: 'unit-a', name: 'Casa Norte',
+      leaderId: 'leader-a', hostId: 'leader-a', apprenticeId: '',
       capacity: 12, participants: 0, createdAt: serverTimestamp(), createdBy: 'leader-a',
     }))
     await assertSucceeds(updateDoc(ref, { participants: 7 }))
     await assertFails(updateDoc(ref, { participants: 13 }))
     await assertFails(setDoc(doc(db, 'organizations/org-a/products/raiz_e_mesa/groups/group-b'), {
       organizationId: 'org-a', congregationId: 'unit-b', name: 'Casa Fora',
+      leaderId: 'leader-a', hostId: 'leader-a', apprenticeId: '',
       capacity: 12, participants: 0, createdAt: serverTimestamp(), createdBy: 'leader-a',
     }))
   })
@@ -1078,9 +1080,10 @@ describe('Groups and Discipleship runtime rules', () => {
     const ref = doc(db, 'organizations/org-a/products/raiz_e_mesa/discipleships/d-a')
     await assertSucceeds(setDoc(ref, {
       organizationId: 'org-a', congregationId: 'unit-a', personId: 'person-a', personName: 'Person',
-      disciplerId: 'discipler-a', meeting: 1, status: 'active', nextMeeting: 'Agendar encontro 1',
+      disciplerId: 'discipler-a', meeting: 1, targetMeetings: 7, playbookId: 'raiz_e_mesa_2026',
+      status: 'active', nextMeeting: 'A combinar', nextMeetingAt: null, nextMeetingStatus: 'to_be_agreed',
     }))
-    await assertSucceeds(updateDoc(ref, { meeting: 2, nextMeeting: 'Agendar encontro 2' }))
+    await assertSucceeds(updateDoc(ref, { meeting: 2, nextMeeting: 'A combinar', nextMeetingAt: null, nextMeetingStatus: 'to_be_agreed' }))
     await assertFails(updateDoc(ref, { personId: 'person-b' }))
     await assertFails(updateDoc(ref, { meeting: 1 }))
     await assertFails(updateDoc(ref, { meeting: 7, status: 'completed' }))
@@ -1091,7 +1094,8 @@ describe('Groups and Discipleship runtime rules', () => {
     const db = environment.authenticatedContext('discipler-a').firestore()
     await assertFails(setDoc(doc(db, 'organizations/org-a/products/raiz_e_mesa/discipleships/d-other'), {
       organizationId: 'org-a', congregationId: 'unit-a', personId: 'person-a',
-      disciplerId: 'someone-else', meeting: 1, status: 'active',
+      disciplerId: 'someone-else', meeting: 1, targetMeetings: 7, playbookId: 'raiz_e_mesa_2026',
+      status: 'active', nextMeeting: 'A combinar', nextMeetingAt: null, nextMeetingStatus: 'to_be_agreed',
     }))
   })
 })
@@ -1147,6 +1151,7 @@ describe('Implementation Runtime rules', () => {
       status:'active',
       carePromiseHours:36,
       discipleshipMeetingCount:10,
+      groupCapacityPolicy:{minimum:4,idealMin:6,idealMax:10,maximum:12},
       areaLabels:{presence:'Boas-vindas',table:'Café',care:'Cuidado',groups:'PG',discipleship:'Caminho'},
       stages:[
         {id:'welcome',label:'Chegada',kind:'presence',entryCriteria:'Chegou',completionCriteria:'Acolhido',responsibleRoles:['presence_host'],requiredFields:['name']},
@@ -1200,6 +1205,7 @@ describe('Implementation Runtime rules', () => {
     await assertFails(setDoc(doc(db,'organizations/org-a/products/raiz_e_mesa/playbooks/not-allowed'),{
       organizationId:'org-a',schemaVersion:1,name:'No',description:'',status:'active',
       carePromiseHours:48,discipleshipMeetingCount:7,
+      groupCapacityPolicy:{minimum:4,idealMin:6,idealMax:10,maximum:12},
       areaLabels:{presence:'P',table:'T',care:'C',groups:'G',discipleship:'D'},
       stages:[{id:'s',label:'S',kind:'custom',entryCriteria:'',completionCriteria:'',responsibleRoles:[],requiredFields:['name']}],
       stageIds:['s'],stageRoles:{s:[]},
@@ -1231,6 +1237,7 @@ describe('Journey milestone rules', () => {
         status:'active',
         carePromiseHours:48,
         discipleshipMeetingCount:7,
+        groupCapacityPolicy:{minimum:4,idealMin:6,idealMax:10,maximum:12},
         areaLabels:{presence:'Recepção',table:'Mesa',care:'Cuidado',groups:'PG',discipleship:'Raiz'},
         stages:[
           {id:'service',label:'Vida & Serviço',kind:'service',entryCriteria:'Interesse explícito',completionCriteria:'Encaminhamento concluído',responsibleRoles:['coordinator'],requiredFields:['name']},
@@ -1299,7 +1306,7 @@ describe('Governance Runtime rules', () => {
   async function seedGovernancePerson() {
     await environment.withSecurityRulesDisabled(async (context) => {
       await setDoc(doc(context.firestore(), 'organizations/org-a/products/raiz_e_mesa/people/privacy-person'), {
-        organizationId: 'org-a', congregationId: 'unit-a', name: 'Privacy Person', consent: true, phone: '43999999999',
+        organizationId: 'org-a', congregationId: 'unit-a', name: 'Privacy Person', consent: true, phone: '43999999999', preferredContactChannel: 'whatsapp',
       })
     })
   }
@@ -1459,6 +1466,7 @@ describe('Governance Runtime rules', () => {
     batch.update(personRef, {
       consent: false,
       phone: '',
+      preferredContactChannel: '',
       contactStatus: 'closed',
       nextActionCode: 'WELCOME_ON_NEXT_VISIT',
       consentRevokedAt: serverTimestamp(),

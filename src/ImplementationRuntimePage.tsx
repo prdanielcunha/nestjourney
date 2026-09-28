@@ -32,6 +32,7 @@ import {
 import { getInitialLocale, implementationRuntimeCopy, localeLabels, persistLocale, type AppLocale } from './i18n'
 import { AccessDeniedState } from './AccessDeniedState'
 import { JourneyAreaFocus } from './JourneyAreaFocus'
+import { implementationExpectedWeek } from './roadmapReadiness'
 import './ImplementationRuntimePage.css'
 
 function genericProgress(requiredKeys:string[],completedKeys:string[]){
@@ -42,9 +43,9 @@ function genericProgress(requiredKeys:string[],completedKeys:string[]){
 }
 
 const extraCopy={
-  'pt-BR':{studio:'Configurar jornada',activePlaybook:'Jornada ativa',customIntro:'Esta organização usa uma implantação configurada. Conclua somente fatos realmente executados; o histórico permanece auditável.',phase:'Fase',startNamed:'Iniciar implantação',noSteps:'Esta jornada ainda não possui um checklist de implantação válido.'},
-  en:{studio:'Configure journey',activePlaybook:'Active journey',customIntro:'This organization uses a configured implementation. Complete only work that actually happened; history remains auditable.',phase:'Phase',startNamed:'Start implementation',noSteps:'This journey does not yet have a valid implementation checklist.'},
-  es:{studio:'Configurar jornada',activePlaybook:'Jornada activa',customIntro:'Esta organización usa una implementación configurada. Completa solo hechos realmente ejecutados; el historial permanece auditable.',phase:'Fase',startNamed:'Iniciar implementación',noSteps:'Esta jornada todavía no tiene una lista de implementación válida.'},
+  'pt-BR':{studio:'Configurar jornada',activePlaybook:'Jornada ativa',customIntro:'Esta organização usa uma implantação configurada. Conclua somente fatos realmente executados; o histórico permanece auditável.',phase:'Fase',startNamed:'Iniciar implantação',noSteps:'Esta jornada ainda não possui um checklist de implantação válido.',overdue:'Atrasadas',owner:'Responsáveis',targetWeek:'Semana alvo',currentWeek:'Semana operacional'},
+  en:{studio:'Configure journey',activePlaybook:'Active journey',customIntro:'This organization uses a configured implementation. Complete only work that actually happened; history remains auditable.',phase:'Phase',startNamed:'Start implementation',noSteps:'This journey does not yet have a valid implementation checklist.',overdue:'Overdue',owner:'Owners',targetWeek:'Target week',currentWeek:'Operational week'},
+  es:{studio:'Configurar jornada',activePlaybook:'Jornada activa',customIntro:'Esta organización usa una implementación configurada. Completa solo hechos realmente ejecutados; el historial permanece auditable.',phase:'Fase',startNamed:'Iniciar implementación',noSteps:'Esta jornada todavía no tiene una lista de implementación válida.',overdue:'Atrasadas',owner:'Responsables',targetWeek:'Semana objetivo',currentWeek:'Semana operativa'},
 } as const
 
 export default function ImplementationRuntimePage() {
@@ -80,6 +81,28 @@ export default function ImplementationRuntimePage() {
   const suggestedWeek=useMemo(()=>defaultCycle?implementationWeekForProgress(cycle?.completedKeys??[]):1,[cycle,defaultCycle])
   const completed=useMemo(()=>new Set(cycle?.completedKeys??[]),[cycle])
   const week=builtIn.weeks[selectedWeek-1]
+  const elapsedWeek=cycle?implementationExpectedWeek(cycle.startedAt):1
+  const roleLabel=(role:string)=>{
+    const labels:Record<AppLocale,Record<string,string>>={
+      'pt-BR':{pastor:'Pastor',coordinator:'Coordenação',presence_host:'Presença',mesa_team:'Mesa',caregiver:'Cuidado',group_leader:'Líder de Casa',discipler:'Discipulador',owner:'Dono',admin:'Administrador'},
+      en:{pastor:'Pastor',coordinator:'Coordination',presence_host:'Presence',mesa_team:'Table',caregiver:'Care',group_leader:'House leader',discipler:'Discipler',owner:'Owner',admin:'Administrator'},
+      es:{pastor:'Pastor',coordinator:'Coordinación',presence_host:'Presencia',mesa_team:'Mesa',caregiver:'Cuidado',group_leader:'Líder de Casa',discipler:'Discipulador',owner:'Dueño',admin:'Administrador'},
+    }
+    return labels[locale][role]??role
+  }
+  const overdueCount=useMemo(()=>{
+    if(!cycle||cycle.status==='completed')return 0
+    if(defaultCycle){
+      return builtIn.weeks.filter(item=>{
+        const keys=implementationWeekKeys(item.week)
+        return elapsedWeek>item.week&&!keys.every(key=>completed.has(key))
+      }).length
+    }
+    return (cyclePlaybook?.implementationPhases??[]).filter(phase=>{
+      const keys=implementationKeysForPhases([phase])
+      return phase.targetWeek>0&&elapsedWeek>phase.targetWeek&&!keys.every(key=>completed.has(key))
+    }).length
+  },[cycle,defaultCycle,builtIn.weeks,elapsedWeek,completed,cyclePlaybook])
 
   const refresh=useCallback(async(orgId:string,unitId:string)=>{
     const next=await listImplementationCycles(orgId,unitId)
@@ -188,6 +211,7 @@ export default function ImplementationRuntimePage() {
         {label:x.activePlaybook,value:configured?.name??'—',tone:configured?'good':'muted'},
         {label:t.progress,value:cycle?progress.percent+'%':'—',tone:cycleComplete?'good':cycle?'attention':'muted'},
         {label:t.week,value:defaultCycle?(cycleComplete?'7/7':String(suggestedWeek)+'/7'):(cycle?progress.done+'/'+progress.total:'—'),tone:cycle?'good':'muted'},
+        {label:x.overdue,value:cycle?overdueCount:'—',tone:overdueCount?'attention':'muted'},
       ]}
       actions={!cycle
         ?[{label:x.startNamed,onClick:()=>void start(),disabled:busy||!congregationId||!configured||!configured.implementationKeys.length,primary:true}]
@@ -210,16 +234,18 @@ export default function ImplementationRuntimePage() {
         <section className="implementation-panel implementation-prep"><div className="implementation-section-title"><div><span className="implementation-kicker">0 / PREPARAÇÃO</span><h2>{t.preparation}</h2><p>{builtIn.preparationIntro}</p></div><span className="implementation-step-count">{IMPLEMENTATION_PREPARATION_KEYS.filter(key=>completed.has(key)).length}/{IMPLEMENTATION_PREPARATION_KEYS.length}</span></div><div className="implementation-checklist">{builtIn.preparation.map((item,index)=>{const key=IMPLEMENTATION_PREPARATION_KEYS[index],done=completed.has(key);return <button key={key} className={done?'done':''} disabled={busy||done||cycleComplete} onClick={()=>void mark(key)}><span>{done?<Check size={16}/>:index+1}</span><p>{item}</p><b>{done?t.done:t.markDone}</b></button>})}</div></section>
         <section className="implementation-rhythm"><div className="implementation-section-title"><div><span className="implementation-kicker">40–45 MIN</span><h2>{t.rhythm}</h2></div></div><div className="implementation-rhythm-grid">{builtIn.rhythm.map(item=><article className="implementation-panel" key={item.block}><Clock3 size={16}/><strong>{item.time}</strong><span>{item.block}</span><p>{item.objective}</p></article>)}</div></section>
         <section className="implementation-week-layout" id="implementation-weeks">
-          <aside className="implementation-panel implementation-week-nav"><span className="implementation-kicker">{t.weeks}</span>{builtIn.weeks.map(item=>{const keys=implementationWeekKeys(item.week),doneCount=keys.filter(key=>completed.has(key)).length,isDone=doneCount===keys.length;return <button key={item.week} className={selectedWeek===item.week?'active':''} onClick={()=>setSelectedWeek(item.week)}><span className={isDone?'done':''}>{isDone?<Check size={14}/>:item.week}</span><div><strong>{t.week} {item.week}</strong><small>{item.title}</small></div><b>{doneCount}/{keys.length}</b>{suggestedWeek===item.week&&!cycleComplete?<i/>:null}</button>})}</aside>
+          <aside className="implementation-panel implementation-week-nav"><span className="implementation-kicker">{t.weeks}</span>{builtIn.weeks.map(item=>{const keys=implementationWeekKeys(item.week),doneCount=keys.filter(key=>completed.has(key)).length,isDone=doneCount===keys.length,isOverdue=elapsedWeek>item.week&&!isDone;const phase=cyclePlaybook?.implementationPhases.find(value=>value.targetWeek===item.week);return <button key={item.week} className={selectedWeek===item.week?'active':''} onClick={()=>setSelectedWeek(item.week)}><span className={isDone?'done':''}>{isDone?<Check size={14}/>:item.week}</span><div><strong>{t.week} {item.week}</strong><small>{item.title}</small><small>{x.owner}: {(phase?.responsibleRoles??['coordinator']).map(roleLabel).join(' · ')}{isOverdue?' · '+x.overdue:''}</small></div><b>{doneCount}/{keys.length}</b>{suggestedWeek===item.week&&!cycleComplete?<i/>:null}</button>})}</aside>
           <section className="implementation-panel implementation-week-card"><div className="implementation-week-heading"><span className="implementation-kicker">{t.week} {week.week}</span><h2>{week.title}</h2><p>{week.objective}</p></div><blockquote>{week.facilitatorQuote}<small>{t.facilitator}</small></blockquote><div className="implementation-scriptures"><span>{t.scriptures}</span>{week.scriptures.map(ref=><b key={ref}>{ref}</b>)}</div><div className="implementation-content-block"><h3>{t.teaching}</h3><div className="implementation-checklist">{week.teaching.map((item,index)=>{const key='week.'+week.week+'.teach.'+(index+1),done=completed.has(key);return <button key={key} className={done?'done':''} disabled={busy||done||cycleComplete} onClick={()=>void mark(key)}><span>{done?<Check size={16}/>:index+1}</span><p>{item}</p><b>{done?t.done:t.markDone}</b></button>})}</div></div><div className="implementation-practice"><span className="implementation-kicker">{t.practice}</span><p>{week.practice}</p>{(()=>{const key='week.'+week.week+'.practice',done=completed.has(key);return <button className={'implementation-button '+(done?'done':'')} disabled={busy||done||cycleComplete} onClick={()=>void mark(key)}>{done?<Check size={16}/>:<CircleCheck size={16}/>} {done?t.done:t.markDone}</button>})()}</div></section>
         </section>
       </>:<section className="implementation-panel implementation-prep" id="implementation-custom">
         <div className="implementation-section-title"><div><span className="implementation-kicker">{x.activePlaybook}</span><h2>{cyclePlaybook?.name}</h2><p>{x.customIntro}</p></div><span className="implementation-step-count">{progress.done}/{progress.total}</span></div>
         {(cyclePlaybook?.implementationPhases??[]).map((phase,phaseIndex)=>{
           const keys=implementationKeysForPhases([phase])
+          const isOverdue=phase.targetWeek>0&&elapsedWeek>phase.targetWeek&&!keys.every(key=>completed.has(key))
           return <div className="implementation-content-block" key={phase.id}>
             <h3>{x.phase} {phaseIndex+1} · {phase.title}</h3>
             <p>{phase.objective}</p>
+            <p className="implementation-rule">{x.targetWeek}: {phase.targetWeek||'—'} · {x.owner}: {phase.responsibleRoles.map(roleLabel).join(' · ')||'—'}{isOverdue?' · '+x.overdue:''}</p>
             <div className="implementation-checklist">{phase.items.map((item,index)=>{
               const key=keys[index],done=completed.has(key)
               return <button key={key} className={done?'done':''} disabled={busy||done||cycleComplete} onClick={()=>void mark(key)}><span>{done?<Check size={16}/>:index+1}</span><p>{item}</p><b>{done?t.done:t.markDone}</b></button>

@@ -7,6 +7,7 @@ import { journeyCollectionPath } from './productIdentity'
 import { createRaizEMesaPlaybook, JOURNEY_PLAYBOOK_DEFAULT_ID, normalizeJourneyPlaybook, type JourneyPlaybookDefinition } from './playbookEngine'
 import { planFollowupOutcome, type FollowupNextActionCode, type FollowupOutcomeCode } from './followup'
 import { calculatePresenceCoverage, canUseAbsenceEvidence, type CarePromise, type PresenceCheck, type PresenceSession, type PresenceSource, type PresenceVerificationState } from './intelligence'
+import { evaluateAuthorizedContact, normalizeGroupCapacity, type GroupCapacityPolicy, type PreferredContactChannel } from './roadmapReadiness'
 
 const HUB_API_BASE = (import.meta.env.VITE_MILLIONSNEST_URL || 'https://www.millionsnest.com').replace(/\/$/, '')
 const SYSTEM_ROLES = new Set(['ceo', 'global_admin', 'ecosystem_owner', 'founder'])
@@ -222,6 +223,7 @@ export interface PresencePerson {
   photoUrl?: string
   phone?: string
   consent?: boolean
+  preferredContactChannel?: PreferredContactChannel
   visits?: number
   bondHostRef?: string
   bondAssignedAt?: string
@@ -260,7 +262,9 @@ export interface JourneyGroupRecord {
   leader?: string
   leaderId?: string
   host?: string
+  hostId?: string
   apprentice?: string
+  apprenticeId?: string
   neighborhood?: string
   weekday?: string
   time?: string
@@ -335,6 +339,8 @@ export interface JourneyDiscipleshipRecord {
   playbookId?: string
   status: 'active' | 'paused' | 'completed'
   nextMeeting?: string
+  nextMeetingAt?: string
+  nextMeetingStatus?: 'to_be_agreed' | 'scheduled' | 'cancelled'
   startedAt?: string
 }
 
@@ -403,6 +409,7 @@ export interface MinimalVisitorInput {
   name: string
   phone?: string
   consent: boolean
+  preferredContactChannel?: PreferredContactChannel
 }
 
 export type CareType =
@@ -854,8 +861,12 @@ export async function ensureDefaultJourneyPlaybook(access: JourneyAccessContext)
     const current = playbookFromSnapshot(access.organizationId, snapshot.id, snapshot.data())
     const data = snapshot.data()
     const hasStageIndexes = Array.isArray(data.stageIds) && data.stageRoles && typeof data.stageRoles === 'object'
-    if (!hasStageIndexes && canConfigureJourneyPlaybooks(access)) {
+    const hasRoadmapFields = data.groupCapacityPolicy && typeof data.groupCapacityPolicy === 'object'
+      && Array.isArray(data.stages) && data.stages.every((stage: unknown) => Boolean(stage && typeof stage === 'object' && 'nextAction' in (stage as Record<string, unknown>)))
+    if ((!hasStageIndexes || !hasRoadmapFields) && canConfigureJourneyPlaybooks(access)) {
       await updateDoc(ref, {
+        groupCapacityPolicy: current.groupCapacityPolicy,
+        stages: current.stages,
         stageIds: current.stages.map((stage) => stage.id),
         stageRoles: Object.fromEntries(current.stages.map((stage) => [stage.id, stage.responsibleRoles])),
         updatedAt: serverTimestamp(),
@@ -896,6 +907,7 @@ export async function saveJourneyPlaybook(access: JourneyAccessContext, input: J
     status: playbook.status,
     carePromiseHours: playbook.carePromiseHours,
     discipleshipMeetingCount: playbook.discipleshipMeetingCount,
+    groupCapacityPolicy: playbook.groupCapacityPolicy,
     areaLabels: playbook.areaLabels,
     stages: playbook.stages,
     stageIds: playbook.stages.map((stage) => stage.id),
@@ -1080,6 +1092,7 @@ export async function listPresencePeople(organizationId: string, congregationId:
       photoUrl: asString(data.photoUrl || data.photoURL) || undefined,
       phone: asString(data.phone) || undefined,
       consent: Boolean(data.consent),
+      preferredContactChannel: (data.preferredContactChannel === 'phone' ? 'phone' : data.preferredContactChannel === 'whatsapp' ? 'whatsapp' : undefined) as PreferredContactChannel | undefined,
       visits: typeof data.visits === 'number' ? data.visits : undefined,
       bondHostRef: asString(data.bondHostRef) || undefined,
       bondAssignedAt: data.bondAssignedAt ? toIso(data.bondAssignedAt) : undefined,
@@ -1104,6 +1117,7 @@ export async function listJourneyPeople(organizationId: string, congregationId: 
       photoUrl: asString(data.photoUrl || data.photoURL) || undefined,
       phone: asString(data.phone) || undefined,
       consent: Boolean(data.consent),
+      preferredContactChannel: (data.preferredContactChannel === 'phone' ? 'phone' : data.preferredContactChannel === 'whatsapp' ? 'whatsapp' : undefined) as PreferredContactChannel | undefined,
       visits: typeof data.visits === 'number' ? data.visits : undefined,
       bondHostRef: asString(data.bondHostRef) || undefined,
       bondAssignedAt: data.bondAssignedAt ? toIso(data.bondAssignedAt) : undefined,
@@ -1132,7 +1146,9 @@ export async function listJourneyGroups(organizationId: string, congregationId: 
       leader: asString(data.leader || data.leaderName) || undefined,
       leaderId: asString(data.leaderId) || undefined,
       host: asString(data.host) || undefined,
+      hostId: asString(data.hostId) || undefined,
       apprentice: asString(data.apprentice) || undefined,
+      apprenticeId: asString(data.apprenticeId) || undefined,
       neighborhood: asString(data.neighborhood) || undefined,
       weekday: asString(data.weekday) || undefined,
       time: asString(data.time) || undefined,
@@ -1310,6 +1326,7 @@ export async function resolvePrivacyRequest(input: {
     batch.update(personRef, {
       consent: false,
       phone: '',
+      preferredContactChannel: '',
       contactStatus: 'closed',
       nextActionCode: 'WELCOME_ON_NEXT_VISIT',
       consentRevokedAt: serverTimestamp(),
@@ -1600,6 +1617,8 @@ export async function listJourneyDiscipleships(access: JourneyAccessContext, con
       playbookId: asString(data.playbookId) || undefined,
       status,
       nextMeeting: asString(data.nextMeeting) || undefined,
+      nextMeetingAt: data.nextMeetingAt ? toIso(data.nextMeetingAt) : undefined,
+      nextMeetingStatus: data.nextMeetingStatus === 'scheduled' ? 'scheduled' : data.nextMeetingStatus === 'cancelled' ? 'cancelled' : 'to_be_agreed',
       startedAt: data.startedAt ? toIso(data.startedAt) : undefined,
     }
   }).sort((a, b) => a.status.localeCompare(b.status) || a.meeting - b.meeting)
@@ -1613,11 +1632,14 @@ export async function createJourneyGroup(input: {
   leader?: string
   leaderId?: string
   host?: string
+  hostId?: string
   apprentice?: string
+  apprenticeId?: string
   neighborhood?: string
   weekday?: string
   time?: string
   capacity?: number
+  capacityPolicy?: GroupCapacityPolicy
 }) {
   const firestore = requireDb()
   const groupRef = doc(collection(firestore, journeyCollectionPath(input.organizationId, 'groups')))
@@ -1629,11 +1651,13 @@ export async function createJourneyGroup(input: {
     leader: String(input.leader ?? '').trim(),
     leaderId: String(input.leaderId ?? '').trim(),
     host: String(input.host ?? '').trim(),
+    hostId: String(input.hostId ?? '').trim(),
     apprentice: String(input.apprentice ?? '').trim(),
+    apprenticeId: String(input.apprenticeId ?? '').trim(),
     neighborhood: String(input.neighborhood ?? '').trim(),
     weekday: String(input.weekday ?? '').trim(),
     time: String(input.time ?? '').trim(),
-    capacity: Math.max(1, Math.min(100, Math.floor(input.capacity ?? 12))),
+    capacity: normalizeGroupCapacity(input.capacity ?? input.capacityPolicy?.maximum ?? 12, input.capacityPolicy),
     participants: 0,
     createdAt: serverTimestamp(),
     createdBy: input.actorId,
@@ -1648,14 +1672,15 @@ export async function updateJourneyGroup(input: {
   organizationId: string
   groupId: string
   actorId: string
-  patch: Partial<Pick<JourneyGroupRecord, 'name' | 'leader' | 'leaderId' | 'host' | 'apprentice' | 'neighborhood' | 'weekday' | 'time' | 'capacity' | 'participants'>>
+  patch: Partial<Pick<JourneyGroupRecord, 'name' | 'leader' | 'leaderId' | 'host' | 'hostId' | 'apprentice' | 'apprenticeId' | 'neighborhood' | 'weekday' | 'time' | 'capacity' | 'participants'>>
+  capacityPolicy?: GroupCapacityPolicy
 }) {
   const firestore = requireDb()
   const groupRef = doc(firestore, `${journeyCollectionPath(input.organizationId, 'groups')}/${input.groupId}`)
   const patch: Record<string, unknown> = { updatedAt: serverTimestamp(), updatedBy: input.actorId }
   for (const [key, value] of Object.entries(input.patch)) {
     if (value === undefined) continue
-    if (key === 'capacity') patch[key] = Math.max(1, Math.min(100, Math.floor(Number(value))))
+    if (key === 'capacity') patch[key] = normalizeGroupCapacity(Number(value), input.capacityPolicy)
     else if (key === 'participants') patch[key] = Math.max(0, Math.floor(Number(value)))
     else patch[key] = typeof value === 'string' ? value.trim() : value
   }
@@ -1676,6 +1701,14 @@ export async function createJourneyDiscipleship(input: {
 }) {
   const firestore = requireDb()
   const relationRef = doc(collection(firestore, journeyCollectionPath(input.organizationId, 'discipleships')))
+  const existingRelations = await getDocs(query(
+    collection(firestore, journeyCollectionPath(input.organizationId, 'discipleships')),
+    where('congregationId', '==', input.congregationId),
+  ))
+  if (existingRelations.docs.some((item) => {
+    const data = item.data()
+    return asString(data.personId) === input.person.id && asString(data.status) !== 'completed'
+  })) throw new Error('discipleship_already_active')
   const targetDisciplerId = String(input.disciplerId || input.actorId).trim()
   if (!targetDisciplerId) throw new Error('missing_discipler')
   const targetMeetings = Math.max(1, Math.min(24, Math.floor(input.targetMeetings ?? 7)))
@@ -1693,7 +1726,9 @@ export async function createJourneyDiscipleship(input: {
     playbookId,
     completedMeetings: [],
     status: 'active',
-    nextMeeting: 'Agendar encontro 1',
+    nextMeeting: 'A combinar',
+    nextMeetingAt: null,
+    nextMeetingStatus: 'to_be_agreed',
     startedAt: serverTimestamp(),
     createdAt: serverTimestamp(),
     createdBy: input.actorId,
@@ -1721,7 +1756,9 @@ export async function updateJourneyDiscipleship(input: {
     batch.update(relationRef, {
       meeting: nextMeeting,
       status: completed ? 'completed' : 'active',
-      nextMeeting: completed ? 'Ciclo concluído' : `Agendar encontro ${nextMeeting}`,
+      nextMeeting: completed ? 'Ciclo concluído' : 'A combinar',
+      nextMeetingAt: null,
+      nextMeetingStatus: completed ? 'cancelled' : 'to_be_agreed',
       lastCompletedMeeting: currentMeeting,
       lastCompletedAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
@@ -1736,6 +1773,38 @@ export async function updateJourneyDiscipleship(input: {
     })
   }
   await batch.commit()
+}
+
+
+export async function setJourneyDiscipleshipNextMeeting(input: {
+  organizationId: string
+  relation: JourneyDiscipleshipRecord
+  actorId: string
+  nextMeetingAt?: string
+  status: 'to_be_agreed' | 'scheduled' | 'cancelled'
+}) {
+  const firestore = requireDb()
+  const relationRef = doc(firestore, `${journeyCollectionPath(input.organizationId, 'discipleships')}/${input.relation.id}`)
+  if (input.relation.status === 'completed') throw new Error('discipleship_completed')
+  if (input.status === 'scheduled') {
+    const parsed = Date.parse(String(input.nextMeetingAt ?? ''))
+    if (!Number.isFinite(parsed) || parsed <= Date.now() - 5 * 60 * 1000) throw new Error('invalid_next_meeting')
+    await updateDoc(relationRef, {
+      nextMeeting: new Date(parsed).toISOString(),
+      nextMeetingAt: Timestamp.fromMillis(parsed),
+      nextMeetingStatus: 'scheduled',
+      updatedAt: serverTimestamp(),
+      updatedBy: input.actorId,
+    })
+    return
+  }
+  await updateDoc(relationRef, {
+    nextMeeting: input.status === 'cancelled' ? 'Cancelado' : 'A combinar',
+    nextMeetingAt: null,
+    nextMeetingStatus: input.status,
+    updatedAt: serverTimestamp(),
+    updatedBy: input.actorId,
+  })
 }
 
 export async function listPastoralHandoffs(organizationId: string, congregationId: string): Promise<JourneyPastoralHandoff[]> {
@@ -2332,6 +2401,13 @@ export async function closePresenceSession(
 
 export async function createMinimalVisitor(input: MinimalVisitorInput) {
   const firestore = requireDb()
+  const name = input.name.trim()
+  if (!name) throw new Error('visitor_name_required')
+  const consent = Boolean(input.consent)
+  const phone = String(input.phone ?? '').trim()
+  const readiness = evaluateAuthorizedContact({ consent, phone, preferredContactChannel: input.preferredContactChannel })
+  if (!readiness.ok) throw new Error('visitor_contact_required')
+  const preferredContactChannel = readiness.preferredContactChannel
   const personRef = doc(collection(firestore, journeyCollectionPath(input.organizationId, 'people')))
   const factRef = doc(firestore, `${journeyCollectionPath(input.organizationId, 'facts')}/visitor-${personRef.id}`)
   const careRef = input.consent ? doc(collection(firestore, journeyCollectionPath(input.organizationId, 'careRequests'))) : null
@@ -2340,13 +2416,13 @@ export async function createMinimalVisitor(input: MinimalVisitorInput) {
     : null
   const batch = writeBatch(firestore)
   const today = new Date().toISOString().slice(0, 10)
-  const consent = Boolean(input.consent)
 
   batch.set(personRef, {
     organizationId: input.organizationId,
     congregationId: input.congregationId,
-    name: input.name.trim(),
-    phone: consent ? String(input.phone ?? '').trim() : '',
+    name,
+    phone: consent ? phone : '',
+    preferredContactChannel: consent ? preferredContactChannel : '',
     firstVisit: today,
     consent,
     stage: consent ? 'contact_authorized' : 'new',
@@ -2397,7 +2473,7 @@ export async function createMinimalVisitor(input: MinimalVisitorInput) {
   }
 
   await batch.commit()
-  return { id: personRef.id, organizationId: input.organizationId, congregationId: input.congregationId, name: input.name.trim(), phone: consent ? input.phone : undefined, consent, visits: 1 } satisfies PresencePerson
+  return { id: personRef.id, organizationId: input.organizationId, congregationId: input.congregationId, name, phone: consent ? phone : undefined, consent, preferredContactChannel, visits: 1 } satisfies PresencePerson
 }
 
 export function careRequestToPromise(request: CareRequestRecord): CarePromise {
@@ -2478,6 +2554,15 @@ export async function startJourneyFollowup(input: {
   if (input.request.ownerRef !== input.access.userId) throw new Error('followup_owner_required')
 
   const firestore = requireDb()
+  const person = await getDoc(doc(firestore, `${journeyCollectionPath(input.access.organizationId, 'people')}/${input.request.personId}`))
+  if (!person.exists()) throw new Error('followup_person_missing')
+  const personData = person.data()
+  const contact = evaluateAuthorizedContact({
+    consent: Boolean(personData.consent),
+    phone: asString(personData.phone),
+    preferredContactChannel: personData.preferredContactChannel === 'phone' ? 'phone' : personData.preferredContactChannel === 'whatsapp' ? 'whatsapp' : undefined,
+  })
+  if (!contact.ok) throw new Error('followup_contact_not_ready')
   const followupId = followupIdForCare(input.request.id)
   const followupRef = doc(firestore, `${journeyCollectionPath(input.access.organizationId, 'followups')}/${followupId}`)
   const factRef = doc(firestore, `${journeyCollectionPath(input.access.organizationId, 'facts')}/followup-created-${followupId}`)
@@ -2605,6 +2690,15 @@ export async function createCareRequest(input: {
   organizationId: string; congregationId: string; personId: string; actorId: string; careType: CareType; summary?: string; promiseHours?: number
 }) {
   const firestore = requireDb()
+  const existing = await getDocs(query(
+    collection(firestore, journeyCollectionPath(input.organizationId, 'careRequests')),
+    where('congregationId', '==', input.congregationId),
+  ))
+  const duplicate = existing.docs.find((item) => {
+    const data = item.data()
+    return asString(data.personId) === input.personId && asString(data.careType) === input.careType && asString(data.status) === 'open'
+  })
+  if (duplicate) return duplicate.id
   const requestRef = doc(collection(firestore, journeyCollectionPath(input.organizationId, 'careRequests')))
   const requestedFactRef = doc(firestore, `${journeyCollectionPath(input.organizationId, 'facts')}/care-requested-${requestRef.id}`)
   const assignedFactRef = doc(firestore, `${journeyCollectionPath(input.organizationId, 'facts')}/care-assigned-${requestRef.id}`)
@@ -2748,6 +2842,36 @@ export async function createAbsenceCareRequest(input: {
 
   await batch.commit()
   return requestId
+}
+
+
+export async function assignCareRequest(input: {
+  organizationId: string
+  request: CareRequestRecord
+  actorId: string
+  ownerRef: string
+}) {
+  const firestore = requireDb()
+  if (input.request.status !== 'open') throw new Error('care_request_closed')
+  const ownerRef = input.ownerRef.trim()
+  if (!ownerRef) throw new Error('care_owner_required')
+  const member = await getDoc(doc(firestore, `organizations/${input.organizationId}/members/${ownerRef}`))
+  if (!member.exists()) throw new Error('care_owner_not_member')
+  const memberData = member.data()
+  const journeyRole = asString(memberData.journeyRole)
+  const memberRole = journeyRole && journeyRole !== 'member'
+    ? journeyRole
+    : asString(memberData.organizationRole || memberData.role)
+  const memberUnits = asStringArray(memberData.congregationIds)
+  if (['removed','inactive','suspended','revoked','deleted'].includes(asString(memberData.status))) throw new Error('care_owner_inactive')
+  if (memberUnits.length && !memberUnits.includes(input.request.congregationId)) throw new Error('care_owner_wrong_scope')
+  if (!['owner','admin','pastor','coordinator','care','caregiver'].includes(memberRole)) throw new Error('care_owner_wrong_role')
+  const requestRef = doc(firestore, `${journeyCollectionPath(input.organizationId, 'careRequests')}/${input.request.id}`)
+  await updateDoc(requestRef, {
+    ownerRef,
+    assignedAt: serverTimestamp(),
+    assignedBy: input.actorId,
+  })
 }
 
 export async function claimCareRequest(input: { organizationId: string; request: CareRequestRecord; actorId: string }) {

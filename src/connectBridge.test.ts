@@ -7,8 +7,15 @@ describe('NestJourney Connect bridge', () => {
     expect(url.origin).toBe('https://www.millionsnest.com')
     expect(url.pathname).toBe('/connect/launch')
     expect(url.searchParams.get('returnTo')).toBe('/journey-followup/first-contact-care1')
+    expect(url.searchParams.get('channel')).toBeNull()
     expect(url.toString()).not.toContain('phone')
     expect(url.toString()).not.toContain('name')
+  })
+
+  it('carries only the authorized channel when requested, never contact PII', () => {
+    const url = new URL(buildConnectFollowupLaunchUrl('first-contact-care1', 'whatsapp'))
+    expect(url.searchParams.get('channel')).toBe('whatsapp')
+    expect(url.toString()).not.toContain('439999')
   })
 
   it('rejects path-like or external identifiers', () => {

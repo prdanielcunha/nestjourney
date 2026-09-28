@@ -6,11 +6,12 @@ export function isSafeFollowupId(value?: string | null) {
   return FOLLOWUP_ID.test(candidate)
 }
 
-export function buildConnectFollowupLaunchUrl(followupId: string) {
+export function buildConnectFollowupLaunchUrl(followupId: string, channel?: 'whatsapp' | 'phone') {
   if (!isSafeFollowupId(followupId)) throw new Error('invalid_followup_id')
   const returnTo = `/journey-followup/${followupId}`
   const url = new URL('/connect/launch', CONNECT_LAUNCH_ORIGIN)
   url.searchParams.set('returnTo', returnTo)
+  if (channel) url.searchParams.set('channel', channel)
   return url.toString()
 }
 
