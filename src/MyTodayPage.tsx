@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
-  AlertTriangle, ArrowRight, Building2, CheckCircle2, Clock3, HeartHandshake, House, Leaf,
+  AlertTriangle, ArrowRight, Building2, CalendarClock, CheckCircle2, Clock3, HeartHandshake, House, Leaf,
   ShieldAlert, ShieldCheck, UserCheck, UserRound, UsersRound,
 } from 'lucide-react'
 import { auth } from './firebase'
@@ -12,6 +12,7 @@ import {
   listJourneyCongregations,
   listJourneyDiscipleships,
   listJourneyGroups,
+  listImplementationCycles,
   listJourneyOrganizationsForSystemAdmin,
   listJourneyPeople,
   listMesaParticipationRecords,
@@ -27,6 +28,7 @@ import {
   type JourneyCongregation,
   type JourneyDiscipleshipRecord,
   type JourneyGroupRecord,
+  type JourneyImplementationCycle,
   type JourneyOrganizationSummary,
   type JourneyPastoralHandoff,
   type JourneyPersonRecord,
@@ -135,6 +137,7 @@ export default function MyTodayPage(){
   const [mesa,setMesa]=useState<MesaParticipationRecord[]>([])
   const [mesaPreparation,setMesaPreparation]=useState<MesaPreparationRecord|null>(null)
   const [pastoralHandoffs,setPastoralHandoffs]=useState<JourneyPastoralHandoff[]>([])
+  const [implementationCycles,setImplementationCycles]=useState<JourneyImplementationCycle[]>([])
   const [filter,setFilter]=useState<Filter>('all')
   const [loading,setLoading]=useState(true)
   const [busy,setBusy]=useState(false)
@@ -170,13 +173,14 @@ export default function MyTodayPage(){
   }),[items,mesaPending,mesaPreparationPending])
 
   const refreshScope=useCallback(async(nextAccess:JourneyAccessContext,unitId:string)=>{
-    const [nextPeople,nextCare,nextSessions,nextGroups,nextDiscipleships,nextPastoral]=await Promise.all([
+    const [nextPeople,nextCare,nextSessions,nextGroups,nextDiscipleships,nextPastoral,nextImplementation]=await Promise.all([
       listJourneyPeople(nextAccess.organizationId,unitId),
       nextAccess.canManageCare||nextAccess.broadJourneyAccess?listCareRequests(nextAccess.organizationId,unitId):Promise.resolve([]),
       nextAccess.canManagePresence||nextAccess.canManageMesa?listPresenceSessions(nextAccess.organizationId,unitId):Promise.resolve([]),
       nextAccess.canManageGroups||nextAccess.broadJourneyAccess?listJourneyGroups(nextAccess.organizationId,unitId):Promise.resolve([]),
       nextAccess.canManageDiscipleship||nextAccess.broadJourneyAccess?listJourneyDiscipleships(nextAccess,unitId):Promise.resolve([]),
       nextAccess.canManagePastoral?listPastoralHandoffs(nextAccess.organizationId,unitId):Promise.resolve([]),
+      nextAccess.canManageImplementation?listImplementationCycles(nextAccess.organizationId,unitId):Promise.resolve([]),
     ])
     const scopedGroups=nextAccess.role==='group_leader'&&!nextAccess.broadJourneyAccess
       ?nextGroups.filter(group=>group.leaderId===nextAccess.userId||group.createdBy===nextAccess.userId)
@@ -187,6 +191,7 @@ export default function MyTodayPage(){
     setGroups(scopedGroups)
     setDiscipleships(nextDiscipleships)
     setPastoralHandoffs(nextPastoral)
+    setImplementationCycles(nextImplementation)
     const mesaSession=nextSessions.find(x=>x.status==='open')??nextSessions[0]
     if(nextAccess.canManageMesa&&mesaSession){
       const [nextMesa,nextPreparation]=await Promise.all([
@@ -233,6 +238,7 @@ export default function MyTodayPage(){
     if(access.canManageGroups||access.broadJourneyAccess)collections.push('groups','groupMemberships','groupMeetings','groupAttendance')
     if(access.canManageDiscipleship||access.broadJourneyAccess)collections.push('discipleships')
     if(access.canManagePastoral)collections.push('pastoralHandoffs')
+    if(access.canManageImplementation)collections.push('implementationCycles')
     return subscribeJourneyLiveChanges({
       organizationId:access.organizationId,
       congregationId,
@@ -288,7 +294,10 @@ export default function MyTodayPage(){
 
   const showMesa=filter==='all'||filter==='mesa'
   const visible=filter==='all'?items:filter==='mesa'?[]:items.filter(item=>filterFor(item.kind)===filter)
-  const hasAnything=visible.length>0||(showMesa&&(mesaPending.length>0||mesaPreparationPending))
+  const activeImplementationCycle=implementationCycles.find(item=>item.status==='active')??implementationCycles[0]
+  const overdueImplementation=(activeImplementationCycle?.steps??[]).filter(step=>step.status==='pending'&&step.dueAt&&Date.parse(step.dueAt)<Date.now())
+  const showImplementation=filter==='all'&&overdueImplementation.length>0
+  const hasAnything=visible.length>0||(showMesa&&(mesaPending.length>0||mesaPreparationPending))||showImplementation
   const primaryAction=buildTodayPrimaryAction({
     locale,
     responsibility,
@@ -353,6 +362,12 @@ export default function MyTodayPage(){
       </header>
 
       <div className="today-list">
+        {showImplementation?<article className="today-action-row">
+          <span className="today-action-icon warning"><CalendarClock size={17}/></span>
+          <div><span>{locale==='en'?'Implementation':locale==='es'?'Implementación':'Implantação'} · {locale==='en'?'overdue':locale==='es'?'atrasado':'atrasado'}</span><h3>{overdueImplementation.length} {locale==='en'?'implementation item(s) passed the agreed deadline':locale==='es'?'ítem(s) de implementación superaron el plazo acordado':'item(ns) da implantação passaram do prazo combinado'}</h3><p>{locale==='en'?'Review the owner and due date. This is an operational reminder, not a score.':locale==='es'?'Revisa responsable y plazo. Es un recordatorio operativo, no una puntuación.':'Revise responsável e prazo. Este é um lembrete operacional, não uma pontuação.'}</p></div>
+          <a href="/implementation-runtime">{locale==='en'?'Review':locale==='es'?'Revisar':'Revisar'}<ArrowRight size={14}/></a>
+        </article>:null}
+
         {showMesa&&mesaPreparationPending?<article className="today-action-row">
           <span className="today-action-icon warning"><UsersRound size={17}/></span>
           <div><span>{labels.table||(locale==='en'?'Open Table':locale==='es'?'Mesa Abierta':'Mesa Aberta')} · {locale==='en'?'attention':locale==='es'?'atención':'atenção'}</span><h3>{locale==='en'?'Prepare the next Table':locale==='es'?'Preparar la próxima Mesa':'Preparar a próxima Mesa'}</h3><p>{locale==='en'?'Confirm environment, hosts, welcome, and simple supplies before the service ends.':locale==='es'?'Confirma ambiente, anfitriones, recepción y elementos simples antes de terminar el culto.':'Confirme ambiente, anfitriões, acolhimento e itens simples antes do encerramento do culto.'}</p></div>
