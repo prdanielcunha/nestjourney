@@ -35,7 +35,7 @@ const copy={
     names:'Nomes das áreas',stages:'Etapas da jornada',stagesHelp:'A ordem abaixo é a ordem que a pessoa enxerga. Etapas não medem valor espiritual.',
     addStage:'Adicionar etapa',entry:'Quando entra',completion:'Quando esta etapa termina',nextAction:'Próxima ação clara',kind:'Tipo de apoio',owners:'Quem pode assumir',required:'Dados mínimos necessários',
     implementation:'Implantação',implementationHelp:'Crie fases e checklists para a igreja saber exatamente o que preparar e executar.',
-    addPhase:'Adicionar fase',objective:'Objetivo',items:'Checklist — uma tarefa por linha',remove:'Remover',
+    addPhase:'Adicionar fase',objective:'Objetivo',items:'Checklist — uma tarefa por linha',targetWeek:'Semana alvo',phaseOwners:'Responsáveis pela fase',remove:'Remover',
     indicators:'Indicadores operacionais',routing:'Encaminhamentos permitidos',safe:'Somente sinais factuais e próximos passos. Nada de ranking espiritual, diagnóstico ou inferência íntima.',
     draft:'Rascunho',activeStatus:'Ativa',saved:'Jornada salva.',activated:'Jornada ativa atualizada.',error:'Não foi possível salvar a jornada.',
     noAccess:'Somente liderança autorizada pode configurar a jornada.',select:'Escolha uma jornada',empty:'Nenhuma jornada configurada.',
@@ -48,7 +48,7 @@ const copy={
     names:'Area names',stages:'Journey stages',stagesHelp:'The order below is the order people see. Stages never measure spiritual worth.',
     addStage:'Add stage',entry:'When it starts',completion:'When this stage ends',nextAction:'Clear next action',kind:'Support type',owners:'Who may own it',required:'Minimum required data',
     implementation:'Implementation',implementationHelp:'Create phases and checklists so the church knows exactly what to prepare and execute.',
-    addPhase:'Add phase',objective:'Objective',items:'Checklist — one task per line',remove:'Remove',
+    addPhase:'Add phase',objective:'Objective',items:'Checklist — one task per line',targetWeek:'Target week',phaseOwners:'Phase owners',remove:'Remove',
     indicators:'Operational indicators',routing:'Allowed routing',safe:'Factual signals and next steps only. No spiritual ranking, diagnosis, or intimate inference.',
     draft:'Draft',activeStatus:'Active',saved:'Journey saved.',activated:'Active journey updated.',error:'The journey could not be saved.',
     noAccess:'Only authorized leadership can configure the journey.',select:'Choose a journey',empty:'No journey configured.',
@@ -61,7 +61,7 @@ const copy={
     names:'Nombres de las áreas',stages:'Etapas de la jornada',stagesHelp:'El orden de abajo es el orden que ve la persona. Las etapas no miden valor espiritual.',
     addStage:'Agregar etapa',entry:'Cuándo entra',completion:'Cuándo termina esta etapa',nextAction:'Próxima acción clara',kind:'Tipo de apoyo',owners:'Quién puede asumir',required:'Datos mínimos necesarios',
     implementation:'Implementación',implementationHelp:'Crea fases y listas para que la iglesia sepa exactamente qué preparar y ejecutar.',
-    addPhase:'Agregar fase',objective:'Objetivo',items:'Checklist — una tarea por línea',remove:'Eliminar',
+    addPhase:'Agregar fase',objective:'Objetivo',items:'Checklist — una tarea por línea',targetWeek:'Semana objetivo',phaseOwners:'Responsables de la fase',remove:'Eliminar',
     indicators:'Indicadores operativos',routing:'Derivaciones permitidas',safe:'Solo señales factuales y próximos pasos. Sin ranking espiritual, diagnóstico ni inferencia íntima.',
     draft:'Borrador',activeStatus:'Activa',saved:'Jornada guardada.',activated:'Jornada activa actualizada.',error:'No se pudo guardar la jornada.',
     noAccess:'Solo liderazgo autorizado puede configurar la jornada.',select:'Elige una jornada',empty:'Ninguna jornada configurada.',
@@ -236,10 +236,14 @@ export default function PlaybookStudioPage(){
         </section>
 
         <section className="journey-section-block">
-          <header><div><span className="journey-section-kicker">{t.implementation}</span><h2>{t.implementation}</h2><p>{t.implementationHelp}</p></div>{!official?<button className="journey-primary-button" onClick={()=>setForm(current=>current?({...current,implementationPhases:[...current.implementationPhases,{id:'phase-'+(current.implementationPhases.length+1),title:'',objective:'',items:['']}] }):current)}><CirclePlus size={16}/>{t.addPhase}</button>:null}</header>
+          <header><div><span className="journey-section-kicker">{t.implementation}</span><h2>{t.implementation}</h2><p>{t.implementationHelp}</p></div>{!official?<button className="journey-primary-button" onClick={()=>setForm(current=>current?({...current,implementationPhases:[...current.implementationPhases,{id:'phase-'+(current.implementationPhases.length+1),title:'',objective:'',items:[''],targetWeek:Math.min(52,current.implementationPhases.length+1),responsibleRoles:['coordinator']}] }):current)}><CirclePlus size={16}/>{t.addPhase}</button>:null}</header>
           <div className="playbook-stack">{form.implementationPhases.map((phase,index)=><article className="playbook-stage" key={phase.id+'-'+index}>
             <div className="playbook-row-head"><b>{index+1}</b><input disabled={official} value={phase.title} maxLength={80} onChange={e=>setPhase(index,{title:e.target.value})}/>{!official&&form.implementationPhases.length>1?<button aria-label={t.remove} onClick={()=>setForm(current=>current?({...current,implementationPhases:current.implementationPhases.filter((_,i)=>i!==index)}):current)}><Trash2 size={15}/></button>:null}</div>
-            <label><span>{t.objective}</span><input disabled={official} value={phase.objective} maxLength={280} onChange={e=>setPhase(index,{objective:e.target.value})}/></label>
+            <div className="playbook-grid two">
+              <label><span>{t.objective}</span><input disabled={official} value={phase.objective} maxLength={280} onChange={e=>setPhase(index,{objective:e.target.value})}/></label>
+              <label><span>{t.targetWeek}</span><input disabled={official} type="number" min={0} max={52} value={phase.targetWeek} onChange={e=>setPhase(index,{targetWeek:Number(e.target.value)})}/></label>
+            </div>
+            <div className="playbook-choice"><span>{t.phaseOwners}</span><div>{roles.map(role=><label key={role}><input disabled={official} type="checkbox" checked={phase.responsibleRoles.includes(role)} onChange={e=>setPhase(index,{responsibleRoles:e.target.checked?[...phase.responsibleRoles,role]:phase.responsibleRoles.filter(item=>item!==role)})}/><b>{roleLabels[locale][role]}</b></label>)}</div></div>
             <label><span>{t.items}</span><textarea disabled={official} rows={Math.max(3,phase.items.length)} value={phase.items.join('\n')} onChange={e=>setPhase(index,{items:e.target.value.split('\n')})}/></label>
           </article>)}</div>
         </section>
