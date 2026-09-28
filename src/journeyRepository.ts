@@ -1326,6 +1326,7 @@ export async function resolvePrivacyRequest(input: {
     batch.update(personRef, {
       consent: false,
       phone: '',
+      preferredContactChannel: '',
       contactStatus: 'closed',
       nextActionCode: 'WELCOME_ON_NEXT_VISIT',
       consentRevokedAt: serverTimestamp(),
