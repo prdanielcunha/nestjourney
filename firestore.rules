@@ -875,12 +875,6 @@ service cloud.firestore {
       let oldOwner = resource.data.get('ownerRef', '');
       let newOwner = request.resource.data.get('ownerRef', '');
       let selfClaim = oldOwner == '' && newOwner == request.auth.uid;
-      let privilegedReassign = oldOwner != newOwner && (
-        isSystemAdmin()
-        || isOwner(orgId)
-        || memberRole(orgId) in ['owner','admin','pastor','coordinator']
-        || hasPermission(orgId, 'canCoordinateJourney')
-      );
       return resource.data.get('status', '') == 'open'
         && request.resource.data.get('status', '') == 'open'
         && tenantUnchanged(orgId)
@@ -890,7 +884,19 @@ service cloud.firestore {
         && newOwner.size() > 0
         && request.resource.data.get('assignedAt', null) == request.time
         && request.resource.data.get('assignedBy', '') == request.auth.uid
-        && (selfClaim || privilegedReassign);
+        && (
+          selfClaim
+            ? true
+            : (
+                oldOwner != newOwner
+                && (
+                  isSystemAdmin()
+                  || isOwner(orgId)
+                  || memberRole(orgId) in ['owner','admin','pastor','coordinator']
+                  || hasPermission(orgId, 'canCoordinateJourney')
+                )
+              )
+        );
     }
     function validRevokedCareResolve(orgId) {
       let personId = resource.data.get('personId', '');
