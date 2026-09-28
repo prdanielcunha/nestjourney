@@ -1641,7 +1641,7 @@ export async function createJourneyGroup(input: {
     neighborhood: String(input.neighborhood ?? '').trim(),
     weekday: String(input.weekday ?? '').trim(),
     time: String(input.time ?? '').trim(),
-    capacity: Math.max(1, Math.min(100, Math.floor(input.capacity ?? 12))),
+    capacity: Math.max(4, Math.min(12, Math.floor(input.capacity ?? 12))),
     participants: 0,
     createdAt: serverTimestamp(),
     createdBy: input.actorId,
@@ -1663,7 +1663,7 @@ export async function updateJourneyGroup(input: {
   const patch: Record<string, unknown> = { updatedAt: serverTimestamp(), updatedBy: input.actorId }
   for (const [key, value] of Object.entries(input.patch)) {
     if (value === undefined) continue
-    if (key === 'capacity') patch[key] = Math.max(1, Math.min(100, Math.floor(Number(value))))
+    if (key === 'capacity') patch[key] = Math.max(4, Math.min(12, Math.floor(Number(value))))
     else if (key === 'participants') patch[key] = Math.max(0, Math.floor(Number(value)))
     else patch[key] = typeof value === 'string' ? value.trim() : value
   }
