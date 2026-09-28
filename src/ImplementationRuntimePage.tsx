@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { BookOpen, Check, ChevronLeft, CircleCheck, Clock3, Play, Settings2, ShieldCheck, Sparkles } from 'lucide-react'
+import { BookOpen, CalendarClock, Check, ChevronLeft, CircleCheck, Clock3, Play, Settings2, ShieldCheck, Sparkles, X } from 'lucide-react'
 import { auth } from './firebase'
 import {
   completeImplementationStep,
@@ -8,7 +8,9 @@ import {
   getActiveJourneyOrganizationId,
   listImplementationCycles,
   listJourneyCongregations,
+  listJourneyOrganizationMembers,
   listJourneyPlaybooks,
+  planImplementationStep,
   loadActiveJourneyPlaybook,
   loadJourneyAccess,
   resolveActiveJourneyCongregationId,
@@ -17,6 +19,7 @@ import {
   type JourneyAccessContext,
   type JourneyCongregation,
   type JourneyImplementationCycle,
+  type JourneyOrganizationMember,
 } from './journeyRepository'
 import {
   IMPLEMENTATION_PREPARATION_KEYS,
@@ -42,9 +45,9 @@ function genericProgress(requiredKeys:string[],completedKeys:string[]){
 }
 
 const extraCopy={
-  'pt-BR':{studio:'Configurar jornada',activePlaybook:'Jornada ativa',customIntro:'Esta organização usa uma implantação configurada. Conclua somente fatos realmente executados; o histórico permanece auditável.',phase:'Fase',startNamed:'Iniciar implantação',noSteps:'Esta jornada ainda não possui um checklist de implantação válido.'},
-  en:{studio:'Configure journey',activePlaybook:'Active journey',customIntro:'This organization uses a configured implementation. Complete only work that actually happened; history remains auditable.',phase:'Phase',startNamed:'Start implementation',noSteps:'This journey does not yet have a valid implementation checklist.'},
-  es:{studio:'Configurar jornada',activePlaybook:'Jornada activa',customIntro:'Esta organización usa una implementación configurada. Completa solo hechos realmente ejecutados; el historial permanece auditable.',phase:'Fase',startNamed:'Iniciar implementación',noSteps:'Esta jornada todavía no tiene una lista de implementación válida.'},
+  'pt-BR':{studio:'Configurar jornada',activePlaybook:'Jornada ativa',customIntro:'Esta organização usa uma implantação configurada. Conclua somente fatos realmente executados; o histórico permanece auditável.',phase:'Fase',startNamed:'Iniciar implantação',noSteps:'Esta jornada ainda não possui um checklist de implantação válido.',plan:'Planejar item',planned:'Responsabilidades combinadas',owner:'Responsável',due:'Prazo',overdue:'atrasado(s)',noPlanned:'Nenhum item com responsável e prazo definido ainda.',chooseItem:'Escolha o item',chooseOwner:'Escolha o responsável',savePlan:'Salvar responsabilidade'},
+  en:{studio:'Configure journey',activePlaybook:'Active journey',customIntro:'This organization uses a configured implementation. Complete only work that actually happened; history remains auditable.',phase:'Phase',startNamed:'Start implementation',noSteps:'This journey does not yet have a valid implementation checklist.',plan:'Plan item',planned:'Agreed responsibilities',owner:'Owner',due:'Due',overdue:'overdue',noPlanned:'No item has an owner and due date yet.',chooseItem:'Choose the item',chooseOwner:'Choose the owner',savePlan:'Save responsibility'},
+  es:{studio:'Configurar jornada',activePlaybook:'Jornada activa',customIntro:'Esta organización usa una implementación configurada. Completa solo hechos realmente ejecutados; el historial permanece auditable.',phase:'Fase',startNamed:'Iniciar implementación',noSteps:'Esta jornada todavía no tiene una lista de implementación válida.',plan:'Planificar ítem',planned:'Responsabilidades acordadas',owner:'Responsable',due:'Plazo',overdue:'atrasado(s)',noPlanned:'Todavía no hay ítems con responsable y plazo.',chooseItem:'Elige el ítem',chooseOwner:'Elige el responsable',savePlan:'Guardar responsabilidad'},
 } as const
 
 export default function ImplementationRuntimePage() {
@@ -56,6 +59,8 @@ export default function ImplementationRuntimePage() {
   const [cycles,setCycles]=useState<JourneyImplementationCycle[]>([])
   const [playbooks,setPlaybooks]=useState<JourneyPlaybookDefinition[]>([])
   const [activePlaybook,setActivePlaybook]=useState<JourneyPlaybookDefinition|null>(null)
+  const [team,setTeam]=useState<JourneyOrganizationMember[]>([])
+  const [planning,setPlanning]=useState(false)
   const [selectedWeek,setSelectedWeek]=useState(1)
   const [loading,setLoading]=useState(true),[busy,setBusy]=useState(false),[error,setError]=useState('')
 
@@ -96,14 +101,16 @@ export default function ImplementationRuntimePage() {
       const nextAccess=await loadJourneyAccess(user.uid,organizationId);setAccess(nextAccess)
       if(!nextAccess.canManageImplementation)return
       await ensureDefaultJourneyPlaybook(nextAccess)
-      const [units,nextPlaybooks,nextActive]=await Promise.all([
+      const [units,nextPlaybooks,nextActive,nextTeam]=await Promise.all([
         listJourneyCongregations(nextAccess),
         listJourneyPlaybooks(nextAccess),
         loadActiveJourneyPlaybook(nextAccess),
+        listJourneyOrganizationMembers(nextAccess),
       ])
       setCongregations(units)
       setPlaybooks(nextPlaybooks.length?nextPlaybooks:[nextActive])
       setActivePlaybook(nextActive)
+      setTeam(nextTeam)
       const unitId=resolveActiveJourneyCongregationId(nextAccess.organizationId,units);setCongregationId(unitId)
       if(unitId)await refresh(organizationId,unitId)
     }catch(cause){console.error(cause);setError(t.error)}finally{setLoading(false)}
@@ -153,10 +160,51 @@ export default function ImplementationRuntimePage() {
     }catch(cause){console.error(cause);setError(t.error)}finally{setBusy(false)}
   }
 
+  function itemLabel(key:string){
+    const prepIndex=IMPLEMENTATION_PREPARATION_KEYS.indexOf(key)
+    if(defaultCycle&&prepIndex>=0)return builtIn.preparation[prepIndex]??key
+    const teach=key.match(/^week\.(\d+)\.teach\.(\d+)$/)
+    if(defaultCycle&&teach){
+      const target=builtIn.weeks[Number(teach[1])-1]
+      return target?.teaching[Number(teach[2])-1]??key
+    }
+    const practice=key.match(/^week\.(\d+)\.practice$/)
+    if(defaultCycle&&practice)return builtIn.weeks[Number(practice[1])-1]?.practice??key
+    for(const phase of cyclePlaybook?.implementationPhases??[]){
+      const keys=implementationKeysForPhases([phase])
+      const index=keys.indexOf(key)
+      if(index>=0)return phase.items[index]??key
+    }
+    return key
+  }
+
+  async function savePlan(key:string,owner:JourneyOrganizationMember,dueAt:string){
+    if(!access||!cycle||!cyclePlaybook)return
+    setBusy(true);setError('')
+    try{
+      await planImplementationStep({
+        organizationId:access.organizationId,
+        cycle,
+        actorId:access.userId,
+        key,
+        requiredKeys:cyclePlaybook.implementationKeys,
+        ownerRef:owner.id,
+        ownerName:owner.name,
+        dueAt,
+      })
+      setPlanning(false)
+      await refresh(access.organizationId,congregationId)
+    }catch(cause){console.error(cause);setError(t.error)}finally{setBusy(false)}
+  }
+
   if(loading)return <main className="implementation-runtime"><div className="implementation-loading">{t.loading}</div></main>
   if(!access?.canManageImplementation)return <main className="implementation-runtime"><AccessDeniedState locale={locale} title={t.noAccessTitle} body={t.noAccess} retryLabel={t.retry} onRetry={()=>void bootstrap()} /></main>
 
   const activeUnit=congregations.find(unit=>unit.id===congregationId)
+  const unitTeam=team.filter(member=>['owner','admin','pastor'].includes(member.organizationRole)||member.congregationIds.includes(congregationId))
+  const plannedSteps=(cycle?.steps??[]).filter(step=>step.status==='pending')
+  const overdueSteps=plannedSteps.filter(step=>step.dueAt&&Date.parse(step.dueAt)<Date.now())
+  const uncompletedKeys=requiredKeys.filter(key=>!completed.has(key))
   const configured=activePlaybook??cyclePlaybook
   const cycleComplete=Boolean(cycle&&requiredKeys.length&&requiredKeys.every(key=>completed.has(key)))
   const focusTitle=!cycle
@@ -188,6 +236,7 @@ export default function ImplementationRuntimePage() {
         {label:x.activePlaybook,value:configured?.name??'—',tone:configured?'good':'muted'},
         {label:t.progress,value:cycle?progress.percent+'%':'—',tone:cycleComplete?'good':cycle?'attention':'muted'},
         {label:t.week,value:defaultCycle?(cycleComplete?'7/7':String(suggestedWeek)+'/7'):(cycle?progress.done+'/'+progress.total:'—'),tone:cycle?'good':'muted'},
+        {label:x.due,value:cycle?String(overdueSteps.length)+' '+x.overdue:'—',tone:overdueSteps.length?'attention':'good'},
       ]}
       actions={!cycle
         ?[{label:x.startNamed,onClick:()=>void start(),disabled:busy||!congregationId||!configured||!configured.implementationKeys.length,primary:true}]
@@ -204,6 +253,11 @@ export default function ImplementationRuntimePage() {
     {!cycle?<section className="implementation-panel implementation-empty"><BookOpen size={28}/><h2>{t.noCycle}</h2><p>{configured?.description||builtIn.progressiveDecision}</p>{configured?.implementationKeys.length?<button className="implementation-button primary" disabled={busy||!congregationId} onClick={()=>void start()}><Play size={17}/>{x.startNamed}</button>:<p>{x.noSteps}</p>}</section>:<>
       <section className="implementation-panel implementation-cycle"><div><span className="implementation-kicker">{cycleComplete?t.completedCycle:t.activeCycle}</span><h2>{cyclePlaybook?.name??builtIn.title}</h2><p>{cyclePlaybook?.description??builtIn.subtitle}</p></div><div className="implementation-progress"><div><span>{t.progress}</span><strong>{progress.percent}%</strong></div><div className="implementation-progress-track"><i style={{width:progress.percent+'%'}}/></div><small>{progress.done} / {progress.total}</small></div></section>
       {cycleComplete?<section className="implementation-panel implementation-complete"><CircleCheck size={26}/><div><strong>{t.completedCycle}</strong><p>{t.allDone}</p></div></section>:null}
+
+      {!cycleComplete?<section className="implementation-panel implementation-planning">
+        <div className="implementation-section-title"><div><span className="implementation-kicker">{x.planned}</span><h2>{x.planned}</h2><p>{locale==='en'?'Assign operational owners and due dates without turning people into scores.':locale==='es'?'Asigna responsables y plazos operativos sin convertir personas en puntuaciones.':'Defina responsáveis e prazos operacionais sem transformar pessoas em pontuação.'}</p></div><button className="implementation-button" disabled={busy||!uncompletedKeys.length||!unitTeam.length} onClick={()=>setPlanning(true)}><CalendarClock size={16}/>{x.plan}</button></div>
+        {plannedSteps.length?<div className="implementation-plan-list">{plannedSteps.map(step=>{const late=Boolean(step.dueAt&&Date.parse(step.dueAt)<Date.now());return <article key={step.key} className={late?'late':''}><div><strong>{itemLabel(step.key)}</strong><span>{x.owner}: {step.ownerName||'—'}</span></div><b>{x.due}: {step.dueAt?new Date(step.dueAt).toLocaleDateString(locale):'—'}{late?' · '+x.overdue:''}</b><button className="implementation-button" disabled={busy} onClick={()=>void mark(step.key)}><Check size={14}/>{t.markDone}</button></article>})}</div>:<p className="implementation-muted">{x.noPlanned}</p>}
+      </section>:null}
 
       {defaultCycle?<>
         <section className="implementation-panel implementation-source"><Sparkles size={18}/><div><strong>{t.progressive}</strong><p>{builtIn.progressiveDecision}</p><small>{t.source}</small></div></section>
@@ -229,5 +283,23 @@ export default function ImplementationRuntimePage() {
       </section>}
       <p className="implementation-rule"><ShieldCheck size={15}/>{t.sourceNote}</p>
     </>}
+    {planning&&cycle?<ImplementationPlanModal locale={locale} keys={uncompletedKeys} labelFor={itemLabel} members={unitTeam} close={()=>setPlanning(false)} save={savePlan}/>:null}
   </div></main>
+}
+
+function ImplementationPlanModal({locale,keys,labelFor,members,close,save}:{locale:AppLocale;keys:string[];labelFor:(key:string)=>string;members:JourneyOrganizationMember[];close:()=>void;save:(key:string,owner:JourneyOrganizationMember,dueAt:string)=>Promise<void>}){
+  const x=extraCopy[locale]
+  const [key,setKey]=useState(keys[0]??'')
+  const [ownerId,setOwnerId]=useState(members[0]?.id??'')
+  const [due,setDue]=useState('')
+  const owner=members.find(member=>member.id===ownerId)
+  return <div className="implementation-modal-backdrop" onMouseDown={close}><section className="implementation-panel implementation-modal" role="dialog" aria-modal="true" onMouseDown={event=>event.stopPropagation()}>
+    <div className="implementation-modal-head"><div><span className="implementation-kicker">{x.plan}</span><h2>{x.plan}</h2></div><button className="implementation-button" onClick={close}><X size={16}/></button></div>
+    <div className="implementation-plan-form">
+      <label><span>{x.chooseItem}</span><select value={key} onChange={event=>setKey(event.target.value)}>{keys.map(item=><option value={item} key={item}>{labelFor(item)}</option>)}</select></label>
+      <label><span>{x.chooseOwner}</span><select value={ownerId} onChange={event=>setOwnerId(event.target.value)}>{members.map(member=><option value={member.id} key={member.id}>{member.name}</option>)}</select></label>
+      <label><span>{x.due}</span><input type="date" value={due} min={new Date().toISOString().slice(0,10)} onChange={event=>setDue(event.target.value)}/></label>
+    </div>
+    <div className="implementation-modal-actions"><button className="implementation-button" onClick={close}>{locale==='en'?'Cancel':locale==='es'?'Cancelar':'Cancelar'}</button><button className="implementation-button primary" disabled={!key||!owner||!due} onClick={()=>owner&&void save(key,owner,new Date(due+'T23:59:59').toISOString())}>{x.savePlan}</button></div>
+  </section></div>
 }
