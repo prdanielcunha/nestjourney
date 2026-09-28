@@ -13,6 +13,7 @@ import {
   listJourneyFollowups,
   listPresencePeople,
   loadJourneyAccess,
+  releaseCareRequest,
   resolveCareRequest,
   subscribeJourneyLiveChanges,
   type CareRequestRecord,
@@ -190,6 +191,24 @@ export default function CareIntegrityPage() {
     finally { setBusy(false) }
   }
 
+  async function release(request: CareRequestRecord) {
+    if (!access || request.status !== 'open' || !request.ownerRef) return
+    const canRelease = request.ownerRef === access.userId || access.broadJourneyAccess
+    if (!canRelease) return
+    const message = locale === 'en'
+      ? 'Return this care item to the unassigned queue so another caregiver can take responsibility?'
+      : locale === 'es'
+        ? '¿Devolver este cuidado a la fila sin responsable para que otra persona pueda asumirlo?'
+        : 'Devolver este cuidado para a fila sem responsável para que outra pessoa possa assumir?'
+    if (!window.confirm(message)) return
+    setBusy(true); setError('')
+    try {
+      await releaseCareRequest({ organizationId: access.organizationId, request, actorId: access.userId })
+      await refreshScope(access, congregationId)
+    } catch (cause) { console.error(cause); setError(t.error) }
+    finally { setBusy(false) }
+  }
+
   async function closeRevokedContact(request: CareRequestRecord) {
     if (!access || request.status !== 'open') return
     const followup = followupByCare.get(request.id)
@@ -275,7 +294,7 @@ export default function CareIntegrityPage() {
       {visible.map(({ request, evaluation }) => {
         const person = personById.get(request.personId)
         const contactRequired = request.careType === 'first_contact' || request.careType === 'absence_check'
-        const contactAllowed = Boolean(person?.consent && person?.phone)
+        const contactAllowed = Boolean(person?.consent && person?.phone && (request.careType !== 'first_contact' || person?.preferredChannel))
         const contactBlocked = request.status === 'open' && contactRequired && !contactAllowed
         const canResolve = Boolean(request.ownerRef === access.userId || access.broadJourneyAccess)
         const canCloseRevoked = Boolean(!request.ownerRef || request.ownerRef === access.userId || access.broadJourneyAccess)
@@ -296,6 +315,7 @@ export default function CareIntegrityPage() {
           </div> : null}
           <div className="care-card-actions">
             {!request.ownerRef && request.status === 'open' ? <button className="care-button" disabled={busy} onClick={() => void claim(request)}>{t.claim}</button> : null}
+            {request.status === 'open' && request.ownerRef && (request.ownerRef === access.userId || access.broadJourneyAccess) ? <button className="care-button" disabled={busy} onClick={() => void release(request)}>{locale==='en'?'Reassign':locale==='es'?'Reasignar':'Repassar'}</button> : null}
             {request.status === 'open' && contactBlocked
               ? <button className="care-button" disabled={busy || !canCloseRevoked} onClick={() => void closeRevokedContact(request)}><ShieldCheck size={16} /> {t.closeRevoked}</button>
               : null}
@@ -344,7 +364,7 @@ function NewCareModal({ locale, people, close, save }: { locale: AppLocale; peop
   const person = people.find((item) => item.id === personId)
   const manualCareTypes = (Object.keys(t.careTypes) as CareType[]).filter((id) => id !== 'absence_check')
   const needsConsent = careType === 'first_contact'
-  const blockedByConsent = Boolean(needsConsent && (!person?.consent || !person.phone))
+  const blockedByConsent = Boolean(needsConsent && (!person?.consent || !person.phone || !person.preferredChannel))
 
   return <div className="care-modal-backdrop" onMouseDown={close}><section className="care-panel care-modal" role="dialog" aria-modal="true" aria-labelledby="care-new-title" onMouseDown={(event) => event.stopPropagation()}>
     <div className="care-modal-head"><div><span className="care-kicker">Care Request</span><h2 id="care-new-title">{t.newRequest}</h2></div><button className="care-button" onClick={close} aria-label={t.cancel}><X size={17} /></button></div>

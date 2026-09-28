@@ -22,7 +22,7 @@ describe('Journey Overview factual projection', () => {
   const pastoralHandoffs: JourneyPastoralHandoff[] = [{ id:'ph1', organizationId:'o', congregationId:'c', personId:'p1', sourceCareRequestId:'c1', status:'open', requestedAt:'2026-09-03T00:00:00Z', requestedBy:'u' }]
   const implementationCycles: JourneyImplementationCycle[] = [{
     id: 'i1', organizationId: 'o', congregationId: 'c', playbookId: 'raiz_e_mesa_2026',
-    status: 'active', completedKeys: [...IMPLEMENTATION_PREPARATION_KEYS, ...implementationWeekKeys(1)],
+    status: 'active', completedKeys: [...IMPLEMENTATION_PREPARATION_KEYS, ...implementationWeekKeys(1)], steps: [],
     startedAt: '2026-09-01T00:00:00Z', createdBy: 'u',
   }]
 

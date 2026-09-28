@@ -222,6 +222,8 @@ export interface PresencePerson {
   photoUrl?: string
   phone?: string
   consent?: boolean
+  preferredChannel?: 'whatsapp' | 'phone'
+  consentGrantedAt?: string
   visits?: number
   bondHostRef?: string
   bondAssignedAt?: string
@@ -260,7 +262,9 @@ export interface JourneyGroupRecord {
   leader?: string
   leaderId?: string
   host?: string
+  hostId?: string
   apprentice?: string
+  apprenticeId?: string
   neighborhood?: string
   weekday?: string
   time?: string
@@ -334,8 +338,23 @@ export interface JourneyDiscipleshipRecord {
   targetMeetings?: number
   playbookId?: string
   status: 'active' | 'paused' | 'completed'
+  /** Legacy textual field kept only for backwards-compatible reads. */
   nextMeeting?: string
+  nextMeetingAt?: string
+  nextMeetingStatus?: 'scheduled' | 'to_schedule'
   startedAt?: string
+}
+
+export interface JourneyImplementationStepRecord {
+  key: string
+  status: 'pending' | 'completed'
+  ownerRef?: string
+  ownerName?: string
+  dueAt?: string
+  plannedAt?: string
+  plannedBy?: string
+  completedAt?: string
+  completedBy?: string
 }
 
 export interface JourneyImplementationCycle {
@@ -345,6 +364,7 @@ export interface JourneyImplementationCycle {
   playbookId: string
   status: 'active' | 'completed'
   completedKeys: string[]
+  steps: JourneyImplementationStepRecord[]
   startedAt: string
   createdAt?: string
   createdBy: string
@@ -403,6 +423,7 @@ export interface MinimalVisitorInput {
   name: string
   phone?: string
   consent: boolean
+  preferredChannel?: 'whatsapp' | 'phone'
 }
 
 export type CareType =
@@ -896,6 +917,9 @@ export async function saveJourneyPlaybook(access: JourneyAccessContext, input: J
     status: playbook.status,
     carePromiseHours: playbook.carePromiseHours,
     discipleshipMeetingCount: playbook.discipleshipMeetingCount,
+    groupRecommendedMin: playbook.groupRecommendedMin,
+    groupRecommendedMax: playbook.groupRecommendedMax,
+    groupCapacityMax: playbook.groupCapacityMax,
     areaLabels: playbook.areaLabels,
     stages: playbook.stages,
     stageIds: playbook.stages.map((stage) => stage.id),
@@ -1070,7 +1094,7 @@ export async function listPresencePeople(organizationId: string, congregationId:
     where('congregationId', '==', congregationId),
   ))
 
-  return snapshot.docs.map((item) => {
+  return snapshot.docs.map((item): PresencePerson => {
     const data = item.data()
     return {
       id: item.id,
@@ -1080,6 +1104,8 @@ export async function listPresencePeople(organizationId: string, congregationId:
       photoUrl: asString(data.photoUrl || data.photoURL) || undefined,
       phone: asString(data.phone) || undefined,
       consent: Boolean(data.consent),
+      preferredChannel: data.preferredChannel === 'phone' ? 'phone' : data.preferredChannel === 'whatsapp' ? 'whatsapp' : undefined,
+      consentGrantedAt: data.consentGrantedAt ? toIso(data.consentGrantedAt) : undefined,
       visits: typeof data.visits === 'number' ? data.visits : undefined,
       bondHostRef: asString(data.bondHostRef) || undefined,
       bondAssignedAt: data.bondAssignedAt ? toIso(data.bondAssignedAt) : undefined,
@@ -1104,6 +1130,8 @@ export async function listJourneyPeople(organizationId: string, congregationId: 
       photoUrl: asString(data.photoUrl || data.photoURL) || undefined,
       phone: asString(data.phone) || undefined,
       consent: Boolean(data.consent),
+      preferredChannel: data.preferredChannel === 'phone' ? 'phone' : data.preferredChannel === 'whatsapp' ? 'whatsapp' : undefined,
+      consentGrantedAt: data.consentGrantedAt ? toIso(data.consentGrantedAt) : undefined,
       visits: typeof data.visits === 'number' ? data.visits : undefined,
       bondHostRef: asString(data.bondHostRef) || undefined,
       bondAssignedAt: data.bondAssignedAt ? toIso(data.bondAssignedAt) : undefined,
@@ -1132,7 +1160,9 @@ export async function listJourneyGroups(organizationId: string, congregationId: 
       leader: asString(data.leader || data.leaderName) || undefined,
       leaderId: asString(data.leaderId) || undefined,
       host: asString(data.host) || undefined,
+      hostId: asString(data.hostId) || undefined,
       apprentice: asString(data.apprentice) || undefined,
+      apprenticeId: asString(data.apprenticeId) || undefined,
       neighborhood: asString(data.neighborhood) || undefined,
       weekday: asString(data.weekday) || undefined,
       time: asString(data.time) || undefined,
@@ -1600,6 +1630,8 @@ export async function listJourneyDiscipleships(access: JourneyAccessContext, con
       playbookId: asString(data.playbookId) || undefined,
       status,
       nextMeeting: asString(data.nextMeeting) || undefined,
+      nextMeetingAt: data.nextMeetingAt ? toIso(data.nextMeetingAt) : undefined,
+      nextMeetingStatus: data.nextMeetingStatus === 'scheduled' ? 'scheduled' : 'to_schedule',
       startedAt: data.startedAt ? toIso(data.startedAt) : undefined,
     }
   }).sort((a, b) => a.status.localeCompare(b.status) || a.meeting - b.meeting)
@@ -1613,11 +1645,14 @@ export async function createJourneyGroup(input: {
   leader?: string
   leaderId?: string
   host?: string
+  hostId?: string
   apprentice?: string
+  apprenticeId?: string
   neighborhood?: string
   weekday?: string
   time?: string
   capacity?: number
+  capacityMax?: number
 }) {
   const firestore = requireDb()
   const groupRef = doc(collection(firestore, journeyCollectionPath(input.organizationId, 'groups')))
@@ -1629,11 +1664,13 @@ export async function createJourneyGroup(input: {
     leader: String(input.leader ?? '').trim(),
     leaderId: String(input.leaderId ?? '').trim(),
     host: String(input.host ?? '').trim(),
+    hostId: String(input.hostId ?? '').trim(),
     apprentice: String(input.apprentice ?? '').trim(),
+    apprenticeId: String(input.apprenticeId ?? '').trim(),
     neighborhood: String(input.neighborhood ?? '').trim(),
     weekday: String(input.weekday ?? '').trim(),
     time: String(input.time ?? '').trim(),
-    capacity: Math.max(1, Math.min(100, Math.floor(input.capacity ?? 12))),
+    capacity: Math.max(1, Math.min(Math.max(1, Math.min(50, Math.floor(input.capacityMax ?? 12))), Math.floor(input.capacity ?? 12))),
     participants: 0,
     createdAt: serverTimestamp(),
     createdBy: input.actorId,
@@ -1648,7 +1685,7 @@ export async function updateJourneyGroup(input: {
   organizationId: string
   groupId: string
   actorId: string
-  patch: Partial<Pick<JourneyGroupRecord, 'name' | 'leader' | 'leaderId' | 'host' | 'apprentice' | 'neighborhood' | 'weekday' | 'time' | 'capacity' | 'participants'>>
+  patch: Partial<Pick<JourneyGroupRecord, 'name' | 'leader' | 'leaderId' | 'host' | 'hostId' | 'apprentice' | 'apprenticeId' | 'neighborhood' | 'weekday' | 'time' | 'capacity' | 'participants'>>
 }) {
   const firestore = requireDb()
   const groupRef = doc(firestore, `${journeyCollectionPath(input.organizationId, 'groups')}/${input.groupId}`)
@@ -1664,6 +1701,14 @@ export async function updateJourneyGroup(input: {
   await batch.commit()
 }
 
+function nextMeetingTimestamp(value?: string | null) {
+  const raw = String(value ?? '').trim()
+  if (!raw) return null
+  const ms = Date.parse(raw)
+  if (!Number.isFinite(ms) || ms <= Date.now() - 5 * 60 * 1000) throw new Error('invalid_next_meeting_at')
+  return Timestamp.fromMillis(ms)
+}
+
 export async function createJourneyDiscipleship(input: {
   organizationId: string
   congregationId: string
@@ -1673,6 +1718,7 @@ export async function createJourneyDiscipleship(input: {
   disciplerName?: string
   targetMeetings?: number
   playbookId?: string
+  firstMeetingAt?: string | null
 }) {
   const firestore = requireDb()
   const relationRef = doc(collection(firestore, journeyCollectionPath(input.organizationId, 'discipleships')))
@@ -1680,6 +1726,7 @@ export async function createJourneyDiscipleship(input: {
   if (!targetDisciplerId) throw new Error('missing_discipler')
   const targetMeetings = Math.max(1, Math.min(24, Math.floor(input.targetMeetings ?? 7)))
   const playbookId = String(input.playbookId ?? '').trim()
+  const firstMeetingAt = nextMeetingTimestamp(input.firstMeetingAt)
   const batch = writeBatch(firestore)
   batch.set(relationRef, {
     organizationId: input.organizationId,
@@ -1693,7 +1740,8 @@ export async function createJourneyDiscipleship(input: {
     playbookId,
     completedMeetings: [],
     status: 'active',
-    nextMeeting: 'Agendar encontro 1',
+    nextMeetingAt: firstMeetingAt,
+    nextMeetingStatus: firstMeetingAt ? 'scheduled' : 'to_schedule',
     startedAt: serverTimestamp(),
     createdAt: serverTimestamp(),
     createdBy: input.actorId,
@@ -1708,7 +1756,8 @@ export async function updateJourneyDiscipleship(input: {
   organizationId: string
   relation: JourneyDiscipleshipRecord
   actorId: string
-  action: 'advance' | 'pause' | 'resume'
+  action: 'advance' | 'pause' | 'resume' | 'schedule'
+  nextMeetingAt?: string | null
 }) {
   const firestore = requireDb()
   const relationRef = doc(firestore, `${journeyCollectionPath(input.organizationId, 'discipleships')}/${input.relation.id}`)
@@ -1718,12 +1767,23 @@ export async function updateJourneyDiscipleship(input: {
     const currentMeeting = Math.max(1, Math.min(targetMeetings, input.relation.meeting || 1))
     const nextMeeting = Math.min(targetMeetings, currentMeeting + 1)
     const completed = currentMeeting >= targetMeetings
+    const scheduledAt = completed ? null : nextMeetingTimestamp(input.nextMeetingAt)
     batch.update(relationRef, {
       meeting: nextMeeting,
       status: completed ? 'completed' : 'active',
-      nextMeeting: completed ? 'Ciclo concluído' : `Agendar encontro ${nextMeeting}`,
+      nextMeetingAt: scheduledAt,
+      nextMeetingStatus: scheduledAt ? 'scheduled' : 'to_schedule',
       lastCompletedMeeting: currentMeeting,
       lastCompletedAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+      updatedBy: input.actorId,
+    })
+  } else if (input.action === 'schedule') {
+    if (input.relation.status === 'completed') throw new Error('discipleship_completed')
+    const scheduledAt = nextMeetingTimestamp(input.nextMeetingAt)
+    batch.update(relationRef, {
+      nextMeetingAt: scheduledAt,
+      nextMeetingStatus: scheduledAt ? 'scheduled' : 'to_schedule',
       updatedAt: serverTimestamp(),
       updatedBy: input.actorId,
     })
@@ -1908,14 +1968,26 @@ export async function listImplementationCycles(organizationId: string, congregat
   const cycles = await Promise.all(snapshot.docs.map(async (item): Promise<JourneyImplementationCycle> => {
     const data = item.data()
     const playbookId = asString(data.playbookId) || JOURNEY_PLAYBOOK_DEFAULT_ID
-    const [steps, playbook] = await Promise.all([
+    const [stepSnapshot, playbook] = await Promise.all([
       getDocs(collection(firestore, `${basePath}/${item.id}/steps`)),
       getDoc(doc(firestore, `${journeyCollectionPath(organizationId, 'playbooks')}/${playbookId}`)),
     ])
-    const completedKeys = steps.docs
-      .map((step) => asString(step.data().key))
-      .filter(Boolean)
-      .sort()
+    const steps = stepSnapshot.docs.map((step): JourneyImplementationStepRecord => {
+      const raw = step.data()
+      const completed = raw.status === 'completed' || Boolean(raw.completedAt)
+      return {
+        key: asString(raw.key) || step.id,
+        status: completed ? 'completed' : 'pending',
+        ownerRef: asString(raw.ownerRef) || undefined,
+        ownerName: asString(raw.ownerName) || undefined,
+        dueAt: raw.dueAt ? toIso(raw.dueAt) : undefined,
+        plannedAt: raw.plannedAt ? toIso(raw.plannedAt) : undefined,
+        plannedBy: asString(raw.plannedBy) || undefined,
+        completedAt: raw.completedAt ? toIso(raw.completedAt) : undefined,
+        completedBy: asString(raw.completedBy) || undefined,
+      }
+    })
+    const completedKeys = steps.filter(step => step.status === 'completed').map(step => step.key).filter(Boolean).sort()
     const requiredKeys = playbook.exists()
       ? asStringArray(playbook.data().implementationKeys)
       : (playbookId === JOURNEY_PLAYBOOK_DEFAULT_ID ? createRaizEMesaPlaybook(organizationId).implementationKeys : [])
@@ -1927,6 +1999,7 @@ export async function listImplementationCycles(organizationId: string, congregat
       playbookId,
       status: completed ? 'completed' : 'active',
       completedKeys,
+      steps,
       startedAt: toIso(data.startedAt),
       createdAt: data.createdAt ? toIso(data.createdAt) : undefined,
       createdBy: asString(data.createdBy),
@@ -1962,6 +2035,48 @@ export async function createImplementationCycle(input: {
   return cycleRef.id
 }
 
+export async function planImplementationStep(input: {
+  organizationId: string
+  cycle: JourneyImplementationCycle
+  actorId: string
+  key: string
+  requiredKeys: string[]
+  ownerRef: string
+  ownerName: string
+  dueAt: string
+}) {
+  if (!input.requiredKeys.includes(input.key)) throw new Error('invalid_implementation_step')
+  const ownerRef = input.ownerRef.trim()
+  const ownerName = input.ownerName.trim()
+  const dueMs = Date.parse(input.dueAt)
+  if (!ownerRef || !ownerName || !Number.isFinite(dueMs)) throw new Error('invalid_implementation_plan')
+  const firestore = requireDb()
+  const stepRef = doc(
+    firestore,
+    `${journeyCollectionPath(input.organizationId, 'implementationCycles')}/${input.cycle.id}/steps/${input.key}`,
+  )
+  const snapshot = await getDoc(stepRef)
+  if (snapshot.exists() && (snapshot.data().status === 'completed' || snapshot.data().completedAt)) throw new Error('implementation_step_completed')
+  const batch = writeBatch(firestore)
+  const base = {
+    organizationId: input.organizationId,
+    congregationId: input.cycle.congregationId,
+    cycleId: input.cycle.id,
+    playbookId: input.cycle.playbookId,
+    key: input.key,
+    status: 'pending',
+    ownerRef,
+    ownerName,
+    dueAt: Timestamp.fromMillis(dueMs),
+    plannedAt: serverTimestamp(),
+    plannedBy: input.actorId,
+    completedAt: null,
+    completedBy: '',
+  }
+  batch.set(stepRef, base)
+  await batch.commit()
+}
+
 export async function completeImplementationStep(input: {
   organizationId: string
   cycle: JourneyImplementationCycle
@@ -1975,16 +2090,32 @@ export async function completeImplementationStep(input: {
     firestore,
     `${journeyCollectionPath(input.organizationId, 'implementationCycles')}/${input.cycle.id}/steps/${input.key}`,
   )
+  const existing = await getDoc(stepRef)
+  const current = existing.exists() ? existing.data() : null
   const batch = writeBatch(firestore)
-  batch.set(stepRef, {
-    organizationId: input.organizationId,
-    congregationId: input.cycle.congregationId,
-    cycleId: input.cycle.id,
-    playbookId: input.cycle.playbookId,
-    key: input.key,
-    completedAt: serverTimestamp(),
-    completedBy: input.actorId,
-  })
+  if (current && current.status === 'pending') {
+    batch.update(stepRef, {
+      status: 'completed',
+      completedAt: serverTimestamp(),
+      completedBy: input.actorId,
+    })
+  } else {
+    batch.set(stepRef, {
+      organizationId: input.organizationId,
+      congregationId: input.cycle.congregationId,
+      cycleId: input.cycle.id,
+      playbookId: input.cycle.playbookId,
+      key: input.key,
+      status: 'completed',
+      ownerRef: '',
+      ownerName: '',
+      dueAt: null,
+      plannedAt: null,
+      plannedBy: '',
+      completedAt: serverTimestamp(),
+      completedBy: input.actorId,
+    })
+  }
   await batch.commit()
 }
 
@@ -2334,19 +2465,26 @@ export async function createMinimalVisitor(input: MinimalVisitorInput) {
   const firestore = requireDb()
   const personRef = doc(collection(firestore, journeyCollectionPath(input.organizationId, 'people')))
   const factRef = doc(firestore, `${journeyCollectionPath(input.organizationId, 'facts')}/visitor-${personRef.id}`)
-  const careRef = input.consent ? doc(collection(firestore, journeyCollectionPath(input.organizationId, 'careRequests'))) : null
+  const consent = Boolean(input.consent)
+  const phone = consent ? String(input.phone ?? '').replace(/\D/g, '') : ''
+  const preferredChannel = consent && (input.preferredChannel === 'whatsapp' || input.preferredChannel === 'phone')
+    ? input.preferredChannel
+    : ''
+  if (consent && (phone.length < 10 || phone.length > 15)) throw new Error('invalid_contact_phone')
+  if (consent && !preferredChannel) throw new Error('preferred_channel_required')
+  const careRef = consent ? doc(collection(firestore, journeyCollectionPath(input.organizationId, 'careRequests'))) : null
   const careRequestedFactRef = careRef
     ? doc(firestore, `${journeyCollectionPath(input.organizationId, 'facts')}/care-requested-${careRef.id}`)
     : null
   const batch = writeBatch(firestore)
   const today = new Date().toISOString().slice(0, 10)
-  const consent = Boolean(input.consent)
 
   batch.set(personRef, {
     organizationId: input.organizationId,
     congregationId: input.congregationId,
     name: input.name.trim(),
-    phone: consent ? String(input.phone ?? '').trim() : '',
+    phone,
+    preferredChannel,
     firstVisit: today,
     consent,
     stage: consent ? 'contact_authorized' : 'new',
@@ -2397,7 +2535,17 @@ export async function createMinimalVisitor(input: MinimalVisitorInput) {
   }
 
   await batch.commit()
-  return { id: personRef.id, organizationId: input.organizationId, congregationId: input.congregationId, name: input.name.trim(), phone: consent ? input.phone : undefined, consent, visits: 1 } satisfies PresencePerson
+  return {
+    id: personRef.id,
+    organizationId: input.organizationId,
+    congregationId: input.congregationId,
+    name: input.name.trim(),
+    phone: consent ? phone : undefined,
+    consent,
+    preferredChannel: preferredChannel || undefined,
+    consentGrantedAt: consent ? new Date().toISOString() : undefined,
+    visits: 1,
+  } satisfies PresencePerson
 }
 
 export function careRequestToPromise(request: CareRequestRecord): CarePromise {
@@ -2754,13 +2902,43 @@ export async function claimCareRequest(input: { organizationId: string; request:
   const firestore = requireDb()
   const requestRef = doc(firestore, `${journeyCollectionPath(input.organizationId, 'careRequests')}/${input.request.id}`)
   const factRef = doc(firestore, `${journeyCollectionPath(input.organizationId, 'facts')}/care-assigned-${input.request.id}`)
+  await runTransaction(firestore, async (transaction) => {
+    const snapshot = await transaction.get(requestRef)
+    if (!snapshot.exists()) throw new Error('care_request_not_found')
+    const data = snapshot.data()
+    const currentOwner = asString(data.ownerRef)
+    if (currentOwner) {
+      if (currentOwner === input.actorId) return
+      throw new Error('care_request_already_assigned')
+    }
+    if (asString(data.status) !== 'open') throw new Error('care_request_closed')
+    const personId = asString(data.personId)
+    const congregationId = asString(data.congregationId)
+    const careType = asString(data.careType)
+    transaction.update(requestRef, { ownerRef: input.actorId, assignedAt: serverTimestamp(), assignedBy: input.actorId })
+    transaction.set(factRef, {
+      eventId: factRef.id, eventType: 'CARE_ASSIGNED', occurredAt: serverTimestamp(), recordedAt: serverTimestamp(),
+      organizationId: input.organizationId, actorId: input.actorId, subjectRef: `person:${personId}`, sourceApp: 'nestjourney',
+      scope: `congregation:${congregationId}`, evidenceRef: `careRequest:${input.request.id}`, sensitivity: 'confidential', version: 1,
+      payload: { careRequestId: input.request.id, personId, careType, ownerRef: input.actorId },
+    })
+  })
+}
+
+export async function releaseCareRequest(input: { organizationId: string; request: CareRequestRecord; actorId: string }) {
+  const firestore = requireDb()
+  const requestRef = doc(firestore, `${journeyCollectionPath(input.organizationId, 'careRequests')}/${input.request.id}`)
+  const auditRef = doc(collection(firestore, journeyCollectionPath(input.organizationId, 'audit')))
   const batch = writeBatch(firestore)
-  batch.update(requestRef, { ownerRef: input.actorId, assignedAt: serverTimestamp(), assignedBy: input.actorId })
-  batch.set(factRef, {
-    eventId: factRef.id, eventType: 'CARE_ASSIGNED', occurredAt: serverTimestamp(), recordedAt: serverTimestamp(),
-    organizationId: input.organizationId, actorId: input.actorId, subjectRef: `person:${input.request.personId}`, sourceApp: 'nestjourney',
-    scope: `congregation:${input.request.congregationId}`, evidenceRef: `careRequest:${input.request.id}`, sensitivity: 'confidential', version: 1,
-    payload: { careRequestId: input.request.id, personId: input.request.personId, careType: input.request.careType, ownerRef: input.actorId },
+  batch.update(requestRef, { ownerRef: '', assignedAt: null, assignedBy: '' })
+  batch.set(auditRef, {
+    organizationId: input.organizationId,
+    congregationId: input.request.congregationId,
+    actorId: input.actorId,
+    action: 'care.released',
+    targetRef: `careRequest:${input.request.id}`,
+    subjectRef: `person:${input.request.personId}`,
+    createdAt: serverTimestamp(),
   })
   await batch.commit()
 }

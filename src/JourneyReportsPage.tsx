@@ -39,6 +39,7 @@ const copy={
     people:'Pessoas',careOpen:'Cuidados abertos',careDebt:'Care Debt',sessions:'Sessões abertas',groups:'Casas',nearCapacity:'Casas perto da capacidade',root:'Raiz ativo',pastoral:'Encaminhamentos pastorais',
     careHealth:'Cuidado no prazo',careHealthDesc:'Compromissos abertos e atrasados ajudam a coordenação a redistribuir carga.',
     journeyHealth:'Saúde operacional',journeyHealthDesc:'Os números representam registros do sistema, não maturidade espiritual ou qualidade humana.',
+    continuity:'Continuidade registrada',continuityDesc:'Entre pessoas cuja primeira visita já completou a janela, mostra quantas têm retorno, Casa ou Raiz registrado. Não mede fé nem permanência futura.',
     noData:'Sem dados registrados nesta unidade.',error:'Não foi possível montar os relatórios.',
   },
   en:{
@@ -47,6 +48,7 @@ const copy={
     people:'People',careOpen:'Open care',careDebt:'Care Debt',sessions:'Open sessions',groups:'Houses',nearCapacity:'Houses near capacity',root:'Active Root',pastoral:'Pastoral handoffs',
     careHealth:'Care timing',careHealthDesc:'Open and overdue commitments help coordinators redistribute workload.',
     journeyHealth:'Operational health',journeyHealthDesc:'Numbers represent recorded facts, not spiritual maturity or human worth.',
+    continuity:'Recorded continuity',continuityDesc:'Among people whose first visit is old enough for the window, shows how many have a recorded return, House, or Root relationship. It does not measure faith or future retention.',
     noData:'No data recorded in this campus.',error:'Reports could not be built.',
   },
   es:{
@@ -55,6 +57,7 @@ const copy={
     people:'Personas',careOpen:'Cuidados abiertos',careDebt:'Care Debt',sessions:'Sesiones abiertas',groups:'Casas',nearCapacity:'Casas cerca de capacidad',root:'Raíz activo',pastoral:'Derivaciones pastorales',
     careHealth:'Cuidado a tiempo',careHealthDesc:'Compromisos abiertos y atrasados ayudan a redistribuir la carga.',
     journeyHealth:'Salud operativa',journeyHealthDesc:'Los números representan hechos registrados, no madurez espiritual ni valor humano.',
+    continuity:'Continuidad registrada',continuityDesc:'Entre personas cuya primera visita ya alcanzó la ventana, muestra cuántas tienen retorno, Casa o Raíz registrado. No mide fe ni permanencia futura.',
     noData:'No hay datos registrados en esta sede.',error:'No se pudieron montar los informes.',
   }
 } as const
@@ -123,6 +126,13 @@ export default function JourneyReportsPage(){
     const openCare=care.filter(x=>x.status==='open')
     const debt=openCare.filter(x=>evaluateCarePromise(careRequestToPromise(x)).state==='debt').length
     const near=groups.filter(g=>(g.capacity??0)>0&&(g.participants??0)/(g.capacity??1)>=.85).length
+    const activeRootIds=new Set(discipleships.filter(item=>item.status==='active'||item.status==='completed').map(item=>item.personId))
+    const continuity=(days:number)=>{
+      const threshold=Date.now()-days*24*60*60*1000
+      const eligible=people.filter(person=>person.firstVisit&&Date.parse(person.firstVisit)<=threshold)
+      const continued=eligible.filter(person=>(person.visits??0)>=2||Boolean(person.groupId)||activeRootIds.has(person.id)||Boolean(person.stage&& !['new','contact_authorized'].includes(person.stage))).length
+      return {continued,eligible:eligible.length}
+    }
     return {
       people:people.length,
       careOpen:openCare.length,
@@ -132,6 +142,9 @@ export default function JourneyReportsPage(){
       near,
       discipleships:discipleships.filter(x=>x.status==='active').length,
       pastoral:pastoral.filter(x=>x.status==='open').length,
+      continuity30:continuity(30),
+      continuity60:continuity(60),
+      continuity90:continuity(90),
     }
   },[people,care,sessions,groups,discipleships,pastoral])
 
@@ -182,6 +195,9 @@ export default function JourneyReportsPage(){
       <div><span><UserCheck size={16}/><strong>{t.sessions}</strong><p>{locale==='en'?'Open service sessions right now.':locale==='es'?'Sesiones de culto abiertas ahora.':'Sessões de culto abertas agora.'}</p></span><b>{metrics.sessions}</b></div>
       <div><span><House size={16}/><strong>{labels.groups||t.groups}</strong><p>{locale==='en'?'Houses registered; attention only when near capacity.':locale==='es'?'Casas registradas; atención solo cuando se acercan a la capacidad.':'Casas registradas; atenção somente quando se aproximam da capacidade.'}</p></span><b>{metrics.groups}</b></div>
       <div><span><Leaf size={16}/><strong>{labels.discipleship||t.root}</strong><p>{locale==='en'?'Active Root relationships.':locale==='es'?'Acompañamientos activos de Raíz.':'Acompanhamentos ativos no Raiz.'}</p></span><b>{metrics.discipleships}</b></div>
+      <div><span><BarChart3 size={16}/><strong>{t.continuity} · 30d</strong><p>{t.continuityDesc}</p></span><b>{metrics.continuity30.continued} / {metrics.continuity30.eligible}</b></div>
+      <div><span><BarChart3 size={16}/><strong>{t.continuity} · 60d</strong><p>{t.continuityDesc}</p></span><b>{metrics.continuity60.continued} / {metrics.continuity60.eligible}</b></div>
+      <div><span><BarChart3 size={16}/><strong>{t.continuity} · 90d</strong><p>{t.continuityDesc}</p></span><b>{metrics.continuity90.continued} / {metrics.continuity90.eligible}</b></div>
     </section>:null}
 
     <div className="journey-section-note"><ShieldCheck size={18}/><p>{t.journeyHealthDesc}</p></div>

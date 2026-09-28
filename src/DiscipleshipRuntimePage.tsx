@@ -31,7 +31,7 @@ export default function DiscipleshipRuntimePage(){
   const t={...baseCopy,title:labels.discipleship||baseCopy.title}
   const [access,setAccess]=useState<JourneyAccessContext|null>(null),[congregations,setCongregations]=useState<JourneyCongregation[]>([]),[congregationId,setCongregationId]=useState('')
   const [people,setPeople]=useState<JourneyPersonRecord[]>([]),[items,setItems]=useState<JourneyDiscipleshipRecord[]>([]),[loading,setLoading]=useState(true),[busy,setBusy]=useState(false),[error,setError]=useState(''),[showNew,setShowNew]=useState(false)
-  const [playbookId,setPlaybookId]=useState(''),[meetingCount,setMeetingCount]=useState(7)
+  const [playbookId,setPlaybookId]=useState(''),[meetingCount,setMeetingCount]=useState(7),[scheduling,setScheduling]=useState<{item:JourneyDiscipleshipRecord;mode:'advance'|'schedule'}|null>(null)
   const activePersonIds=useMemo(()=>new Set(items.filter(x=>x.status!=='completed').map(x=>x.personId)),[items])
 
   const refresh=useCallback(async(nextAccess:JourneyAccessContext,unitId:string)=>{
@@ -63,7 +63,19 @@ export default function DiscipleshipRuntimePage(){
   },[access,congregationId,refresh])
 
   async function selectUnit(unitId:string){if(!access)return;setCongregationId(unitId);setActiveJourneyCongregationId(access.organizationId,unitId);setBusy(true);setError('');try{await refresh(access,unitId)}catch(cause){console.error(cause);setError(t.error)}finally{setBusy(false)}}
-  async function act(item:JourneyDiscipleshipRecord,action:'advance'|'pause'|'resume'){if(!access)return;setBusy(true);setError('');try{await updateJourneyDiscipleship({organizationId:access.organizationId,relation:item,actorId:access.userId,action});await refresh(access,congregationId)}catch(cause){console.error(cause);setError(t.error)}finally{setBusy(false)}}
+  async function act(item:JourneyDiscipleshipRecord,action:'advance'|'pause'|'resume',nextMeetingAt?:string|null){if(!access)return;setBusy(true);setError('');try{await updateJourneyDiscipleship({organizationId:access.organizationId,relation:item,actorId:access.userId,action,nextMeetingAt});await refresh(access,congregationId)}catch(cause){console.error(cause);setError(t.error)}finally{setBusy(false)}}
+  async function saveSchedule(nextMeetingAt:string|null){
+    if(!scheduling||!access)return
+    const target=scheduling
+    setScheduling(null);setBusy(true);setError('')
+    try{await updateJourneyDiscipleship({organizationId:access.organizationId,relation:target.item,actorId:access.userId,action:target.mode,nextMeetingAt});await refresh(access,congregationId)}
+    catch(cause){console.error(cause);setError(t.error)}finally{setBusy(false)}
+  }
+  const nextMeetingLabel=(item:JourneyDiscipleshipRecord)=>{
+    if(item.status==='completed')return locale==='en'?'Cycle completed':locale==='es'?'Ciclo concluido':'Ciclo concluído'
+    if(item.nextMeetingStatus==='scheduled'&&item.nextMeetingAt)return new Date(item.nextMeetingAt).toLocaleString(locale,{dateStyle:'short',timeStyle:'short'})
+    return locale==='en'?'To schedule':locale==='es'?'Por acordar':'A combinar'
+  }
 
   const empty=emptyGuidance(locale,'discipleship_none')
   const availablePeople=people.filter(person=>!activePersonIds.has(person.id))
@@ -72,10 +84,10 @@ export default function DiscipleshipRuntimePage(){
   const completedItems=items.filter(item=>item.status==='completed')
   const activeUnit=congregations.find(item=>item.id===congregationId)
   const nextItem=[...activeItems].sort((a,b)=>{
-    if(!a.nextMeeting&&!b.nextMeeting)return 0
-    if(!a.nextMeeting)return 1
-    if(!b.nextMeeting)return -1
-    return Date.parse(a.nextMeeting)-Date.parse(b.nextMeeting)
+    if(!a.nextMeetingAt&&!b.nextMeetingAt)return 0
+    if(!a.nextMeetingAt)return 1
+    if(!b.nextMeetingAt)return -1
+    return Date.parse(a.nextMeetingAt)-Date.parse(b.nextMeetingAt)
   })[0]
   const focusTitle=nextItem
     ?locale==='en'?'Next: '+(nextItem.personName||nextItem.personId):locale==='es'?'Próximo: '+(nextItem.personName||nextItem.personId):'Próximo: '+(nextItem.personName||nextItem.personId)
@@ -127,22 +139,36 @@ export default function DiscipleshipRuntimePage(){
             ? {title:'Prepara este encuentro',items:['Ora antes de la conversación','Revisa el material oficial de este encuentro','Prepara preguntas abiertas y escucha sin prisa','No registres relatos íntimos o sensibles']}
             : {title:'Prepare este encontro',items:['Ore antes da conversa','Revise o material oficial deste encontro','Prepare perguntas abertas e escute sem pressa','Não registre relatos íntimos ou sensíveis']}
         return <article className="runtime-panel runtime-card" id={"discipleship-"+item.id} key={item.id}><div className="runtime-card-head"><span className="runtime-icon"><Leaf size={18}/></span><div><h2>{item.personName||item.personId}</h2><p>{t.discipler}: {item.disciplerName||item.disciplerId}</p></div><span className={`runtime-badge ${item.status==='paused'?'attention':''}`}>{item.status==='completed'?t.completed:item.status==='paused'?t.paused:t.active}</span></div>
-        <div className="runtime-progress"><span><small>{t.meeting}</small><strong>{item.meeting}/{item.targetMeetings??7}</strong></span><div><i style={{width:`${Math.min(100,item.meeting/(item.targetMeetings??7)*100)}%`}}/></div></div><p className="runtime-next"><b>{t.next}:</b> {item.nextMeeting||'—'}</p>
+        <div className="runtime-progress"><span><small>{t.meeting}</small><strong>{item.meeting}/{item.targetMeetings??7}</strong></span><div><i style={{width:`${Math.min(100,item.meeting/(item.targetMeetings??7)*100)}%`}}/></div></div><p className="runtime-next"><b>{t.next}:</b> {nextMeetingLabel(item)}</p>
         {item.status!=='completed'?<div className="runtime-preparation"><span><BookOpen size={15}/><strong>{prep.title} · {item.meeting}/{item.targetMeetings??7}</strong></span><ul>{prep.items.map(step=><li key={step}>{step}</li>)}</ul></div>:null}
-        <div className="runtime-card-actions">{item.status!=='completed'?<><button className="runtime-button primary" disabled={busy||item.status==='paused'} onClick={()=>void act(item,'advance')}><CheckCircle2 size={16}/>{t.advance}</button>{item.status==='paused'?<button className="runtime-button" disabled={busy} onClick={()=>void act(item,'resume')}><Play size={16}/>{t.resume}</button>:<button className="runtime-button" disabled={busy} onClick={()=>void act(item,'pause')}><Pause size={16}/>{t.pause}</button>}</>:null}</div>
+        <div className="runtime-card-actions">{item.status!=='completed'?<><button className="runtime-button primary" disabled={busy||item.status==='paused'} onClick={()=>item.meeting>=(item.targetMeetings??7)?void act(item,'advance',null):setScheduling({item,mode:'advance'})}><CheckCircle2 size={16}/>{t.advance}</button><button className="runtime-button" disabled={busy||item.status==='paused'} onClick={()=>setScheduling({item,mode:'schedule'})}>{item.nextMeetingStatus==='scheduled'?(locale==='en'?'Reschedule':locale==='es'?'Reprogramar':'Remarcar'):(locale==='en'?'Set date':locale==='es'?'Definir fecha':'Definir data')}</button>{item.status==='paused'?<button className="runtime-button" disabled={busy} onClick={()=>void act(item,'resume')}><Play size={16}/>{t.resume}</button>:<button className="runtime-button" disabled={busy} onClick={()=>void act(item,'pause')}><Pause size={16}/>{t.pause}</button>}</>:null}</div>
       </article>})}
       {!items.length?<div className="runtime-panel"><GuidedEmptyState icon={Leaf} title={empty.title} body={empty.body} primary={availablePeople.length?{label:empty.primary,onClick:()=>setShowNew(true)}:{label:locale==='en'?'View People':locale==='es'?'Ver Personas':'Ver Pessoas',href:'/journey-profile'}} secondary={{label:empty.secondary||t.empty,href:'/journey-profile'}}/></div>:null}
     </section><p className="runtime-rule"><ShieldCheck size={15}/>{t.sourceRule}</p>
   </div>
-  {showNew?<NewRelationModal locale={locale} people={people} activePersonIds={activePersonIds} close={()=>setShowNew(false)} save={async person=>{
+  {showNew?<NewRelationModal locale={locale} people={people} activePersonIds={activePersonIds} close={()=>setShowNew(false)} save={async (person,firstMeetingAt)=>{
     if(!access)return;setBusy(true);setError('')
-    try{await createJourneyDiscipleship({organizationId:access.organizationId,congregationId,person,actorId:access.userId,disciplerName:auth?.currentUser?.displayName||'',targetMeetings:meetingCount,playbookId});setShowNew(false);await refresh(access,congregationId)}
+    try{await createJourneyDiscipleship({organizationId:access.organizationId,congregationId,person,actorId:access.userId,disciplerName:auth?.currentUser?.displayName||'',targetMeetings:meetingCount,playbookId,firstMeetingAt});setShowNew(false);await refresh(access,congregationId)}
     catch(cause){console.error(cause);setError(t.error)}finally{setBusy(false)}
-  }}/>:null}</main>
+  }}/>:null}
+  {scheduling?<ScheduleMeetingModal locale={locale} item={scheduling.item} mode={scheduling.mode} close={()=>setScheduling(null)} save={saveSchedule}/>:null}</main>
 }
 
-function NewRelationModal({locale,people,activePersonIds,close,save}:{locale:AppLocale;people:JourneyPersonRecord[];activePersonIds:Set<string>;close:()=>void;save:(person:JourneyPersonRecord)=>Promise<void>}){
-  const t=discipleshipRuntimeCopy[locale],available=people.filter(x=>!activePersonIds.has(x.id)),[personId,setPersonId]=useState(available[0]?.id??'')
+function NewRelationModal({locale,people,activePersonIds,close,save}:{locale:AppLocale;people:JourneyPersonRecord[];activePersonIds:Set<string>;close:()=>void;save:(person:JourneyPersonRecord,firstMeetingAt:string|null)=>Promise<void>}){
+  const t=discipleshipRuntimeCopy[locale],available=people.filter(x=>!activePersonIds.has(x.id)),[personId,setPersonId]=useState(available[0]?.id??''),[firstMeetingAt,setFirstMeetingAt]=useState(''),[toSchedule,setToSchedule]=useState(false)
   const person=available.find(x=>x.id===personId)
-  return <div className="runtime-modal-backdrop" onMouseDown={close}><section className="runtime-panel runtime-modal" onMouseDown={e=>e.stopPropagation()}><div className="runtime-modal-head"><h2>{t.newRelation}</h2><button className="runtime-button" onClick={close}><X size={17}/></button></div><div className="runtime-form"><label><span>{t.choosePerson}</span><select value={personId} onChange={e=>setPersonId(e.target.value)}>{available.map(x=><option key={x.id} value={x.id}>{x.name}</option>)}</select></label>{!available.length?<p className="runtime-muted">{t.duplicate}</p>:null}</div><div className="runtime-modal-actions"><button className="runtime-button" onClick={close}>{t.cancel}</button><button className="runtime-button primary" disabled={!person} onClick={()=>person&&void save(person)}>{t.start}</button></div></section></div>
+  const copy=locale==='en'?{first:'First meeting',later:'Date still to be agreed',hint:'Record the real agreed date/time. If it is not agreed yet, keep it explicitly as “to schedule”.'}:locale==='es'?{first:'Primer encuentro',later:'Fecha todavía por acordar',hint:'Registra la fecha y hora realmente acordadas. Si todavía no se acordó, déjalo explícitamente “por acordar”.'}:{first:'Primeiro encontro',later:'Data ainda a combinar',hint:'Registre a data e hora realmente combinadas. Se ainda não foi acertada, deixe explicitamente como “a combinar”.'}
+  return <div className="runtime-modal-backdrop" onMouseDown={close}><section className="runtime-panel runtime-modal" onMouseDown={e=>e.stopPropagation()}><div className="runtime-modal-head"><h2>{t.newRelation}</h2><button className="runtime-button" onClick={close}><X size={17}/></button></div><div className="runtime-form"><label><span>{t.choosePerson}</span><select value={personId} onChange={e=>setPersonId(e.target.value)}>{available.map(x=><option key={x.id} value={x.id}>{x.name}</option>)}</select></label>{person?<><label><span>{copy.first}</span><input type="datetime-local" value={firstMeetingAt} disabled={toSchedule} onChange={e=>setFirstMeetingAt(e.target.value)}/></label><label className="presence-check"><input type="checkbox" checked={toSchedule} onChange={e=>setToSchedule(e.target.checked)}/><span>{copy.later}</span></label><p className="runtime-muted">{copy.hint}</p></>:null}{!available.length?<p className="runtime-muted">{t.duplicate}</p>:null}</div><div className="runtime-modal-actions"><button className="runtime-button" onClick={close}>{t.cancel}</button><button className="runtime-button primary" disabled={!person||(!toSchedule&&!firstMeetingAt)} onClick={()=>person&&void save(person,toSchedule?null:new Date(firstMeetingAt).toISOString())}>{t.start}</button></div></section></div>
+}
+
+function ScheduleMeetingModal({locale,item,mode,close,save}:{locale:AppLocale;item:JourneyDiscipleshipRecord;mode:'advance'|'schedule';close:()=>void;save:(nextMeetingAt:string|null)=>Promise<void>}){
+  const source=item.nextMeetingAt?new Date(item.nextMeetingAt):null
+  const initial=source?new Date(source.getTime()-source.getTimezoneOffset()*60000).toISOString().slice(0,16):''
+  const [value,setValue]=useState(initial),[toSchedule,setToSchedule]=useState(item.nextMeetingStatus!=='scheduled')
+  const copy=locale==='en'
+    ?{title:mode==='advance'?'Complete meeting and set the next one':'Set next meeting',date:'Agreed date and time',later:'Still to schedule',hint:'“Still to schedule” is not shown as a booked meeting.',save:mode==='advance'?'Complete and continue':'Save schedule'}
+    :locale==='es'
+      ?{title:mode==='advance'?'Concluir encuentro y definir el próximo':'Definir próximo encuentro',date:'Fecha y hora acordadas',later:'Todavía por acordar',hint:'“Todavía por acordar” no se muestra como encuentro agendado.',save:mode==='advance'?'Concluir y continuar':'Guardar agenda'}
+      :{title:mode==='advance'?'Concluir encontro e definir o próximo':'Definir próximo encontro',date:'Data e hora combinadas',later:'Ainda a combinar',hint:'“Ainda a combinar” não aparece como encontro agendado.',save:mode==='advance'?'Concluir e continuar':'Salvar agenda'}
+  return <div className="runtime-modal-backdrop" onMouseDown={close}><section className="runtime-panel runtime-modal" onMouseDown={e=>e.stopPropagation()}><div className="runtime-modal-head"><h2>{copy.title}</h2><button className="runtime-button" onClick={close}><X size={17}/></button></div><div className="runtime-form"><p className="runtime-muted">{item.personName||item.personId}</p><label><span>{copy.date}</span><input type="datetime-local" value={value} disabled={toSchedule} onChange={e=>setValue(e.target.value)}/></label><label className="presence-check"><input type="checkbox" checked={toSchedule} onChange={e=>setToSchedule(e.target.checked)}/><span>{copy.later}</span></label><p className="runtime-muted">{copy.hint}</p></div><div className="runtime-modal-actions"><button className="runtime-button" onClick={close}>{locale==='en'?'Cancel':locale==='es'?'Cancelar':'Cancelar'}</button><button className="runtime-button primary" disabled={!toSchedule&&!value} onClick={()=>void save(toSchedule?null:new Date(value).toISOString())}>{copy.save}</button></div></section></div>
 }

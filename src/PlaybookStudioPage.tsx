@@ -31,7 +31,7 @@ const copy={
     title:'Configurar jornada',subtitle:'Defina como sua igreja chama e organiza a jornada sem mudar código, permissões ou regras.',
     back:'Voltar à Gestão',active:'Jornada ativa',activate:'Usar nesta organização',save:'Salvar alterações',saving:'Salvando…',
     official:'Modelo oficial',officialHelp:'Raiz e Mesa 2026 é o modelo de referência. Para adaptar etapas e implantação, crie uma variação sem alterar o original.',
-    clone:'Criar uma variação',newName:'Nome da jornada',description:'Propósito em uma frase',care:'Prazo de cuidado',hours:'horas',meetings:'Encontros de discipulado',
+    clone:'Criar uma variação',newName:'Nome da jornada',description:'Propósito em uma frase',care:'Prazo de cuidado',hours:'horas',meetings:'Encontros de discipulado',groupMin:'Casa · ideal mínimo',groupIdealMax:'Casa · ideal máximo',groupMax:'Casa · máximo permitido',groupPolicy:'Política das Casas',
     names:'Nomes das áreas',stages:'Etapas da jornada',stagesHelp:'A ordem abaixo é a ordem que a pessoa enxerga. Etapas não medem valor espiritual.',
     addStage:'Adicionar etapa',entry:'Quando entra',completion:'Quando esta etapa termina',kind:'Tipo de apoio',owners:'Quem pode assumir',required:'Dados mínimos necessários',
     implementation:'Implantação',implementationHelp:'Crie fases e checklists para a igreja saber exatamente o que preparar e executar.',
@@ -44,7 +44,7 @@ const copy={
     title:'Configure journey',subtitle:'Define how your church names and organizes the journey without changing code, permissions, or rules.',
     back:'Back to Management',active:'Active journey',activate:'Use in this organization',save:'Save changes',saving:'Saving…',
     official:'Official template',officialHelp:'Raiz e Mesa 2026 is the reference model. To adapt stages and rollout, create a variation without changing the original.',
-    clone:'Create a variation',newName:'Journey name',description:'Purpose in one sentence',care:'Care deadline',hours:'hours',meetings:'Discipleship meetings',
+    clone:'Create a variation',newName:'Journey name',description:'Purpose in one sentence',care:'Care deadline',hours:'hours',meetings:'Discipleship meetings',groupMin:'House · recommended minimum',groupIdealMax:'House · recommended maximum',groupMax:'House · allowed maximum',groupPolicy:'House policy',
     names:'Area names',stages:'Journey stages',stagesHelp:'The order below is the order people see. Stages never measure spiritual worth.',
     addStage:'Add stage',entry:'When it starts',completion:'When this stage ends',kind:'Support type',owners:'Who may own it',required:'Minimum required data',
     implementation:'Implementation',implementationHelp:'Create phases and checklists so the church knows exactly what to prepare and execute.',
@@ -57,7 +57,7 @@ const copy={
     title:'Configurar jornada',subtitle:'Define cómo tu iglesia nombra y organiza la jornada sin cambiar código, permisos o reglas.',
     back:'Volver a Gestión',active:'Jornada activa',activate:'Usar en esta organización',save:'Guardar cambios',saving:'Guardando…',
     official:'Modelo oficial',officialHelp:'Raiz e Mesa 2026 es el modelo de referencia. Para adaptar etapas e implementación, crea una variación sin cambiar el original.',
-    clone:'Crear una variación',newName:'Nombre de la jornada',description:'Propósito en una frase',care:'Plazo de cuidado',hours:'horas',meetings:'Encuentros de discipulado',
+    clone:'Crear una variación',newName:'Nombre de la jornada',description:'Propósito en una frase',care:'Plazo de cuidado',hours:'horas',meetings:'Encuentros de discipulado',groupMin:'Casa · mínimo recomendado',groupIdealMax:'Casa · máximo recomendado',groupMax:'Casa · máximo permitido',groupPolicy:'Política de Casas',
     names:'Nombres de las áreas',stages:'Etapas de la jornada',stagesHelp:'El orden de abajo es el orden que ve la persona. Las etapas no miden valor espiritual.',
     addStage:'Agregar etapa',entry:'Cuándo entra',completion:'Cuándo termina esta etapa',kind:'Tipo de apoyo',owners:'Quién puede asumir',required:'Datos mínimos necesarios',
     implementation:'Implementación',implementationHelp:'Crea fases y listas para que la iglesia sepa exactamente qué preparar y ejecutar.',
@@ -204,6 +204,12 @@ export default function PlaybookStudioPage(){
             <label><span>{t.description}</span><input disabled={official} value={form.description} maxLength={280} onChange={e=>setForm(current=>current?({...current,description:e.target.value}):current)}/></label>
             <label><span>{t.care}</span><div className="playbook-number"><input disabled={official} type="number" min={1} max={168} value={form.carePromiseHours} onChange={e=>setForm(current=>current?({...current,carePromiseHours:Number(e.target.value)}):current)}/><small>{t.hours}</small></div></label>
             <label><span>{t.meetings}</span><input disabled={official} type="number" min={1} max={24} value={form.discipleshipMeetingCount} onChange={e=>setForm(current=>current?({...current,discipleshipMeetingCount:Number(e.target.value)}):current)}/></label>
+          </div>
+          <span className="journey-section-kicker">{t.groupPolicy}</span>
+          <div className="playbook-grid two">
+            <label><span>{t.groupMin}</span><input disabled={official} type="number" min={1} max={50} value={form.groupRecommendedMin} onChange={e=>setForm(current=>current?({...current,groupRecommendedMin:Number(e.target.value)}):current)}/></label>
+            <label><span>{t.groupIdealMax}</span><input disabled={official} type="number" min={1} max={50} value={form.groupRecommendedMax} onChange={e=>setForm(current=>current?({...current,groupRecommendedMax:Number(e.target.value)}):current)}/></label>
+            <label><span>{t.groupMax}</span><input disabled={official} type="number" min={1} max={50} value={form.groupCapacityMax} onChange={e=>setForm(current=>current?({...current,groupCapacityMax:Number(e.target.value)}):current)}/></label>
           </div>
         </section>
 

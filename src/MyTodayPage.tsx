@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
-  AlertTriangle, ArrowRight, Building2, CheckCircle2, Clock3, HeartHandshake, House, Leaf,
+  AlertTriangle, ArrowRight, Building2, CalendarClock, CheckCircle2, Clock3, HeartHandshake, House, Leaf,
   ShieldAlert, ShieldCheck, UserCheck, UserRound, UsersRound,
 } from 'lucide-react'
 import { auth } from './firebase'
@@ -12,6 +12,7 @@ import {
   listJourneyCongregations,
   listJourneyDiscipleships,
   listJourneyGroups,
+  listImplementationCycles,
   listJourneyOrganizationsForSystemAdmin,
   listJourneyPeople,
   listMesaParticipationRecords,
@@ -27,6 +28,7 @@ import {
   type JourneyCongregation,
   type JourneyDiscipleshipRecord,
   type JourneyGroupRecord,
+  type JourneyImplementationCycle,
   type JourneyOrganizationSummary,
   type JourneyPastoralHandoff,
   type JourneyPersonRecord,
@@ -135,13 +137,24 @@ export default function MyTodayPage(){
   const [mesa,setMesa]=useState<MesaParticipationRecord[]>([])
   const [mesaPreparation,setMesaPreparation]=useState<MesaPreparationRecord|null>(null)
   const [pastoralHandoffs,setPastoralHandoffs]=useState<JourneyPastoralHandoff[]>([])
+  const [implementationCycles,setImplementationCycles]=useState<JourneyImplementationCycle[]>([])
   const [filter,setFilter]=useState<Filter>('all')
   const [loading,setLoading]=useState(true)
   const [busy,setBusy]=useState(false)
   const [error,setError]=useState('')
+  const [showFirstRun,setShowFirstRun]=useState(false)
 
   const responsibility=useMemo(()=>access?resolveJourneyResponsibility(access):'member',[access])
   const focus=focusCopy[locale][responsibility]
+  const firstRunKey=access?`nestjourney_first_run_${access.organizationId}_${responsibility}`:''
+  useEffect(()=>{
+    if(!firstRunKey)return
+    try{setShowFirstRun(localStorage.getItem(firstRunKey)!=='done')}catch{setShowFirstRun(true)}
+  },[firstRunKey])
+  function dismissFirstRun(){
+    if(firstRunKey)try{localStorage.setItem(firstRunKey,'done')}catch{/* optional UX state */}
+    setShowFirstRun(false)
+  }
 
   const items=useMemo(()=>access?buildMyTodayItems({
     people,careRequests:care,groups,discipleships,sessions:access.canManagePresence?sessions:[],pastoralHandoffs,
@@ -160,13 +173,14 @@ export default function MyTodayPage(){
   }),[items,mesaPending,mesaPreparationPending])
 
   const refreshScope=useCallback(async(nextAccess:JourneyAccessContext,unitId:string)=>{
-    const [nextPeople,nextCare,nextSessions,nextGroups,nextDiscipleships,nextPastoral]=await Promise.all([
+    const [nextPeople,nextCare,nextSessions,nextGroups,nextDiscipleships,nextPastoral,nextImplementation]=await Promise.all([
       listJourneyPeople(nextAccess.organizationId,unitId),
       nextAccess.canManageCare||nextAccess.broadJourneyAccess?listCareRequests(nextAccess.organizationId,unitId):Promise.resolve([]),
       nextAccess.canManagePresence||nextAccess.canManageMesa?listPresenceSessions(nextAccess.organizationId,unitId):Promise.resolve([]),
       nextAccess.canManageGroups||nextAccess.broadJourneyAccess?listJourneyGroups(nextAccess.organizationId,unitId):Promise.resolve([]),
       nextAccess.canManageDiscipleship||nextAccess.broadJourneyAccess?listJourneyDiscipleships(nextAccess,unitId):Promise.resolve([]),
       nextAccess.canManagePastoral?listPastoralHandoffs(nextAccess.organizationId,unitId):Promise.resolve([]),
+      nextAccess.canManageImplementation?listImplementationCycles(nextAccess.organizationId,unitId):Promise.resolve([]),
     ])
     const scopedGroups=nextAccess.role==='group_leader'&&!nextAccess.broadJourneyAccess
       ?nextGroups.filter(group=>group.leaderId===nextAccess.userId||group.createdBy===nextAccess.userId)
@@ -177,6 +191,7 @@ export default function MyTodayPage(){
     setGroups(scopedGroups)
     setDiscipleships(nextDiscipleships)
     setPastoralHandoffs(nextPastoral)
+    setImplementationCycles(nextImplementation)
     const mesaSession=nextSessions.find(x=>x.status==='open')??nextSessions[0]
     if(nextAccess.canManageMesa&&mesaSession){
       const [nextMesa,nextPreparation]=await Promise.all([
@@ -223,6 +238,7 @@ export default function MyTodayPage(){
     if(access.canManageGroups||access.broadJourneyAccess)collections.push('groups','groupMemberships','groupMeetings','groupAttendance')
     if(access.canManageDiscipleship||access.broadJourneyAccess)collections.push('discipleships')
     if(access.canManagePastoral)collections.push('pastoralHandoffs')
+    if(access.canManageImplementation)collections.push('implementationCycles')
     return subscribeJourneyLiveChanges({
       organizationId:access.organizationId,
       congregationId,
@@ -278,7 +294,10 @@ export default function MyTodayPage(){
 
   const showMesa=filter==='all'||filter==='mesa'
   const visible=filter==='all'?items:filter==='mesa'?[]:items.filter(item=>filterFor(item.kind)===filter)
-  const hasAnything=visible.length>0||(showMesa&&(mesaPending.length>0||mesaPreparationPending))
+  const activeImplementationCycle=implementationCycles.find(item=>item.status==='active')??implementationCycles[0]
+  const overdueImplementation=(activeImplementationCycle?.steps??[]).filter(step=>step.status==='pending'&&step.dueAt&&Date.parse(step.dueAt)<Date.now())
+  const showImplementation=filter==='all'&&overdueImplementation.length>0
+  const hasAnything=visible.length>0||(showMesa&&(mesaPending.length>0||mesaPreparationPending))||showImplementation
   const primaryAction=buildTodayPrimaryAction({
     locale,
     responsibility,
@@ -324,6 +343,18 @@ export default function MyTodayPage(){
       <div className="today-context-meta"><span><Building2 size={14}/>{activeUnit?.name||ui.unit}</span><span><UserRound size={14}/>{people.length} {ui.people}</span></div>
     </section>
 
+    {showFirstRun&&access?<section className="today-first-run" aria-label={locale==='en'?'First steps':locale==='es'?'Primeros pasos':'Primeiros passos'}>
+      <div className="today-first-run-head">
+        <div><span className="today-section-label">{locale==='en'?'First access':locale==='es'?'Primer acceso':'Primeiro acesso'}</span><strong>{locale==='en'?'Three steps. That’s all you need to start.':locale==='es'?'Tres pasos. Es todo lo que necesitas para empezar.':'Três passos. É só isso que você precisa para começar.'}</strong></div>
+        <button type="button" onClick={dismissFirstRun}>{locale==='en'?'Got it':locale==='es'?'Entendido':'Entendi'}</button>
+      </div>
+      <div className="today-first-run-grid">
+        <article><b>1</b><div><strong>{activeUnit?.name||ui.unit} · {focus.title}</strong><p>{locale==='en'?'This is your current campus and responsibility.':locale==='es'?'Esta es tu sede y responsabilidad actuales.':'Esta é sua unidade e sua responsabilidade atuais.'}</p></div></article>
+        <article><b>2</b><div><strong>{ui.whatNeeds}</strong><p>{locale==='en'?'Start with the first action below. You do not need to learn every module.':locale==='es'?'Empieza por la primera acción de abajo. No necesitas aprender todos los módulos.':'Comece pela primeira ação abaixo. Você não precisa aprender todos os módulos.'}</p></div></article>
+        <article><b>3</b><div><strong>MillionsNest Hub → NestJourney</strong><p>{locale==='en'?'Team access and roles come from the Hub. If your campus or responsibility is missing, ask your coordinator or administrator to grant access there.':locale==='es'?'El acceso y los roles vienen del Hub. Si falta tu sede o responsabilidad, pide acceso al coordinador o administrador allí.':'Acesso da equipe e funções vêm do Hub. Se sua unidade ou responsabilidade não aparecer, peça ao coordenador ou administrador para conceder acesso por lá.'}</p></div></article>
+      </div>
+    </section>:null}
+
     <section className="today-action-center">
       <header className="today-section-head">
         <div><span className="today-section-label">{ui.whatNeeds}</span><h2>{ui.whatNeeds}</h2><p>{ui.whatNeedsHint}</p></div>
@@ -331,6 +362,12 @@ export default function MyTodayPage(){
       </header>
 
       <div className="today-list">
+        {showImplementation?<article className="today-action-row">
+          <span className="today-action-icon warning"><CalendarClock size={17}/></span>
+          <div><span>{locale==='en'?'Implementation':locale==='es'?'Implementación':'Implantação'} · {locale==='en'?'overdue':locale==='es'?'atrasado':'atrasado'}</span><h3>{overdueImplementation.length} {locale==='en'?'implementation item(s) passed the agreed deadline':locale==='es'?'ítem(s) de implementación superaron el plazo acordado':'item(ns) da implantação passaram do prazo combinado'}</h3><p>{locale==='en'?'Review the owner and due date. This is an operational reminder, not a score.':locale==='es'?'Revisa responsable y plazo. Es un recordatorio operativo, no una puntuación.':'Revise responsável e prazo. Este é um lembrete operacional, não uma pontuação.'}</p></div>
+          <a href="/implementation-runtime">{locale==='en'?'Review':locale==='es'?'Revisar':'Revisar'}<ArrowRight size={14}/></a>
+        </article>:null}
+
         {showMesa&&mesaPreparationPending?<article className="today-action-row">
           <span className="today-action-icon warning"><UsersRound size={17}/></span>
           <div><span>{labels.table||(locale==='en'?'Open Table':locale==='es'?'Mesa Abierta':'Mesa Aberta')} · {locale==='en'?'attention':locale==='es'?'atención':'atenção'}</span><h3>{locale==='en'?'Prepare the next Table':locale==='es'?'Preparar la próxima Mesa':'Preparar a próxima Mesa'}</h3><p>{locale==='en'?'Confirm environment, hosts, welcome, and simple supplies before the service ends.':locale==='es'?'Confirma ambiente, anfitriones, recepción y elementos simples antes de terminar el culto.':'Confirme ambiente, anfitriões, acolhimento e itens simples antes do encerramento do culto.'}</p></div>

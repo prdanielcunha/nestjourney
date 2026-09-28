@@ -16,7 +16,9 @@ import {
   listJourneyGroupMeetings,
   listJourneyGroupMemberships,
   listJourneyGroups,
+  listJourneyOrganizationMembers,
   listJourneyPeople,
+  loadActiveJourneyPlaybook,
   loadJourneyAccess,
   resolveJourneyGroupEntryRequest,
   setJourneyGroupMembership,
@@ -28,6 +30,7 @@ import {
   type JourneyGroupMeetingRecord,
   type JourneyGroupMembership,
   type JourneyGroupRecord,
+  type JourneyOrganizationMember,
   type JourneyPersonRecord,
 } from './journeyRepository'
 import { getInitialLocale, groupsRuntimeCopy, localeLabels, persistLocale, type AppLocale } from './i18n'
@@ -48,6 +51,8 @@ export default function GroupsRuntimePage() {
   const [congregationId, setCongregationId] = useState('')
   const [groups, setGroups] = useState<JourneyGroupRecord[]>([])
   const [people, setPeople] = useState<JourneyPersonRecord[]>([])
+  const [team, setTeam] = useState<JourneyOrganizationMember[]>([])
+  const [groupPolicy, setGroupPolicy] = useState({ recommendedMin: 6, recommendedMax: 10, capacityMax: 12 })
   const [rosterGroup, setRosterGroup] = useState<JourneyGroupRecord | null>(null)
   const [roster, setRoster] = useState<JourneyGroupMembership[]>([])
   const [entryRequests, setEntryRequests] = useState<JourneyGroupEntryRequest[]>([])
@@ -80,8 +85,18 @@ export default function GroupsRuntimePage() {
       const nextAccess = await loadJourneyAccess(user.uid, organizationId)
       setAccess(nextAccess)
       if (!(nextAccess.canManageGroups || nextAccess.broadJourneyAccess)) return
-      const units = await listJourneyCongregations(nextAccess)
+      const [units, activePlaybook, members] = await Promise.all([
+        listJourneyCongregations(nextAccess),
+        loadActiveJourneyPlaybook(nextAccess),
+        canCreateJourneyGroupEntryRequest(nextAccess) ? listJourneyOrganizationMembers(nextAccess) : Promise.resolve([]),
+      ])
       setCongregations(units)
+      setTeam(members)
+      setGroupPolicy({
+        recommendedMin: activePlaybook.groupRecommendedMin,
+        recommendedMax: activePlaybook.groupRecommendedMax,
+        capacityMax: activePlaybook.groupCapacityMax,
+      })
       const unitId = resolveActiveJourneyCongregationId(nextAccess.organizationId, units)
       setCongregationId(unitId)
       if (unitId) await refresh(nextAccess, unitId)
@@ -303,12 +318,13 @@ export default function GroupsRuntimePage() {
     </section>
     <p className="runtime-rule"><ShieldCheck size={15}/>{t.sourceRule}</p>
   </div>
-  {showNew ? <NewGroupModal locale={locale} close={()=>setShowNew(false)} save={async data=>{
+  {showNew ? <NewGroupModal locale={locale} members={team} congregationId={congregationId} policy={groupPolicy} close={()=>setShowNew(false)} save={async data=>{
     if(!access)return;setBusy(true);setError('')
     try{
       await createJourneyGroup({
         organizationId:access.organizationId,congregationId,actorId:access.userId,
-        leaderId:access.role==='group_leader'?access.userId:'',...data,
+        capacityMax:groupPolicy.capacityMax,
+        ...data,
       })
       setShowNew(false);await refresh(access,congregationId)
     } catch(cause){console.error(cause);setError(t.error)}finally{setBusy(false)}
@@ -334,12 +350,47 @@ export default function GroupsRuntimePage() {
   </main>
 }
 
-function NewGroupModal({locale,close,save}:{locale:AppLocale;close:()=>void;save:(data:{name:string;leader:string;host:string;apprentice:string;neighborhood:string;weekday:string;time:string;capacity:number})=>Promise<void>}){
+function NewGroupModal({
+  locale,members,congregationId,policy,close,save,
+}:{
+  locale:AppLocale
+  members:JourneyOrganizationMember[]
+  congregationId:string
+  policy:{recommendedMin:number;recommendedMax:number;capacityMax:number}
+  close:()=>void
+  save:(data:{name:string;leader:string;leaderId:string;host:string;hostId:string;apprentice:string;apprenticeId:string;neighborhood:string;weekday:string;time:string;capacity:number})=>Promise<void>
+}){
   const t=groupsRuntimeCopy[locale]
-  const [name,setName]=useState(''),[leader,setLeader]=useState(''),[host,setHost]=useState(''),[apprentice,setApprentice]=useState(''),[neighborhood,setNeighborhood]=useState(''),[weekday,setWeekday]=useState(''),[time,setTime]=useState(''),[capacity,setCapacity]=useState(12)
+  const unitMembers=members.filter(member=>{
+    const broad=['owner','admin','pastor'].includes(member.organizationRole)
+    return broad||member.congregationIds.includes(congregationId)
+  })
+  const leaders=unitMembers.filter(member=>['owner','admin','pastor','coordinator','group_leader'].includes(member.journeyRole)||['owner','admin','pastor'].includes(member.organizationRole))
+  const [name,setName]=useState(''),[leaderId,setLeaderId]=useState(leaders[0]?.id??''),[hostId,setHostId]=useState(''),[apprenticeId,setApprenticeId]=useState(''),[neighborhood,setNeighborhood]=useState(''),[weekday,setWeekday]=useState(''),[time,setTime]=useState(''),[capacity,setCapacity]=useState(policy.capacityMax)
+  const leader=leaders.find(member=>member.id===leaderId)
+  const host=unitMembers.find(member=>member.id===hostId)
+  const apprentice=unitMembers.find(member=>member.id===apprenticeId)
+  const weekdays=locale==='en'
+    ?['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday']
+    :locale==='es'
+      ?['Lunes','Martes','Miércoles','Jueves','Viernes','Sábado','Domingo']
+      :['Segunda-feira','Terça-feira','Quarta-feira','Quinta-feira','Sexta-feira','Sábado','Domingo']
+  const copy=locale==='en'
+    ?{policy:`Recommended ${policy.recommendedMin}–${policy.recommendedMax}; maximum ${policy.capacityMax} regular participants.`,chooseLeader:'Choose an authorized leader',optional:'Optional',schedule:'Meeting details are operational: use a real weekday and time.'}
+    :locale==='es'
+      ?{policy:`Recomendado ${policy.recommendedMin}–${policy.recommendedMax}; máximo ${policy.capacityMax} participantes regulares.`,chooseLeader:'Elige un líder autorizado',optional:'Opcional',schedule:'Los datos del encuentro son operativos: usa día y horario reales.'}
+      :{policy:`Sugerido ${policy.recommendedMin}–${policy.recommendedMax}; máximo ${policy.capacityMax} participantes regulares.`,chooseLeader:'Escolha um líder autorizado',optional:'Opcional',schedule:'Os dados do encontro são operacionais: use dia e horário reais.'}
   return <div className="runtime-modal-backdrop" onMouseDown={close}><section className="runtime-panel runtime-modal" onMouseDown={e=>e.stopPropagation()}><div className="runtime-modal-head"><h2>{t.newGroup}</h2><button className="runtime-button" onClick={close}><X size={17}/></button></div><div className="runtime-form">
-    <label><span>{t.name}</span><input autoFocus value={name} onChange={e=>setName(e.target.value)}/></label><label><span>{t.leader}</span><input value={leader} onChange={e=>setLeader(e.target.value)}/></label><label><span>{t.host}</span><input value={host} onChange={e=>setHost(e.target.value)}/></label><label><span>{t.apprentice}</span><input value={apprentice} onChange={e=>setApprentice(e.target.value)}/></label><label><span>{t.neighborhood}</span><input value={neighborhood} onChange={e=>setNeighborhood(e.target.value)}/></label><label><span>{t.weekday}</span><input value={weekday} onChange={e=>setWeekday(e.target.value)}/></label><label><span>{t.time}</span><input value={time} onChange={e=>setTime(e.target.value)}/></label><label><span>{t.capacity}</span><input type="number" min={1} max={100} value={capacity} onChange={e=>setCapacity(Number(e.target.value))}/></label>
-  </div><div className="runtime-modal-actions"><button className="runtime-button" onClick={close}>{t.cancel}</button><button className="runtime-button primary" disabled={!name.trim()} onClick={()=>void save({name,leader,host,apprentice,neighborhood,weekday,time,capacity})}>{t.create}</button></div></section></div>
+    <label><span>{t.name}</span><input autoFocus value={name} onChange={e=>setName(e.target.value)}/></label>
+    <label><span>{t.leader}</span><select value={leaderId} onChange={e=>setLeaderId(e.target.value)}><option value="">{copy.chooseLeader}</option>{leaders.map(member=><option key={member.id} value={member.id}>{member.name}</option>)}</select></label>
+    <label><span>{t.host}</span><select value={hostId} onChange={e=>setHostId(e.target.value)}><option value="">{copy.optional}</option>{unitMembers.map(member=><option key={member.id} value={member.id}>{member.name}</option>)}</select></label>
+    <label><span>{t.apprentice}</span><select value={apprenticeId} onChange={e=>setApprenticeId(e.target.value)}><option value="">{copy.optional}</option>{unitMembers.map(member=><option key={member.id} value={member.id}>{member.name}</option>)}</select></label>
+    <label><span>{t.neighborhood}</span><input value={neighborhood} onChange={e=>setNeighborhood(e.target.value)}/></label>
+    <label><span>{t.weekday}</span><select value={weekday} onChange={e=>setWeekday(e.target.value)}><option value="">—</option>{weekdays.map(day=><option key={day} value={day}>{day}</option>)}</select></label>
+    <label><span>{t.time}</span><input type="time" value={time} onChange={e=>setTime(e.target.value)}/></label>
+    <label><span>{t.capacity}</span><input type="number" min={policy.recommendedMin} max={policy.capacityMax} value={capacity} onChange={e=>setCapacity(Math.max(policy.recommendedMin,Math.min(policy.capacityMax,Number(e.target.value))))}/><small className="runtime-muted">{copy.policy}</small></label>
+    <p className="runtime-muted">{copy.schedule}</p>
+  </div><div className="runtime-modal-actions"><button className="runtime-button" onClick={close}>{t.cancel}</button><button className="runtime-button primary" disabled={!name.trim()||!leader||!weekday||!time} onClick={()=>void save({name,leader:leader?.name??'',leaderId:leader?.id??'',host:host?.name??'',hostId:host?.id??'',apprentice:apprentice?.name??'',apprenticeId:apprentice?.id??'',neighborhood,weekday,time,capacity})}>{t.create}</button></div></section></div>
 }
 
 function RosterModal({
