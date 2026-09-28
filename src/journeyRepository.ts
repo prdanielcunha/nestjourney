@@ -2858,7 +2858,10 @@ export async function assignCareRequest(input: {
   const member = await getDoc(doc(firestore, `organizations/${input.organizationId}/members/${ownerRef}`))
   if (!member.exists()) throw new Error('care_owner_not_member')
   const memberData = member.data()
-  const memberRole = asString(memberData.journeyRole || memberData.organizationRole || memberData.role)
+  const journeyRole = asString(memberData.journeyRole)
+  const memberRole = journeyRole && journeyRole !== 'member'
+    ? journeyRole
+    : asString(memberData.organizationRole || memberData.role)
   const memberUnits = asStringArray(memberData.congregationIds)
   if (['removed','inactive','suspended','revoked','deleted'].includes(asString(memberData.status))) throw new Error('care_owner_inactive')
   if (memberUnits.length && !memberUnits.includes(input.request.congregationId)) throw new Error('care_owner_wrong_scope')
