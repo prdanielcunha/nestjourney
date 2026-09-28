@@ -39,6 +39,9 @@ export interface JourneyPlaybookDefinition {
   status: JourneyPlaybookStatus
   carePromiseHours: number
   discipleshipMeetingCount: number
+  groupRecommendedMin: number
+  groupRecommendedMax: number
+  groupCapacityMax: number
   areaLabels: Record<JourneyPlaybookAreaKey, string>
   stages: JourneyPlaybookStage[]
   indicators: string[]
@@ -114,6 +117,9 @@ export function createRaizEMesaPlaybook(organizationId: string): JourneyPlaybook
     status: 'active',
     carePromiseHours: 48,
     discipleshipMeetingCount: 7,
+    groupRecommendedMin: 6,
+    groupRecommendedMax: 10,
+    groupCapacityMax: 12,
     areaLabels,
     stages: DEFAULT_STAGE_BLUEPRINT.map((stage, index) => ({ ...stage, label: DEFAULT_STAGE_LABELS[index] })),
     indicators: ['care_debt','unassigned_care','open_presence_sessions','group_capacity','active_discipleships','pastoral_handoffs'],
@@ -174,6 +180,9 @@ export function normalizeJourneyPlaybook(input: Partial<JourneyPlaybookDefinitio
     status: input.status === 'archived' ? 'archived' : input.status === 'active' ? 'active' : 'draft',
     carePromiseHours: boundedNumber(input.carePromiseHours, 48, 1, 168),
     discipleshipMeetingCount: boundedNumber(input.discipleshipMeetingCount, 7, 1, 24),
+    groupRecommendedMin: boundedNumber(input.groupRecommendedMin, 6, 1, 50),
+    groupRecommendedMax: boundedNumber(input.groupRecommendedMax, 10, 1, 50),
+    groupCapacityMax: boundedNumber(input.groupCapacityMax, 12, 1, 50),
     areaLabels: {
       presence: cleanText(labels.presence, 48) || 'Recepção',
       table: cleanText(labels.table, 48) || 'Mesa',
@@ -191,6 +200,8 @@ export function normalizeJourneyPlaybook(input: Partial<JourneyPlaybookDefinitio
     updatedAt: input.updatedAt,
     updatedBy: cleanText(input.updatedBy, 256) || undefined,
   }
+  if (normalized.groupRecommendedMax < normalized.groupRecommendedMin) normalized.groupRecommendedMax = normalized.groupRecommendedMin
+  if (normalized.groupCapacityMax < normalized.groupRecommendedMax) normalized.groupCapacityMax = normalized.groupRecommendedMax
   normalized.implementationKeys = implementationKeysForPhases(normalized.implementationPhases).slice(0, 120)
   return normalized
 }
