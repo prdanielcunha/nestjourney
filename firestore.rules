@@ -765,6 +765,8 @@ service cloud.firestore {
       let source = request.resource.data.get('source', '');
       let ownerRef = request.resource.data.get('ownerRef', '');
       let summary = request.resource.data.get('summary', '');
+      let personPath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/people/$(personId);
+      let personAfter = getAfter(personPath).data;
       return tenantCreate(orgId)
         && congregationId is string
         && personId is string
@@ -796,7 +798,15 @@ service cloud.firestore {
             && request.resource.data.get('sourcePresenceCheckId', '') == ''
             && ownerRef == ''
             && request.resource.data.get('assignedAt', null) == null
-            && request.resource.data.get('assignedBy', '') == '')
+            && request.resource.data.get('assignedBy', '') == ''
+            && existsAfter(personPath)
+            && personAfter.get('organizationId', '') == orgId
+            && personAfter.get('congregationId', '') == congregationId
+            && personAfter.get('consent', false) == true
+            && personAfter.get('phone', '') is string
+            && personAfter.get('phone', '').size() >= 10
+            && personAfter.get('phone', '').size() <= 15
+            && personAfter.get('preferredChannel', '') in ['whatsapp', 'phone'])
           ||
           (source == 'presence_absence'
             && ownerRef == ''
@@ -843,6 +853,18 @@ service cloud.firestore {
         && request.resource.data.get('ownerRef', '') == request.auth.uid
         && request.resource.data.get('assignedAt', null) == request.time
         && request.resource.data.get('assignedBy', '') == request.auth.uid;
+    }
+    function validCareRelease(orgId) {
+      return resource.data.get('status', '') == 'open'
+        && resource.data.get('ownerRef', '') is string
+        && resource.data.get('ownerRef', '').size() > 0
+        && (resource.data.get('ownerRef', '') == request.auth.uid || isOrgAdmin(orgId))
+        && tenantUnchanged(orgId)
+        && congregationUnchanged()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['ownerRef', 'assignedAt', 'assignedBy'])
+        && request.resource.data.get('ownerRef', '') == ''
+        && request.resource.data.get('assignedAt', null) == null
+        && request.resource.data.get('assignedBy', '') == '';
     }
     function validRevokedCareResolve(orgId) {
       let personId = resource.data.get('personId', '');
@@ -1311,6 +1333,8 @@ service cloud.firestore {
 
     function validDiscipleshipCreate() {
       let targetMeetings = request.resource.data.get('targetMeetings', 7);
+      let nextMeetingStatus = request.resource.data.get('nextMeetingStatus', 'to_schedule');
+      let nextMeetingAt = request.resource.data.get('nextMeetingAt', null);
       return request.resource.data.get('personId', '') is string
         && request.resource.data.get('personId', '').size() > 0
         && request.resource.data.get('disciplerId', '') is string
@@ -1320,13 +1344,20 @@ service cloud.firestore {
         && targetMeetings >= 1
         && targetMeetings <= 24
         && request.resource.data.get('playbookId', '') is string
-        && request.resource.data.get('status', '') == 'active';
+        && request.resource.data.get('status', '') == 'active'
+        && nextMeetingStatus in ['scheduled', 'to_schedule']
+        && (
+          (nextMeetingStatus == 'scheduled' && nextMeetingAt is timestamp && nextMeetingAt > request.time - duration.value(5, 'm'))
+          || (nextMeetingStatus == 'to_schedule' && nextMeetingAt == null)
+        );
     }
     function validDiscipleshipUpdate() {
       let meeting = request.resource.data.get('meeting', 0);
       let previousMeeting = resource.data.get('meeting', 0);
       let targetMeetings = resource.data.get('targetMeetings', 7);
       let status = request.resource.data.get('status', '');
+      let nextMeetingStatus = request.resource.data.get('nextMeetingStatus', 'to_schedule');
+      let nextMeetingAt = request.resource.data.get('nextMeetingAt', null);
       return request.resource.data.get('personId', '') == resource.data.get('personId', '')
         && request.resource.data.get('targetMeetings', 7) == targetMeetings
         && request.resource.data.get('playbookId', '') == resource.data.get('playbookId', '')
@@ -1340,7 +1371,16 @@ service cloud.firestore {
         && meeting >= 1
         && meeting <= targetMeetings
         && status in ['active', 'paused', 'completed']
-        && (status != 'completed' || meeting == targetMeetings);
+        && (status != 'completed' || meeting == targetMeetings)
+        && nextMeetingStatus in ['scheduled', 'to_schedule']
+        && (
+          status == 'completed'
+            ? (nextMeetingStatus == 'to_schedule' && nextMeetingAt == null)
+            : (
+              (nextMeetingStatus == 'scheduled' && nextMeetingAt is timestamp)
+              || (nextMeetingStatus == 'to_schedule' && nextMeetingAt == null)
+            )
+        );
     }
     function validFollowupCanonicalFact(orgId, factId, eventType, payload) {
       let followupId = payload.get('followupId', '');
@@ -1695,7 +1735,7 @@ service cloud.firestore {
             && (
               request.resource.data.get('resolutionCode', '') == 'consent_revoked'
                 ? validRevokedCareResolve(orgId)
-                : (validCareClaim(orgId) || validCareResolve(orgId))
+                : (validCareClaim(orgId) || validCareRelease(orgId) || validCareResolve(orgId))
             );
           allow delete: if false;
         }
