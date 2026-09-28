@@ -181,6 +181,27 @@ describe('Presence Assist and canonical evidence', () => {
     await assertSucceeds(batch.commit())
   })
 
+  it('honors a scoped NestJourney presence role without granting broad organization access', async () => {
+    await seedMembership('journey-presence', 'org-a', 'member', ['unit-a'], {}, 'presence_host')
+    const db = environment.authenticatedContext('journey-presence').firestore()
+    const session = doc(db, 'organizations/org-a/products/raiz_e_mesa/presenceSessions/session-role')
+    const fact = doc(db, 'organizations/org-a/products/raiz_e_mesa/facts/fact-session-role')
+    const batch = writeBatch(db)
+    batch.set(session, {
+      organizationId: 'org-a', congregationId: 'unit-a', eventRef: 'event:session-role', eventName: 'Sunday',
+      openedAt: serverTimestamp(), closedAt: null, status: 'open', expectedPeopleCount: 10,
+      minimumCoveragePercent: 90, createdBy: 'journey-presence',
+    })
+    batch.set(fact, {
+      eventId: 'fact-session-role', eventType: 'PRESENCE_SESSION_OPENED', occurredAt: serverTimestamp(), recordedAt: serverTimestamp(),
+      organizationId: 'org-a', actorId: 'journey-presence', subjectRef: 'presenceSession:session-role', sourceApp: 'nestjourney',
+      scope: 'congregation:unit-a', evidenceRef: 'presenceSession:session-role', sensitivity: 'internal', version: 1,
+      payload: { sessionId: 'session-role' },
+    })
+    await assertSucceeds(batch.commit())
+    await assertFails(getDoc(doc(db, 'organizations/org-a/products/raiz_e_mesa/pastoral/private-note')))
+  })
+
   it('denies presence management to an unrelated operational role and across assigned scope', async () => {
     await seedMembership('care-a', 'org-a', 'care', ['unit-a'])
     await seedMembership('coord-a', 'org-a', 'coordinator', ['unit-a'])
@@ -498,6 +519,33 @@ describe('Care Integrity persistence and scope', () => {
     await assertFails(updateDoc(requestRef, { ownerRef: 'coord-a', assignedAt: serverTimestamp(), assignedBy: 'coord-a' }))
   })
 
+  it('rejects first-contact creation when consent lacks a usable preferred channel', async () => {
+    await seedMembership('coord-channel', 'org-a', 'member', ['unit-a'], {}, 'coordinator')
+    await environment.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), 'organizations/org-a/products/raiz_e_mesa/people/person-no-channel'), {
+        organizationId: 'org-a', congregationId: 'unit-a', name: 'No channel',
+        consent: true, phone: '43999999999',
+      })
+    })
+    const db = environment.authenticatedContext('coord-channel').firestore()
+    const requestRef = doc(db, 'organizations/org-a/products/raiz_e_mesa/careRequests/no-channel')
+    const batch = writeBatch(db)
+    batch.set(requestRef, {
+      organizationId: 'org-a', congregationId: 'unit-a', personId: 'person-no-channel',
+      careType: 'first_contact', source: 'visitor_registration', summary: '',
+      status: 'open', requestedAt: serverTimestamp(), requestedBy: 'coord-channel', promiseHours: 48,
+      dueAt: Timestamp.fromMillis(Date.now() + 48 * 60 * 60 * 1000), ownerRef: '',
+      assignedAt: null, assignedBy: '', resolvedAt: null, resolvedBy: '', resolutionCode: '', resolutionNote: '',
+    })
+    batch.set(
+      doc(db, 'organizations/org-a/products/raiz_e_mesa/facts/care-requested-no-channel'),
+      careFact('care-requested-no-channel', 'CARE_REQUESTED', 'coord-channel', {
+        careRequestId: 'no-channel', personId: 'person-no-channel', careType: 'first_contact', source: 'visitor_registration',
+      }),
+    )
+    await assertFails(batch.commit())
+  })
+
   it('lets a scoped care worker claim an unassigned request and persist its assignment fact atomically', async () => {
     await seedMembership('care-claim', 'org-a', 'care', ['unit-a'])
     await seedPerson()
@@ -521,6 +569,26 @@ describe('Care Integrity persistence and scope', () => {
       }),
     )
     await assertSucceeds(claim.commit())
+  })
+
+  it('lets the assigned caregiver release a task but rejects a different caregiver', async () => {
+    await seedMembership('care-owner-release', 'org-a', 'member', ['unit-a'], {}, 'caregiver')
+    await seedMembership('care-other-release', 'org-a', 'member', ['unit-a'], {}, 'caregiver')
+    await seedPerson('release-person')
+    await environment.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), 'organizations/org-a/products/raiz_e_mesa/careRequests/release-care'), {
+        organizationId: 'org-a', congregationId: 'unit-a', personId: 'release-person',
+        careType: 'prayer', source: 'manual', summary: '', status: 'open',
+        requestedAt: new Date(), requestedBy: 'care-owner-release', promiseHours: 48,
+        dueAt: new Date(Date.now() + 48 * 60 * 60 * 1000),
+        ownerRef: 'care-owner-release', assignedAt: new Date(), assignedBy: 'care-owner-release',
+        resolvedAt: null, resolvedBy: '', resolutionCode: '', resolutionNote: '',
+      })
+    })
+    const ownerRef = doc(environment.authenticatedContext('care-owner-release').firestore(), 'organizations/org-a/products/raiz_e_mesa/careRequests/release-care')
+    const otherRef = doc(environment.authenticatedContext('care-other-release').firestore(), 'organizations/org-a/products/raiz_e_mesa/careRequests/release-care')
+    await assertFails(updateDoc(otherRef, { ownerRef: '', assignedAt: null, assignedBy: '' }))
+    await assertSucceeds(updateDoc(ownerRef, { ownerRef: '', assignedAt: null, assignedBy: '' }))
   })
 
   it('ordinary scoped member cannot create a manual Care Request through the generic tenant scope', async () => {
@@ -1084,9 +1152,14 @@ describe('Groups and Discipleship runtime rules', () => {
     const ref = doc(db, 'organizations/org-a/products/raiz_e_mesa/discipleships/d-a')
     await assertSucceeds(setDoc(ref, {
       organizationId: 'org-a', congregationId: 'unit-a', personId: 'person-a', personName: 'Person',
-      disciplerId: 'discipler-a', meeting: 1, status: 'active', nextMeeting: 'Agendar encontro 1',
+      disciplerId: 'discipler-a', meeting: 1, status: 'active',
+      nextMeetingStatus: 'scheduled', nextMeetingAt: Timestamp.fromMillis(Date.now() + 24 * 60 * 60 * 1000),
     }))
-    await assertSucceeds(updateDoc(ref, { meeting: 2, nextMeeting: 'Agendar encontro 2' }))
+    await assertSucceeds(updateDoc(ref, {
+      meeting: 2, nextMeetingStatus: 'scheduled', nextMeetingAt: Timestamp.fromMillis(Date.now() + 7 * 24 * 60 * 60 * 1000),
+    }))
+    await assertSucceeds(updateDoc(ref, { nextMeetingStatus: 'to_schedule', nextMeetingAt: null }))
+    await assertFails(updateDoc(ref, { nextMeetingStatus: 'scheduled', nextMeetingAt: null }))
     await assertFails(updateDoc(ref, { personId: 'person-b' }))
     await assertFails(updateDoc(ref, { meeting: 1 }))
     await assertFails(updateDoc(ref, { meeting: 7, status: 'completed' }))
@@ -1126,6 +1199,23 @@ describe('Implementation Runtime rules', () => {
     const stepRef=doc(db,'organizations/org-a/products/raiz_e_mesa/implementationCycles/cycle-a/steps/prep.1')
     await assertSucceeds(setDoc(stepRef,step('coord-impl')))
     await assertFails(updateDoc(stepRef,{key:'prep.2'}))
+  })
+
+  it('tracks a responsible owner and deadline before completing an implementation step', async () => {
+    await seedMembership('coord-plan','org-a','member',['unit-a'],{},'coordinator')
+    const db=environment.authenticatedContext('coord-plan').firestore()
+    await assertSucceeds(setDoc(
+      doc(db,'organizations/org-a/products/raiz_e_mesa/implementationCycles/cycle-plan'),
+      {organizationId:'org-a',congregationId:'unit-a',playbookId:'raiz_e_mesa_2026',status:'active',startedAt:serverTimestamp(),createdAt:serverTimestamp(),createdBy:'coord-plan'},
+    ))
+    const ref=doc(db,'organizations/org-a/products/raiz_e_mesa/implementationCycles/cycle-plan/steps/prep.1')
+    await assertSucceeds(setDoc(ref,{
+      organizationId:'org-a',congregationId:'unit-a',cycleId:'cycle-plan',playbookId:'raiz_e_mesa_2026',
+      key:'prep.1',status:'pending',ownerRef:'coord-plan',ownerName:'Coordinator',
+      dueAt:Timestamp.fromMillis(Date.now()+3*24*60*60*1000),plannedAt:serverTimestamp(),plannedBy:'coord-plan',
+      completedAt:null,completedBy:'',
+    }))
+    await assertSucceeds(updateDoc(ref,{status:'completed',completedAt:serverTimestamp(),completedBy:'coord-plan'}))
   })
 
   it('rejects arbitrary step keys and cross-scope cycle creation', async () => {
