@@ -139,9 +139,19 @@ export default function MyTodayPage(){
   const [loading,setLoading]=useState(true)
   const [busy,setBusy]=useState(false)
   const [error,setError]=useState('')
+  const [showFirstRun,setShowFirstRun]=useState(false)
 
   const responsibility=useMemo(()=>access?resolveJourneyResponsibility(access):'member',[access])
   const focus=focusCopy[locale][responsibility]
+  const firstRunKey=access?`nestjourney_first_run_${access.organizationId}_${responsibility}`:''
+  useEffect(()=>{
+    if(!firstRunKey)return
+    try{setShowFirstRun(localStorage.getItem(firstRunKey)!=='done')}catch{setShowFirstRun(true)}
+  },[firstRunKey])
+  function dismissFirstRun(){
+    if(firstRunKey)try{localStorage.setItem(firstRunKey,'done')}catch{/* optional UX state */}
+    setShowFirstRun(false)
+  }
 
   const items=useMemo(()=>access?buildMyTodayItems({
     people,careRequests:care,groups,discipleships,sessions:access.canManagePresence?sessions:[],pastoralHandoffs,
@@ -323,6 +333,18 @@ export default function MyTodayPage(){
       <div><span className="today-section-label">{ui.currentContext}</span><strong>{focus.title}</strong><p>{focus.body}</p></div>
       <div className="today-context-meta"><span><Building2 size={14}/>{activeUnit?.name||ui.unit}</span><span><UserRound size={14}/>{people.length} {ui.people}</span></div>
     </section>
+
+    {showFirstRun&&access?<section className="today-first-run" aria-label={locale==='en'?'First steps':locale==='es'?'Primeros pasos':'Primeiros passos'}>
+      <div className="today-first-run-head">
+        <div><span className="today-section-label">{locale==='en'?'First access':locale==='es'?'Primer acceso':'Primeiro acesso'}</span><strong>{locale==='en'?'Three steps. That’s all you need to start.':locale==='es'?'Tres pasos. Es todo lo que necesitas para empezar.':'Três passos. É só isso que você precisa para começar.'}</strong></div>
+        <button type="button" onClick={dismissFirstRun}>{locale==='en'?'Got it':locale==='es'?'Entendido':'Entendi'}</button>
+      </div>
+      <div className="today-first-run-grid">
+        <article><b>1</b><div><strong>{activeUnit?.name||ui.unit} · {focus.title}</strong><p>{locale==='en'?'This is your current campus and responsibility.':locale==='es'?'Esta es tu sede y responsabilidad actuales.':'Esta é sua unidade e sua responsabilidade atuais.'}</p></div></article>
+        <article><b>2</b><div><strong>{ui.whatNeeds}</strong><p>{locale==='en'?'Start with the first action below. You do not need to learn every module.':locale==='es'?'Empieza por la primera acción de abajo. No necesitas aprender todos los módulos.':'Comece pela primeira ação abaixo. Você não precisa aprender todos os módulos.'}</p></div></article>
+        <article><b>3</b><div><strong>MillionsNest Hub → NestJourney</strong><p>{locale==='en'?'Team access and roles come from the Hub. If your campus or responsibility is missing, ask your coordinator or administrator to grant access there.':locale==='es'?'El acceso y los roles vienen del Hub. Si falta tu sede o responsabilidad, pide acceso al coordinador o administrador allí.':'Acesso da equipe e funções vêm do Hub. Se sua unidade ou responsabilidade não aparecer, peça ao coordenador ou administrador para conceder acesso por lá.'}</p></div></article>
+      </div>
+    </section>:null}
 
     <section className="today-action-center">
       <header className="today-section-head">
