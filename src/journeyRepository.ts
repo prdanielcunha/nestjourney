@@ -222,6 +222,7 @@ export interface PresencePerson {
   photoUrl?: string
   phone?: string
   consent?: boolean
+  preferredContactChannel?: 'whatsapp' | 'phone'
   visits?: number
   bondHostRef?: string
   bondAssignedAt?: string
@@ -335,6 +336,8 @@ export interface JourneyDiscipleshipRecord {
   playbookId?: string
   status: 'active' | 'paused' | 'completed'
   nextMeeting?: string
+  nextMeetingAt?: string
+  nextMeetingStatus?: 'to_be_agreed' | 'scheduled' | 'cancelled'
   startedAt?: string
 }
 
@@ -403,6 +406,7 @@ export interface MinimalVisitorInput {
   name: string
   phone?: string
   consent: boolean
+  preferredContactChannel?: 'whatsapp' | 'phone'
 }
 
 export type CareType =
@@ -1080,6 +1084,7 @@ export async function listPresencePeople(organizationId: string, congregationId:
       photoUrl: asString(data.photoUrl || data.photoURL) || undefined,
       phone: asString(data.phone) || undefined,
       consent: Boolean(data.consent),
+      preferredContactChannel: data.preferredContactChannel === 'phone' ? 'phone' : data.preferredContactChannel === 'whatsapp' ? 'whatsapp' : undefined,
       visits: typeof data.visits === 'number' ? data.visits : undefined,
       bondHostRef: asString(data.bondHostRef) || undefined,
       bondAssignedAt: data.bondAssignedAt ? toIso(data.bondAssignedAt) : undefined,
@@ -1104,6 +1109,7 @@ export async function listJourneyPeople(organizationId: string, congregationId: 
       photoUrl: asString(data.photoUrl || data.photoURL) || undefined,
       phone: asString(data.phone) || undefined,
       consent: Boolean(data.consent),
+      preferredContactChannel: data.preferredContactChannel === 'phone' ? 'phone' : data.preferredContactChannel === 'whatsapp' ? 'whatsapp' : undefined,
       visits: typeof data.visits === 'number' ? data.visits : undefined,
       bondHostRef: asString(data.bondHostRef) || undefined,
       bondAssignedAt: data.bondAssignedAt ? toIso(data.bondAssignedAt) : undefined,
@@ -1600,6 +1606,8 @@ export async function listJourneyDiscipleships(access: JourneyAccessContext, con
       playbookId: asString(data.playbookId) || undefined,
       status,
       nextMeeting: asString(data.nextMeeting) || undefined,
+      nextMeetingAt: data.nextMeetingAt ? toIso(data.nextMeetingAt) : undefined,
+      nextMeetingStatus: data.nextMeetingStatus === 'scheduled' ? 'scheduled' : data.nextMeetingStatus === 'cancelled' ? 'cancelled' : 'to_be_agreed',
       startedAt: data.startedAt ? toIso(data.startedAt) : undefined,
     }
   }).sort((a, b) => a.status.localeCompare(b.status) || a.meeting - b.meeting)
@@ -1693,7 +1701,9 @@ export async function createJourneyDiscipleship(input: {
     playbookId,
     completedMeetings: [],
     status: 'active',
-    nextMeeting: 'Agendar encontro 1',
+    nextMeeting: 'A combinar',
+    nextMeetingAt: null,
+    nextMeetingStatus: 'to_be_agreed',
     startedAt: serverTimestamp(),
     createdAt: serverTimestamp(),
     createdBy: input.actorId,
@@ -1721,7 +1731,9 @@ export async function updateJourneyDiscipleship(input: {
     batch.update(relationRef, {
       meeting: nextMeeting,
       status: completed ? 'completed' : 'active',
-      nextMeeting: completed ? 'Ciclo concluído' : `Agendar encontro ${nextMeeting}`,
+      nextMeeting: completed ? 'Ciclo concluído' : 'A combinar',
+      nextMeetingAt: null,
+      nextMeetingStatus: completed ? 'cancelled' : 'to_be_agreed',
       lastCompletedMeeting: currentMeeting,
       lastCompletedAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
@@ -1736,6 +1748,38 @@ export async function updateJourneyDiscipleship(input: {
     })
   }
   await batch.commit()
+}
+
+
+export async function setJourneyDiscipleshipNextMeeting(input: {
+  organizationId: string
+  relation: JourneyDiscipleshipRecord
+  actorId: string
+  nextMeetingAt?: string
+  status: 'to_be_agreed' | 'scheduled' | 'cancelled'
+}) {
+  const firestore = requireDb()
+  const relationRef = doc(firestore, `${journeyCollectionPath(input.organizationId, 'discipleships')}/${input.relation.id}`)
+  if (input.relation.status === 'completed') throw new Error('discipleship_completed')
+  if (input.status === 'scheduled') {
+    const parsed = Date.parse(String(input.nextMeetingAt ?? ''))
+    if (!Number.isFinite(parsed) || parsed <= Date.now() - 5 * 60 * 1000) throw new Error('invalid_next_meeting')
+    await updateDoc(relationRef, {
+      nextMeeting: new Date(parsed).toISOString(),
+      nextMeetingAt: Timestamp.fromMillis(parsed),
+      nextMeetingStatus: 'scheduled',
+      updatedAt: serverTimestamp(),
+      updatedBy: input.actorId,
+    })
+    return
+  }
+  await updateDoc(relationRef, {
+    nextMeeting: input.status === 'cancelled' ? 'Cancelado' : 'A combinar',
+    nextMeetingAt: null,
+    nextMeetingStatus: input.status,
+    updatedAt: serverTimestamp(),
+    updatedBy: input.actorId,
+  })
 }
 
 export async function listPastoralHandoffs(organizationId: string, congregationId: string): Promise<JourneyPastoralHandoff[]> {
@@ -2332,6 +2376,13 @@ export async function closePresenceSession(
 
 export async function createMinimalVisitor(input: MinimalVisitorInput) {
   const firestore = requireDb()
+  const name = input.name.trim()
+  if (!name) throw new Error('visitor_name_required')
+  const consent = Boolean(input.consent)
+  const phone = String(input.phone ?? '').trim()
+  const phoneDigits = phone.replace(/\D/g, '')
+  const preferredContactChannel = input.preferredContactChannel === 'phone' ? 'phone' : input.preferredContactChannel === 'whatsapp' ? 'whatsapp' : undefined
+  if (consent && (phoneDigits.length < 8 || !preferredContactChannel)) throw new Error('visitor_contact_required')
   const personRef = doc(collection(firestore, journeyCollectionPath(input.organizationId, 'people')))
   const factRef = doc(firestore, `${journeyCollectionPath(input.organizationId, 'facts')}/visitor-${personRef.id}`)
   const careRef = input.consent ? doc(collection(firestore, journeyCollectionPath(input.organizationId, 'careRequests'))) : null
@@ -2340,13 +2391,13 @@ export async function createMinimalVisitor(input: MinimalVisitorInput) {
     : null
   const batch = writeBatch(firestore)
   const today = new Date().toISOString().slice(0, 10)
-  const consent = Boolean(input.consent)
 
   batch.set(personRef, {
     organizationId: input.organizationId,
     congregationId: input.congregationId,
-    name: input.name.trim(),
-    phone: consent ? String(input.phone ?? '').trim() : '',
+    name,
+    phone: consent ? phone : '',
+    preferredContactChannel: consent ? preferredContactChannel : '',
     firstVisit: today,
     consent,
     stage: consent ? 'contact_authorized' : 'new',
@@ -2397,7 +2448,7 @@ export async function createMinimalVisitor(input: MinimalVisitorInput) {
   }
 
   await batch.commit()
-  return { id: personRef.id, organizationId: input.organizationId, congregationId: input.congregationId, name: input.name.trim(), phone: consent ? input.phone : undefined, consent, visits: 1 } satisfies PresencePerson
+  return { id: personRef.id, organizationId: input.organizationId, congregationId: input.congregationId, name, phone: consent ? phone : undefined, consent, preferredContactChannel, visits: 1 } satisfies PresencePerson
 }
 
 export function careRequestToPromise(request: CareRequestRecord): CarePromise {
@@ -2748,6 +2799,25 @@ export async function createAbsenceCareRequest(input: {
 
   await batch.commit()
   return requestId
+}
+
+
+export async function assignCareRequest(input: {
+  organizationId: string
+  request: CareRequestRecord
+  actorId: string
+  ownerRef: string
+}) {
+  const firestore = requireDb()
+  if (input.request.status !== 'open') throw new Error('care_request_closed')
+  const ownerRef = input.ownerRef.trim()
+  if (!ownerRef) throw new Error('care_owner_required')
+  const requestRef = doc(firestore, `${journeyCollectionPath(input.organizationId, 'careRequests')}/${input.request.id}`)
+  await updateDoc(requestRef, {
+    ownerRef,
+    assignedAt: serverTimestamp(),
+    assignedBy: input.actorId,
+  })
 }
 
 export async function claimCareRequest(input: { organizationId: string; request: CareRequestRecord; actorId: string }) {
