@@ -1094,7 +1094,7 @@ export async function listPresencePeople(organizationId: string, congregationId:
     where('congregationId', '==', congregationId),
   ))
 
-  return snapshot.docs.map((item) => {
+  return snapshot.docs.map((item): PresencePerson => {
     const data = item.data()
     return {
       id: item.id,
