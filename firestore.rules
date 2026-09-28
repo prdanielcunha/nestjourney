@@ -1161,6 +1161,51 @@ service cloud.firestore {
         && request.resource.data.get('updatedBy', '') == request.auth.uid;
     }
 
+    function activeJourneyTeamMemberInScope(orgId, uid, congregationId) {
+      let memberPath = /databases/$(database)/documents/organizations/$(orgId)/members/$(uid);
+      let orgPath = /databases/$(database)/documents/organizations/$(orgId);
+      let targetIsOwner = exists(orgPath)
+        && get(orgPath).data.get('ownerUid', get(orgPath).data.get('ownerId', '')) == uid;
+      let memberData = exists(memberPath) ? get(memberPath).data : {};
+      let roleName = memberData.get('journeyRole', memberData.get('organizationRole', memberData.get('role', 'member')));
+      return uid is string
+        && uid.size() > 0
+        && (
+          targetIsOwner
+          || (
+            exists(memberPath)
+            && memberData.get('status', 'active') in ['active', 'ativo']
+            && (
+              roleName in ['owner','admin','pastor','data_admin']
+              || congregationId in memberData.get('congregationIds', [])
+            )
+          )
+        );
+    }
+    function validGroupTeamCreate(orgId) {
+      let congregationId = request.resource.data.get('congregationId', '');
+      let leaderId = request.resource.data.get('leaderId', '');
+      let hostId = request.resource.data.get('hostId', '');
+      let apprenticeId = request.resource.data.get('apprenticeId', '');
+      let leaderPath = /databases/$(database)/documents/organizations/$(orgId)/members/$(leaderId);
+      let leaderData = exists(leaderPath) ? get(leaderPath).data : {};
+      let leaderRole = leaderData.get('journeyRole', leaderData.get('organizationRole', leaderData.get('role', 'member')));
+      let orgPath = /databases/$(database)/documents/organizations/$(orgId);
+      let leaderIsOwner = exists(orgPath)
+        && get(orgPath).data.get('ownerUid', get(orgPath).data.get('ownerId', '')) == leaderId;
+      return activeJourneyTeamMemberInScope(orgId, leaderId, congregationId)
+        && activeJourneyTeamMemberInScope(orgId, hostId, congregationId)
+        && (
+          leaderIsOwner
+          || leaderRole in ['owner','admin','pastor','coordinator','group_leader']
+          || leaderData.get('permissions', {}).get('canManageGroups', false) == true
+          || leaderData.get('permissions', {}).get('canCoordinateJourney', false) == true
+        )
+        && (
+          apprenticeId == ''
+          || activeJourneyTeamMemberInScope(orgId, apprenticeId, congregationId)
+        );
+    }
     function validGroupState() {
       let capacity = request.resource.data.get('capacity', 0);
       let participants = request.resource.data.get('participants', 0);
@@ -1829,7 +1874,8 @@ service cloud.firestore {
           allow create: if tenantCreate(orgId)
             && canAccessCongregation(orgId, request.resource.data.get('congregationId', ''))
             && canManageGroups(orgId)
-            && validGroupState();
+            && validGroupState()
+            && validGroupTeamCreate(orgId);
           allow update: if tenantUnchanged(orgId) && congregationUnchanged()
             && canAccessCongregation(orgId, resource.data.get('congregationId', ''))
             && canManageGroupRoster(orgId, groupId)
