@@ -222,6 +222,8 @@ export interface PresencePerson {
   photoUrl?: string
   phone?: string
   consent?: boolean
+  preferredChannel?: 'whatsapp' | 'phone'
+  consentGrantedAt?: string
   visits?: number
   bondHostRef?: string
   bondAssignedAt?: string
@@ -334,7 +336,10 @@ export interface JourneyDiscipleshipRecord {
   targetMeetings?: number
   playbookId?: string
   status: 'active' | 'paused' | 'completed'
+  /** Legacy textual field kept only for backwards-compatible reads. */
   nextMeeting?: string
+  nextMeetingAt?: string
+  nextMeetingStatus?: 'scheduled' | 'to_schedule'
   startedAt?: string
 }
 
@@ -403,6 +408,7 @@ export interface MinimalVisitorInput {
   name: string
   phone?: string
   consent: boolean
+  preferredChannel?: 'whatsapp' | 'phone'
 }
 
 export type CareType =
@@ -1080,6 +1086,8 @@ export async function listPresencePeople(organizationId: string, congregationId:
       photoUrl: asString(data.photoUrl || data.photoURL) || undefined,
       phone: asString(data.phone) || undefined,
       consent: Boolean(data.consent),
+      preferredChannel: data.preferredChannel === 'phone' ? 'phone' : data.preferredChannel === 'whatsapp' ? 'whatsapp' : undefined,
+      consentGrantedAt: data.consentGrantedAt ? toIso(data.consentGrantedAt) : undefined,
       visits: typeof data.visits === 'number' ? data.visits : undefined,
       bondHostRef: asString(data.bondHostRef) || undefined,
       bondAssignedAt: data.bondAssignedAt ? toIso(data.bondAssignedAt) : undefined,
@@ -1104,6 +1112,8 @@ export async function listJourneyPeople(organizationId: string, congregationId: 
       photoUrl: asString(data.photoUrl || data.photoURL) || undefined,
       phone: asString(data.phone) || undefined,
       consent: Boolean(data.consent),
+      preferredChannel: data.preferredChannel === 'phone' ? 'phone' : data.preferredChannel === 'whatsapp' ? 'whatsapp' : undefined,
+      consentGrantedAt: data.consentGrantedAt ? toIso(data.consentGrantedAt) : undefined,
       visits: typeof data.visits === 'number' ? data.visits : undefined,
       bondHostRef: asString(data.bondHostRef) || undefined,
       bondAssignedAt: data.bondAssignedAt ? toIso(data.bondAssignedAt) : undefined,
@@ -1600,6 +1610,8 @@ export async function listJourneyDiscipleships(access: JourneyAccessContext, con
       playbookId: asString(data.playbookId) || undefined,
       status,
       nextMeeting: asString(data.nextMeeting) || undefined,
+      nextMeetingAt: data.nextMeetingAt ? toIso(data.nextMeetingAt) : undefined,
+      nextMeetingStatus: data.nextMeetingStatus === 'scheduled' ? 'scheduled' : 'to_schedule',
       startedAt: data.startedAt ? toIso(data.startedAt) : undefined,
     }
   }).sort((a, b) => a.status.localeCompare(b.status) || a.meeting - b.meeting)
@@ -1664,6 +1676,14 @@ export async function updateJourneyGroup(input: {
   await batch.commit()
 }
 
+function nextMeetingTimestamp(value?: string | null) {
+  const raw = String(value ?? '').trim()
+  if (!raw) return null
+  const ms = Date.parse(raw)
+  if (!Number.isFinite(ms) || ms <= Date.now() - 5 * 60 * 1000) throw new Error('invalid_next_meeting_at')
+  return Timestamp.fromMillis(ms)
+}
+
 export async function createJourneyDiscipleship(input: {
   organizationId: string
   congregationId: string
@@ -1673,6 +1693,7 @@ export async function createJourneyDiscipleship(input: {
   disciplerName?: string
   targetMeetings?: number
   playbookId?: string
+  firstMeetingAt?: string | null
 }) {
   const firestore = requireDb()
   const relationRef = doc(collection(firestore, journeyCollectionPath(input.organizationId, 'discipleships')))
@@ -1680,6 +1701,7 @@ export async function createJourneyDiscipleship(input: {
   if (!targetDisciplerId) throw new Error('missing_discipler')
   const targetMeetings = Math.max(1, Math.min(24, Math.floor(input.targetMeetings ?? 7)))
   const playbookId = String(input.playbookId ?? '').trim()
+  const firstMeetingAt = nextMeetingTimestamp(input.firstMeetingAt)
   const batch = writeBatch(firestore)
   batch.set(relationRef, {
     organizationId: input.organizationId,
@@ -1693,7 +1715,8 @@ export async function createJourneyDiscipleship(input: {
     playbookId,
     completedMeetings: [],
     status: 'active',
-    nextMeeting: 'Agendar encontro 1',
+    nextMeetingAt: firstMeetingAt,
+    nextMeetingStatus: firstMeetingAt ? 'scheduled' : 'to_schedule',
     startedAt: serverTimestamp(),
     createdAt: serverTimestamp(),
     createdBy: input.actorId,
@@ -1708,7 +1731,8 @@ export async function updateJourneyDiscipleship(input: {
   organizationId: string
   relation: JourneyDiscipleshipRecord
   actorId: string
-  action: 'advance' | 'pause' | 'resume'
+  action: 'advance' | 'pause' | 'resume' | 'schedule'
+  nextMeetingAt?: string | null
 }) {
   const firestore = requireDb()
   const relationRef = doc(firestore, `${journeyCollectionPath(input.organizationId, 'discipleships')}/${input.relation.id}`)
@@ -1718,12 +1742,23 @@ export async function updateJourneyDiscipleship(input: {
     const currentMeeting = Math.max(1, Math.min(targetMeetings, input.relation.meeting || 1))
     const nextMeeting = Math.min(targetMeetings, currentMeeting + 1)
     const completed = currentMeeting >= targetMeetings
+    const scheduledAt = completed ? null : nextMeetingTimestamp(input.nextMeetingAt)
     batch.update(relationRef, {
       meeting: nextMeeting,
       status: completed ? 'completed' : 'active',
-      nextMeeting: completed ? 'Ciclo concluído' : `Agendar encontro ${nextMeeting}`,
+      nextMeetingAt: scheduledAt,
+      nextMeetingStatus: scheduledAt ? 'scheduled' : 'to_schedule',
       lastCompletedMeeting: currentMeeting,
       lastCompletedAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+      updatedBy: input.actorId,
+    })
+  } else if (input.action === 'schedule') {
+    if (input.relation.status === 'completed') throw new Error('discipleship_completed')
+    const scheduledAt = nextMeetingTimestamp(input.nextMeetingAt)
+    batch.update(relationRef, {
+      nextMeetingAt: scheduledAt,
+      nextMeetingStatus: scheduledAt ? 'scheduled' : 'to_schedule',
       updatedAt: serverTimestamp(),
       updatedBy: input.actorId,
     })
@@ -2334,19 +2369,26 @@ export async function createMinimalVisitor(input: MinimalVisitorInput) {
   const firestore = requireDb()
   const personRef = doc(collection(firestore, journeyCollectionPath(input.organizationId, 'people')))
   const factRef = doc(firestore, `${journeyCollectionPath(input.organizationId, 'facts')}/visitor-${personRef.id}`)
-  const careRef = input.consent ? doc(collection(firestore, journeyCollectionPath(input.organizationId, 'careRequests'))) : null
+  const consent = Boolean(input.consent)
+  const phone = consent ? String(input.phone ?? '').replace(/\D/g, '') : ''
+  const preferredChannel = consent && (input.preferredChannel === 'whatsapp' || input.preferredChannel === 'phone')
+    ? input.preferredChannel
+    : ''
+  if (consent && (phone.length < 10 || phone.length > 15)) throw new Error('invalid_contact_phone')
+  if (consent && !preferredChannel) throw new Error('preferred_channel_required')
+  const careRef = consent ? doc(collection(firestore, journeyCollectionPath(input.organizationId, 'careRequests'))) : null
   const careRequestedFactRef = careRef
     ? doc(firestore, `${journeyCollectionPath(input.organizationId, 'facts')}/care-requested-${careRef.id}`)
     : null
   const batch = writeBatch(firestore)
   const today = new Date().toISOString().slice(0, 10)
-  const consent = Boolean(input.consent)
 
   batch.set(personRef, {
     organizationId: input.organizationId,
     congregationId: input.congregationId,
     name: input.name.trim(),
-    phone: consent ? String(input.phone ?? '').trim() : '',
+    phone,
+    preferredChannel,
     firstVisit: today,
     consent,
     stage: consent ? 'contact_authorized' : 'new',
@@ -2397,7 +2439,17 @@ export async function createMinimalVisitor(input: MinimalVisitorInput) {
   }
 
   await batch.commit()
-  return { id: personRef.id, organizationId: input.organizationId, congregationId: input.congregationId, name: input.name.trim(), phone: consent ? input.phone : undefined, consent, visits: 1 } satisfies PresencePerson
+  return {
+    id: personRef.id,
+    organizationId: input.organizationId,
+    congregationId: input.congregationId,
+    name: input.name.trim(),
+    phone: consent ? phone : undefined,
+    consent,
+    preferredChannel: preferredChannel || undefined,
+    consentGrantedAt: consent ? new Date().toISOString() : undefined,
+    visits: 1,
+  } satisfies PresencePerson
 }
 
 export function careRequestToPromise(request: CareRequestRecord): CarePromise {
@@ -2754,13 +2806,43 @@ export async function claimCareRequest(input: { organizationId: string; request:
   const firestore = requireDb()
   const requestRef = doc(firestore, `${journeyCollectionPath(input.organizationId, 'careRequests')}/${input.request.id}`)
   const factRef = doc(firestore, `${journeyCollectionPath(input.organizationId, 'facts')}/care-assigned-${input.request.id}`)
+  await runTransaction(firestore, async (transaction) => {
+    const snapshot = await transaction.get(requestRef)
+    if (!snapshot.exists()) throw new Error('care_request_not_found')
+    const data = snapshot.data()
+    const currentOwner = asString(data.ownerRef)
+    if (currentOwner) {
+      if (currentOwner === input.actorId) return
+      throw new Error('care_request_already_assigned')
+    }
+    if (asString(data.status) !== 'open') throw new Error('care_request_closed')
+    const personId = asString(data.personId)
+    const congregationId = asString(data.congregationId)
+    const careType = asString(data.careType)
+    transaction.update(requestRef, { ownerRef: input.actorId, assignedAt: serverTimestamp(), assignedBy: input.actorId })
+    transaction.set(factRef, {
+      eventId: factRef.id, eventType: 'CARE_ASSIGNED', occurredAt: serverTimestamp(), recordedAt: serverTimestamp(),
+      organizationId: input.organizationId, actorId: input.actorId, subjectRef: `person:${personId}`, sourceApp: 'nestjourney',
+      scope: `congregation:${congregationId}`, evidenceRef: `careRequest:${input.request.id}`, sensitivity: 'confidential', version: 1,
+      payload: { careRequestId: input.request.id, personId, careType, ownerRef: input.actorId },
+    })
+  })
+}
+
+export async function releaseCareRequest(input: { organizationId: string; request: CareRequestRecord; actorId: string }) {
+  const firestore = requireDb()
+  const requestRef = doc(firestore, `${journeyCollectionPath(input.organizationId, 'careRequests')}/${input.request.id}`)
+  const auditRef = doc(collection(firestore, journeyCollectionPath(input.organizationId, 'audit')))
   const batch = writeBatch(firestore)
-  batch.update(requestRef, { ownerRef: input.actorId, assignedAt: serverTimestamp(), assignedBy: input.actorId })
-  batch.set(factRef, {
-    eventId: factRef.id, eventType: 'CARE_ASSIGNED', occurredAt: serverTimestamp(), recordedAt: serverTimestamp(),
-    organizationId: input.organizationId, actorId: input.actorId, subjectRef: `person:${input.request.personId}`, sourceApp: 'nestjourney',
-    scope: `congregation:${input.request.congregationId}`, evidenceRef: `careRequest:${input.request.id}`, sensitivity: 'confidential', version: 1,
-    payload: { careRequestId: input.request.id, personId: input.request.personId, careType: input.request.careType, ownerRef: input.actorId },
+  batch.update(requestRef, { ownerRef: '', assignedAt: null, assignedBy: '' })
+  batch.set(auditRef, {
+    organizationId: input.organizationId,
+    congregationId: input.request.congregationId,
+    actorId: input.actorId,
+    action: 'care.released',
+    targetRef: `careRequest:${input.request.id}`,
+    subjectRef: `person:${input.request.personId}`,
+    createdAt: serverTimestamp(),
   })
   await batch.commit()
 }
