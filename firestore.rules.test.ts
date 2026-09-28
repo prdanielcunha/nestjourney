@@ -9,9 +9,9 @@ beforeAll(async () => {
     projectId: 'raiz-e-mesa-rules-test',
     firestore: { rules: readFileSync('firestore.rules', 'utf8'), host: '127.0.0.1', port: 8080 },
   })
-})
-afterAll(async () => environment.cleanup())
-beforeEach(async () => environment.clearFirestore())
+}, 30_000)
+afterAll(async () => { if (environment) await environment.cleanup() }, 30_000)
+beforeEach(async () => environment.clearFirestore(), 15_000)
 
 async function seedMembership(uid: string, orgId: string, role: string, congregationIds = ['unit-a'], permissions: Record<string, boolean> = {}) {
   await environment.withSecurityRulesDisabled(async (context) => {
