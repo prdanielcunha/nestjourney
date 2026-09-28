@@ -1048,29 +1048,79 @@ service cloud.firestore {
           'startedAt', 'createdAt', 'createdBy'
         ]);
     }
-    function validImplementationStepCreate(orgId, cycleId, stepId) {
+    function implementationStepKeyAllowed(orgId, cycleId, stepId) {
       let cyclePath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/implementationCycles/$(cycleId);
       let cycleData = get(cyclePath).data;
       let playbookId = cycleData.get('playbookId', 'raiz_e_mesa_2026');
       let playbookPath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/playbooks/$(playbookId);
-      let customKeyAllowed = exists(playbookPath)
-        && stepId in get(playbookPath).data.get('implementationKeys', []);
-      let legacyKeyAllowed = playbookId == 'raiz_e_mesa_2026'
-        && !exists(playbookPath)
-        && validLegacyImplementationKey(stepId);
       return exists(cyclePath)
+        && (
+          (exists(playbookPath) && stepId in get(playbookPath).data.get('implementationKeys', []))
+          || (playbookId == 'raiz_e_mesa_2026' && !exists(playbookPath) && validLegacyImplementationKey(stepId))
+        );
+    }
+    function validImplementationStepCreate(orgId, cycleId, stepId) {
+      let cyclePath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/implementationCycles/$(cycleId);
+      let cycleData = get(cyclePath).data;
+      let status = request.resource.data.get('status', '');
+      return implementationStepKeyAllowed(orgId, cycleId, stepId)
         && request.resource.data.get('organizationId', '') == orgId
         && request.resource.data.get('cycleId', '') == cycleId
-        && request.resource.data.get('playbookId', '') == playbookId
+        && request.resource.data.get('playbookId', '') == cycleData.get('playbookId', 'raiz_e_mesa_2026')
         && request.resource.data.get('key', '') == stepId
-        && (customKeyAllowed || legacyKeyAllowed)
-        && request.resource.data.get('completedAt', null) == request.time
-        && request.resource.data.get('completedBy', '') == request.auth.uid
         && request.resource.data.get('congregationId', '') == cycleData.get('congregationId', '')
+        && status in ['pending', 'completed']
         && request.resource.data.keys().hasOnly([
-          'organizationId', 'congregationId', 'cycleId', 'playbookId',
-          'key', 'completedAt', 'completedBy'
-        ]);
+          'organizationId', 'congregationId', 'cycleId', 'playbookId', 'key', 'status',
+          'ownerRef', 'ownerName', 'dueAt', 'plannedAt', 'plannedBy',
+          'completedAt', 'completedBy'
+        ])
+        && (
+          (
+            status == 'pending'
+            && request.resource.data.get('ownerRef', '') is string
+            && request.resource.data.get('ownerRef', '').size() > 0
+            && request.resource.data.get('ownerName', '') is string
+            && request.resource.data.get('ownerName', '').size() > 0
+            && request.resource.data.get('ownerName', '').size() <= 120
+            && request.resource.data.get('dueAt', null) is timestamp
+            && request.resource.data.get('plannedAt', null) == request.time
+            && request.resource.data.get('plannedBy', '') == request.auth.uid
+            && request.resource.data.get('completedAt', null) == null
+            && request.resource.data.get('completedBy', '') == ''
+          )
+          || (
+            status == 'completed'
+            && request.resource.data.get('ownerRef', '') == ''
+            && request.resource.data.get('ownerName', '') == ''
+            && request.resource.data.get('dueAt', null) == null
+            && request.resource.data.get('plannedAt', null) == null
+            && request.resource.data.get('plannedBy', '') == ''
+            && request.resource.data.get('completedAt', null) == request.time
+            && request.resource.data.get('completedBy', '') == request.auth.uid
+          )
+        );
+    }
+    function validImplementationStepUpdate(orgId, cycleId, stepId) {
+      return implementationStepKeyAllowed(orgId, cycleId, stepId)
+        && resource.data.get('organizationId', '') == orgId
+        && resource.data.get('cycleId', '') == cycleId
+        && resource.data.get('key', '') == stepId
+        && resource.data.get('status', '') == 'pending'
+        && request.resource.data.get('organizationId', '') == resource.data.get('organizationId', '')
+        && request.resource.data.get('congregationId', '') == resource.data.get('congregationId', '')
+        && request.resource.data.get('cycleId', '') == resource.data.get('cycleId', '')
+        && request.resource.data.get('playbookId', '') == resource.data.get('playbookId', '')
+        && request.resource.data.get('key', '') == resource.data.get('key', '')
+        && request.resource.data.get('ownerRef', '') == resource.data.get('ownerRef', '')
+        && request.resource.data.get('ownerName', '') == resource.data.get('ownerName', '')
+        && request.resource.data.get('dueAt', null) == resource.data.get('dueAt', null)
+        && request.resource.data.get('plannedAt', null) == resource.data.get('plannedAt', null)
+        && request.resource.data.get('plannedBy', '') == resource.data.get('plannedBy', '')
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'completedAt', 'completedBy'])
+        && request.resource.data.get('status', '') == 'completed'
+        && request.resource.data.get('completedAt', null) == request.time
+        && request.resource.data.get('completedBy', '') == request.auth.uid;
     }
     function canOperateJourneyMilestone(orgId, congregationId, playbookId, stageId) {
       let active = membershipIsActive(orgId);
@@ -1834,7 +1884,10 @@ service cloud.firestore {
             allow create: if canManageImplementation(orgId)
               && canAccessCongregation(orgId, request.resource.data.get('congregationId', ''))
               && validImplementationStepCreate(orgId, cycleId, stepId);
-            allow update, delete: if false;
+            allow update: if canManageImplementation(orgId)
+              && canAccessCongregation(orgId, resource.data.get('congregationId', ''))
+              && validImplementationStepUpdate(orgId, cycleId, stepId);
+            allow delete: if false;
           }
         }
         match /groups/{groupId} {
