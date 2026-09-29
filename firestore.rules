@@ -199,6 +199,32 @@ service cloud.firestore {
         || role(orgId, ['owner', 'admin', 'pastor', 'coordinator'])
         || hasPermission(orgId, 'canManageImplementation');
     }
+    function canOperateFieldProgram(orgId, congregationId) {
+      let active = membershipIsActive(orgId);
+      let memberData = active ? membership(orgId) : {};
+      let roleName = active
+        ? memberData.get('organizationRole', memberData.get('role', ''))
+        : '';
+      let permissions = active ? memberData.get('permissions', {}) : {};
+      let privileged = isSystemAdmin() || isOwner(orgId);
+      let allowed = privileged || (
+        active && (
+          roleName in ['owner', 'admin', 'pastor', 'coordinator']
+          || permissions.get('canManageImplementation', false) == true
+        )
+      );
+      let inScope = privileged || (
+        active && (
+          roleName in ['owner', 'admin', 'pastor']
+          || (
+            congregationId is string
+            && congregationId in memberData.get('congregationIds', [])
+          )
+        )
+      );
+      return hasProductAccess(orgId) && allowed && inScope;
+    }
+
     function assignedToCongregation(orgId, congregationId) {
       return membershipIsActive(orgId) && congregationId is string
         && congregationId in membership(orgId).get('congregationIds', []);
@@ -761,8 +787,7 @@ service cloud.firestore {
     function validFieldHopeSessionCreate(orgId) {
       let congregationId = request.resource.data.get('congregationId', '');
       return tenantCreate(orgId)
-        && canManageImplementation(orgId)
-        && canAccessCongregation(orgId, congregationId)
+        && canOperateFieldProgram(orgId, congregationId)
         && congregationId is string && congregationId.size() > 0
         && request.resource.data.get('themeId', '') is string
         && request.resource.data.get('themeId', '').size() > 0
@@ -787,8 +812,7 @@ service cloud.firestore {
     function validFieldHopeSessionUpdate(orgId) {
       return tenantUnchanged(orgId)
         && congregationUnchanged()
-        && canManageImplementation(orgId)
-        && canAccessCongregation(orgId, resource.data.get('congregationId', ''))
+        && canOperateFieldProgram(orgId, resource.data.get('congregationId', ''))
         && resource.data.get('status', '') == 'planned'
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','completedAt','completedBy'])
         && request.resource.data.get('status', '') == 'completed'
@@ -803,8 +827,7 @@ service cloud.firestore {
       let sessionPath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/fieldHopeSessions/$(sessionId);
       let personPath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/people/$(personId);
       return tenantCreate(orgId)
-        && canManageImplementation(orgId)
-        && canAccessCongregation(orgId, congregationId)
+        && canOperateFieldProgram(orgId, congregationId)
         && recordId == sessionId + '__' + personId
         && request.resource.data.get('status', '') in ['invited','present']
         && request.resource.data.get('personName', '') is string
@@ -815,17 +838,14 @@ service cloud.firestore {
           'organizationId','congregationId','sessionId','personId','personName',
           'status','updatedAt','updatedBy'
         ])
-        && exists(sessionPath)
         && get(sessionPath).data.get('congregationId', '') == congregationId
-        && exists(personPath)
         && get(personPath).data.get('congregationId', '') == congregationId;
     }
 
     function validFieldHopeParticipationUpdate(orgId) {
       return tenantUnchanged(orgId)
         && congregationUnchanged()
-        && canManageImplementation(orgId)
-        && canAccessCongregation(orgId, resource.data.get('congregationId', ''))
+        && canOperateFieldProgram(orgId, resource.data.get('congregationId', ''))
         && request.resource.data.get('sessionId', '') == resource.data.get('sessionId', '')
         && request.resource.data.get('personId', '') == resource.data.get('personId', '')
         && request.resource.data.get('personName', '') == resource.data.get('personName', '')
@@ -842,9 +862,7 @@ service cloud.firestore {
       let personPath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/people/$(personId);
       return tenantCreate(orgId)
         && recordId == personId
-        && canManageImplementation(orgId)
-        && canAccessCongregation(orgId, congregationId)
-        && exists(personPath)
+        && canOperateFieldProgram(orgId, congregationId)
         && get(personPath).data.get('congregationId', '') == congregationId
         && request.resource.data.get('personName', '') is string
         && request.resource.data.get('personName', '').size() <= 120
@@ -889,8 +907,7 @@ service cloud.firestore {
         );
       return tenantUnchanged(orgId)
         && congregationUnchanged()
-        && canManageImplementation(orgId)
-        && canAccessCongregation(orgId, resource.data.get('congregationId', ''))
+        && canOperateFieldProgram(orgId, resource.data.get('congregationId', ''))
         && request.resource.data.get('personId', '') == resource.data.get('personId', '')
         && request.resource.data.get('personName', '') == resource.data.get('personName', '')
         && request.resource.data.get('facilitatorId', '') == resource.data.get('facilitatorId', '')
@@ -1895,22 +1912,19 @@ service cloud.firestore {
           allow delete: if false;
         }
         match /fieldHopeSessions/{sessionId} {
-          allow read: if canManageImplementation(orgId)
-            && canAccessCongregation(orgId, resource.data.get('congregationId', ''));
+          allow read: if canOperateFieldProgram(orgId, resource.data.get('congregationId', ''));
           allow create: if validFieldHopeSessionCreate(orgId);
           allow update: if validFieldHopeSessionUpdate(orgId);
           allow delete: if false;
         }
         match /fieldHopeParticipations/{recordId} {
-          allow read: if canManageImplementation(orgId)
-            && canAccessCongregation(orgId, resource.data.get('congregationId', ''));
+          allow read: if canOperateFieldProgram(orgId, resource.data.get('congregationId', ''));
           allow create: if validFieldHopeParticipationCreate(orgId, recordId);
           allow update: if validFieldHopeParticipationUpdate(orgId);
           allow delete: if false;
         }
         match /fieldFirstSteps/{recordId} {
-          allow read: if canManageImplementation(orgId)
-            && canAccessCongregation(orgId, resource.data.get('congregationId', ''));
+          allow read: if canOperateFieldProgram(orgId, resource.data.get('congregationId', ''));
           allow create: if validFieldFirstStepsCreate(orgId, recordId);
           allow update: if validFieldFirstStepsUpdate(orgId);
           allow delete: if false;
