@@ -342,6 +342,8 @@ export interface JourneyDiscipleshipRecord {
   nextMeetingAt?: string
   nextMeetingStatus?: 'to_be_agreed' | 'scheduled' | 'cancelled'
   startedAt?: string
+  lastCompletedMeeting?: number
+  lastCompletedAt?: string
 }
 
 export interface JourneyImplementationCycle {
@@ -1620,6 +1622,8 @@ export async function listJourneyDiscipleships(access: JourneyAccessContext, con
       nextMeetingAt: data.nextMeetingAt ? toIso(data.nextMeetingAt) : undefined,
       nextMeetingStatus: data.nextMeetingStatus === 'scheduled' ? 'scheduled' : data.nextMeetingStatus === 'cancelled' ? 'cancelled' : 'to_be_agreed',
       startedAt: data.startedAt ? toIso(data.startedAt) : undefined,
+      lastCompletedMeeting: typeof data.lastCompletedMeeting === 'number' ? data.lastCompletedMeeting : undefined,
+      lastCompletedAt: data.lastCompletedAt ? toIso(data.lastCompletedAt) : undefined,
     }
   }).sort((a, b) => a.status.localeCompare(b.status) || a.meeting - b.meeting)
 }
