@@ -2698,12 +2698,9 @@ export async function createFieldFirstSteps(input: {
 }) {
   if (!input.access.canManageImplementation && !input.access.broadJourneyAccess) throw new Error('field_program_forbidden')
   const firestore = requireDb()
-  const base = collection(firestore, journeyCollectionPath(input.access.organizationId, 'fieldFirstSteps'))
-  const existing = await getDocs(query(base, where('congregationId', '==', input.congregationId)))
-  if (existing.docs.some(item => asString(item.data().personId) === input.person.id && asString(item.data().status) !== 'completed')) {
-    throw new Error('field_first_steps_already_active')
-  }
-  const ref = doc(base)
+  const ref = doc(firestore, `${journeyCollectionPath(input.access.organizationId, 'fieldFirstSteps')}/${input.person.id}`)
+  const existing = await getDoc(ref)
+  if (existing.exists()) throw new Error(asString(existing.data().status) === 'completed' ? 'field_first_steps_already_completed' : 'field_first_steps_already_active')
   await setDoc(ref, {
     organizationId: input.access.organizationId,
     congregationId: input.congregationId,
