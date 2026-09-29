@@ -836,11 +836,12 @@ service cloud.firestore {
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','updatedAt','updatedBy']);
     }
 
-    function validFieldFirstStepsCreate(orgId) {
+    function validFieldFirstStepsCreate(orgId, recordId) {
       let congregationId = request.resource.data.get('congregationId', '');
       let personId = request.resource.data.get('personId', '');
       let personPath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/people/$(personId);
       return tenantCreate(orgId)
+        && recordId == personId
         && canManageImplementation(orgId)
         && canAccessCongregation(orgId, congregationId)
         && exists(personPath)
@@ -1910,7 +1911,7 @@ service cloud.firestore {
         match /fieldFirstSteps/{recordId} {
           allow read: if canManageImplementation(orgId)
             && canAccessCongregation(orgId, resource.data.get('congregationId', ''));
-          allow create: if validFieldFirstStepsCreate(orgId);
+          allow create: if validFieldFirstStepsCreate(orgId, recordId);
           allow update: if validFieldFirstStepsUpdate(orgId);
           allow delete: if false;
         }
