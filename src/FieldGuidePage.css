@@ -70,3 +70,26 @@
 .field-guide-loading{min-height:55vh;display:grid;place-items:center;color:#9cafac}
 @media(max-width:900px){.field-guide-page{padding:20px 16px 96px}.field-guide-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.field-guide-rhythm{grid-template-columns:repeat(2,minmax(0,1fr))}.field-guide-lessons{grid-template-columns:1fr}}
 @media(max-width:640px){.field-guide-header{display:grid}.field-guide-header select{justify-self:start}.field-guide-section{padding:16px;border-radius:18px}.field-guide-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.field-guide-metrics article{min-height:82px}.field-guide-rhythm,.field-guide-meetings,.field-guide-local,.field-guide-attention{grid-template-columns:1fr}.field-guide-section-head{align-items:flex-start}.field-guide-section-head button{font-size:0;padding:9px}.field-guide-section-head button svg{width:16px;height:16px}.field-guide-library details>ol{padding:0 10px 10px}.field-guide-library details>ol li{grid-template-columns:26px 1fr}}
+
+.field-guide-operations{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.field-guide-operations>article{padding:17px;border-radius:16px;border:1px solid rgba(255,255,255,.06);background:rgba(255,255,255,.02)}
+.field-guide-operations h3{margin:0 0 14px;font-size:15px}
+.field-guide-form-row{display:flex;align-items:end;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.field-guide-form-row label,.field-guide-session-select{display:grid;gap:5px;min-width:150px}
+.field-guide-form-row label.grow{flex:1}
+.field-guide-form-row label>span,.field-guide-session-select>span{font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:#7f9792}
+.field-guide-form-row select,.field-guide-form-row input,.field-guide-session-select select{width:100%;background:#0c1719;border:1px solid rgba(255,255,255,.09);color:#edf4f3;border-radius:10px;padding:9px 10px;min-height:38px}
+.field-guide-form-row button,.field-guide-program-card button,.field-guide-participants button,.field-guide-first-list button{border:1px solid rgba(112,214,183,.2);background:rgba(112,214,183,.1);color:#dff8ef;border-radius:10px;padding:9px 11px;cursor:pointer}
+.field-guide-form-row button:disabled,.field-guide-program-card button:disabled,.field-guide-participants button:disabled,.field-guide-first-list button:disabled{opacity:.45;cursor:not-allowed}
+.field-guide-session-select{margin:8px 0 10px}
+.field-guide-program-card{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px;border-radius:12px;background:rgba(112,214,183,.045);border:1px solid rgba(112,214,183,.09)}
+.field-guide-program-card>div{display:grid;gap:3px}.field-guide-program-card strong{font-size:13px}.field-guide-program-card small{color:#8fa5a1;font-size:11px}
+.field-guide-participants,.field-guide-first-list{display:grid;gap:7px;margin-top:10px}
+.field-guide-participants>div,.field-guide-first-list>div{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 11px;border-radius:11px;border:1px solid rgba(255,255,255,.05);background:rgba(0,0,0,.12)}
+.field-guide-participants>div>span,.field-guide-first-list>div>span{display:grid;gap:2px;min-width:0}
+.field-guide-participants strong,.field-guide-first-list strong{font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.field-guide-participants small,.field-guide-first-list small{font-size:10px;color:#819993;text-transform:uppercase;letter-spacing:.05em}
+.field-guide-first-list>div>div{display:flex;gap:6px}
+.field-guide-first-list button.ghost{background:transparent;color:#9cafac;border-color:rgba(255,255,255,.08)}
+.field-guide-empty{color:#829a95;font-size:12px;line-height:1.5;padding:9px 0;margin:0}
+@media(max-width:900px){.field-guide-operations{grid-template-columns:1fr}}
