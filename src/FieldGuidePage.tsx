@@ -5,7 +5,13 @@ import {
   careRequestToPromise,
   getActiveJourneyOrganizationId,
   latestChecksByPerson,
+  completeFieldHopeSession,
+  createFieldFirstSteps,
+  createFieldHopeSession,
   listCareRequests,
+  listFieldFirstSteps,
+  listFieldHopeParticipations,
+  listFieldHopeSessions,
   listJourneyCongregations,
   listJourneyDiscipleships,
   listJourneyFollowups,
@@ -17,11 +23,16 @@ import {
   loadJourneyAccess,
   resolveActiveJourneyCongregationId,
   setActiveJourneyCongregationId,
+  setFieldHopeParticipation,
   subscribeJourneyLiveChanges,
+  updateFieldFirstSteps,
   type CareRequestRecord,
   type JourneyAccessContext,
   type JourneyCongregation,
   type JourneyDiscipleshipRecord,
+  type FieldFirstStepsRecord,
+  type FieldHopeParticipationRecord,
+  type FieldHopeSessionRecord,
   type JourneyFollowupRecord,
   type JourneyPastoralHandoff,
   type JourneyPersonRecord,
@@ -57,9 +68,12 @@ type FieldData = {
   mesa: MesaParticipationRecord[]
   discipleships: JourneyDiscipleshipRecord[]
   pastoral: JourneyPastoralHandoff[]
+  hopeSessions: FieldHopeSessionRecord[]
+  hopeParticipations: FieldHopeParticipationRecord[]
+  firstSteps: FieldFirstStepsRecord[]
 }
 
-const emptyData: FieldData = { people: [], care: [], followups: [], sessions: [], checks: [], mesa: [], discipleships: [], pastoral: [] }
+const emptyData: FieldData = { people: [], care: [], followups: [], sessions: [], checks: [], mesa: [], discipleships: [], pastoral: [], hopeSessions: [], hopeParticipations: [], firstSteps: [] }
 
 const copy = {
   'pt-BR': {
@@ -73,6 +87,7 @@ const copy = {
     weeklyMeeting: 'Reunião semanal dos coordenadores · 35–45 min', biweekly: 'Reunião quinzenal de ajuste · 45 min',
     pulpit: '12 falas curtas para o púlpito', hopeTable: '12 roteiros da Mesa de Esperança', firstSteps: '6 roteiros de Primeiros Passos',
     sourceLanguage: 'O conteúdo pastoral abaixo preserva a redação oficial do manual em português. A interface do produto continua disponível em PT, EN e ES.',
+    fieldOps:'Operação do Manual de Campo',fieldOpsDesc:'Mesa de Esperança e Primeiros Passos ficam separados da Mesa Aberta e do Raiz para preservar os dois métodos sem misturar dados.',hopeOps:'Mesa de Esperança',newHope:'Agendar Mesa',theme:'Tema',date:'Data',session:'Encontro',person:'Pessoa',invite:'Convidar',present:'Marcar presença',complete:'Concluir encontro',noHope:'Nenhuma Mesa de Esperança agendada ainda.',firstOps:'Primeiros Passos',startFirst:'Iniciar Primeiros Passos',advance:'Concluir encontro',pause:'Pausar',resume:'Retomar',noFirst:'Nenhum Primeiros Passos ativo ainda.',fieldSaved:'Registro atualizado.',
     factual: 'O relatório usa somente fatos registrados. “Abertura”, “avanço espiritual” e valor de pessoas não viram score nem rótulo no NestJourney.',
     error: 'Não foi possível montar o Manual de Campo com os dados desta unidade.',
   },
@@ -87,6 +102,7 @@ const copy = {
     weeklyMeeting: 'Weekly coordinator meeting · 35–45 min', biweekly: 'Biweekly refinement meeting · 45 min',
     pulpit: '12 short pulpit lines', hopeTable: '12 Mesa de Esperança guides', firstSteps: '6 Primeiros Passos guides',
     sourceLanguage: 'The pastoral material below preserves the official Portuguese wording of the source manual. Product navigation remains available in PT, EN, and ES.',
+    fieldOps:'Field operations',fieldOpsDesc:'Mesa de Esperança and Primeiros Passos stay separate from Open Table and Root so both methods remain intact without mixing records.',hopeOps:'Mesa de Esperança',newHope:'Schedule table',theme:'Theme',date:'Date',session:'Session',person:'Person',invite:'Invite',present:'Mark present',complete:'Complete session',noHope:'No Mesa de Esperança session scheduled yet.',firstOps:'Primeiros Passos',startFirst:'Start Primeiros Passos',advance:'Complete meeting',pause:'Pause',resume:'Resume',noFirst:'No active Primeiros Passos relationship yet.',fieldSaved:'Record updated.',
     factual: 'This report uses recorded facts only. Perceived “openness,” spiritual progress, or human value never becomes a score or label in NestJourney.',
     error: 'The Field Guide could not be built for this campus.',
   },
@@ -101,6 +117,7 @@ const copy = {
     weeklyMeeting: 'Reunión semanal de coordinadores · 35–45 min', biweekly: 'Reunión quincenal de ajuste · 45 min',
     pulpit: '12 frases breves para el púlpito', hopeTable: '12 guías de Mesa de Esperança', firstSteps: '6 guías de Primeiros Passos',
     sourceLanguage: 'El contenido pastoral de abajo conserva la redacción oficial en portugués. La navegación del producto sigue disponible en PT, EN y ES.',
+    fieldOps:'Operación del Manual de Campo',fieldOpsDesc:'Mesa de Esperança y Primeiros Passos quedan separados de Mesa Abierta y Raíz para preservar ambos métodos sin mezclar registros.',hopeOps:'Mesa de Esperança',newHope:'Programar Mesa',theme:'Tema',date:'Fecha',session:'Encuentro',person:'Persona',invite:'Invitar',present:'Marcar presencia',complete:'Concluir encuentro',noHope:'Aún no hay Mesa de Esperança programada.',firstOps:'Primeiros Passos',startFirst:'Iniciar Primeiros Passos',advance:'Concluir encuentro',pause:'Pausar',resume:'Retomar',noFirst:'Aún no hay Primeiros Passos activo.',fieldSaved:'Registro actualizado.',
     factual: 'El informe usa solo hechos registrados. La “apertura”, el avance espiritual o el valor de una persona nunca se convierten en puntuación o etiqueta.',
     error: 'No se pudo preparar el Manual de Campo para esta sede.',
   },
@@ -119,16 +136,23 @@ export default function FieldGuidePage() {
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
+  const [hopeThemeId, setHopeThemeId] = useState(MESA_DE_ESPERANCA[0]?.id ?? '')
+  const [hopeDate, setHopeDate] = useState(() => new Date().toISOString().slice(0,10))
+  const [hopeSessionId, setHopeSessionId] = useState('')
+  const [hopePersonId, setHopePersonId] = useState('')
+  const [firstPersonId, setFirstPersonId] = useState('')
 
   const loadScope = useCallback(async (nextAccess: JourneyAccessContext, nextUnitId: string) => {
     const organizationId = nextAccess.organizationId
-    const [people, care, followups, sessions, discipleships, pastoral] = await Promise.all([
+    const [people, care, followups, sessions, discipleships, pastoral, hopeSessions, firstSteps] = await Promise.all([
       listJourneyPeople(organizationId, nextUnitId),
       nextAccess.canManageCare || nextAccess.broadJourneyAccess ? listCareRequests(organizationId, nextUnitId) : Promise.resolve([]),
       nextAccess.canManageCare || nextAccess.broadJourneyAccess ? listJourneyFollowups(nextAccess, nextUnitId) : Promise.resolve([]),
       nextAccess.canManagePresence || nextAccess.canManageMesa || nextAccess.broadJourneyAccess ? listPresenceSessions(organizationId, nextUnitId) : Promise.resolve([]),
       nextAccess.canManageDiscipleship || nextAccess.broadJourneyAccess ? listJourneyDiscipleships(nextAccess, nextUnitId) : Promise.resolve([]),
       nextAccess.canManagePastoral || nextAccess.broadJourneyAccess ? listPastoralHandoffs(organizationId, nextUnitId) : Promise.resolve([]),
+      nextAccess.canManageImplementation || nextAccess.broadJourneyAccess ? listFieldHopeSessions(organizationId, nextUnitId) : Promise.resolve([]),
+      nextAccess.canManageImplementation || nextAccess.broadJourneyAccess ? listFieldFirstSteps(nextAccess, nextUnitId) : Promise.resolve([]),
     ])
     const weeklySessions = sessions.filter(session => isInsideFieldWeek(session.openedAt))
     const checksBySession = await Promise.all(weeklySessions.map(session =>
@@ -141,12 +165,16 @@ export default function FieldGuidePage() {
         ? listMesaParticipationRecords(organizationId, nextUnitId, session.id)
         : Promise.resolve([] as MesaParticipationRecord[])
     ))
+    const hopeParticipations = hopeSessions.length && (nextAccess.canManageImplementation || nextAccess.broadJourneyAccess)
+      ? await listFieldHopeParticipations(organizationId, nextUnitId, hopeSessions.map(item => item.id))
+      : []
     setData({
       people, care, followups, sessions,
       checks: checksBySession.flat(),
       mesa: mesaBySession.flat(),
-      discipleships, pastoral,
+      discipleships, pastoral, hopeSessions, hopeParticipations, firstSteps,
     })
+    setHopeSessionId(current => current && hopeSessions.some(item => item.id === current) ? current : (hopeSessions.find(item => item.status === 'planned')?.id || hopeSessions[0]?.id || ''))
   }, [])
 
   const bootstrap = useCallback(async () => {
@@ -175,7 +203,7 @@ export default function FieldGuidePage() {
     return subscribeJourneyLiveChanges({
       organizationId: access.organizationId,
       congregationId: unitId,
-      collections: ['people','careRequests','followups','presenceSessions','presenceChecks','mesaParticipations','discipleships','pastoralHandoffs'],
+      collections: ['people','careRequests','followups','presenceSessions','presenceChecks','mesaParticipations','discipleships','pastoralHandoffs','fieldHopeSessions','fieldHopeParticipations','fieldFirstSteps'],
       onChange: () => { void loadScope(access, unitId) },
       onError: cause => console.error('Field guide live sync failed', cause),
     })
@@ -207,8 +235,11 @@ export default function FieldGuidePage() {
       return Boolean(first && Date.parse(first) < startOfFieldWeek().getTime())
     }).length
     const weeklyMesa = data.mesa.filter(item => weeklySessionIds.has(item.sessionId) && isInsideFieldWeek(item.updatedAt))
-    const mesaPeople = unique(weeklyMesa.map(item => `${item.sessionId}:${item.personId}`))
-    const mesaJoined = unique(weeklyMesa.filter(item => item.status === 'joined').map(item => `${item.sessionId}:${item.personId}`))
+    const postServiceJoined = unique(weeklyMesa.filter(item => item.status === 'joined').map(item => `${item.sessionId}:${item.personId}`))
+    const weeklyHopeIds = new Set(data.hopeSessions.filter(item => isInsideFieldWeek(item.scheduledFor)).map(item => item.id))
+    const weeklyHope = data.hopeParticipations.filter(item => weeklyHopeIds.has(item.sessionId))
+    const mesaPeople = unique(weeklyHope.map(item => `${item.sessionId}:${item.personId}`))
+    const mesaJoined = unique(weeklyHope.filter(item => item.status === 'present').map(item => `${item.sessionId}:${item.personId}`))
     const prayer = data.care.filter(item => item.careType === 'prayer' && isInsideFieldWeek(item.requestedAt)).length
     const completedFollowups = data.followups.filter(item => item.status === 'completed' && isInsideFieldWeek(item.completedAt))
     const onTime = completedFollowups.filter(item => item.completedAt && Date.parse(item.completedAt) <= Date.parse(item.dueAt)).length
@@ -217,15 +248,15 @@ export default function FieldGuidePage() {
     const pastoral = data.pastoral.filter(item => isInsideFieldWeek(item.requestedAt)).length
     const explicitNext = unique([
       ...completedFollowups.filter(item => item.outcomeCode === 'group_interest' || item.outcomeCode === 'prayer_requested').map(item => item.personId),
-      ...data.discipleships.filter(item => isInsideFieldWeek(item.startedAt)).map(item => item.personId),
+      ...data.firstSteps.filter(item => isInsideFieldWeek(item.startedAt)).map(item => item.personId),
     ])
-    const rootMeetings = data.discipleships.filter(item => isInsideFieldWeek(item.lastCompletedAt)).length
-    const rootActive = data.discipleships.filter(item => item.status === 'active').length
-    const newRoot = data.discipleships.filter(item => isInsideFieldWeek(item.startedAt)).length
+    const rootMeetings = data.firstSteps.filter(item => isInsideFieldWeek(item.lastCompletedAt)).length
+    const rootActive = data.firstSteps.filter(item => item.status === 'active').length
+    const newRoot = data.firstSteps.filter(item => isInsideFieldWeek(item.startedAt)).length
     const careDebt = data.care.filter(item => item.status === 'open' && evaluateCarePromise(careRequestToPromise(item)).state === 'debt').length
     const unassigned = data.care.filter(item => item.status === 'open' && !item.ownerRef).length
     const openPastoral = data.pastoral.filter(item => item.status === 'open').length
-    return { visitors, returns, mesaPeople, mesaJoined, prayer, onTime, responses, absences, pastoral, explicitNext, rootMeetings, rootActive, newRoot, careDebt, unassigned, openPastoral }
+    return { visitors, returns, postServiceJoined, mesaPeople, mesaJoined, prayer, onTime, responses, absences, pastoral, explicitNext, rootMeetings, rootActive, newRoot, careDebt, unassigned, openPastoral }
   }, [data])
 
   const reportText = useMemo(() => {
@@ -237,7 +268,7 @@ export default function FieldGuidePage() {
       '1. Presença e acolhimento',
       `Visitantes: ${metrics.visitors}`,
       `Retornos: ${metrics.returns}`,
-      `Pessoas que ficaram no pós-culto: ${metrics.mesaJoined}`,
+      `Pessoas que ficaram no pós-culto: ${metrics.postServiceJoined}`,
       `Pedidos de oração registrados: ${metrics.prayer}`,
       '',
       '2. Acompanhamento',
@@ -269,6 +300,62 @@ export default function FieldGuidePage() {
       'Nota: relatório factual. O NestJourney não atribui score espiritual nem registra “abertura” subjetiva.',
     ].join('\n')
   }, [locale, metrics, t.unit, unit?.name])
+
+  const activeHopeSession = data.hopeSessions.find(item => item.id === hopeSessionId)
+  const activeHopeParticipants = activeHopeSession ? data.hopeParticipations.filter(item => item.sessionId === activeHopeSession.id) : []
+  const activeFirstSteps = data.firstSteps.filter(item => item.status !== 'completed')
+
+  async function createHopeSession() {
+    if (!access || !unitId || !access.canManageImplementation) return
+    const theme = MESA_DE_ESPERANCA.find(item => item.id === hopeThemeId)
+    if (!theme) return
+    setBusy(true); setError('')
+    try {
+      const id = await createFieldHopeSession({ access, congregationId: unitId, themeId: theme.id, title: theme.title, scripture: theme.scripture, scheduledFor: `${hopeDate}T12:00:00` })
+      setHopeSessionId(id); await loadScope(access, unitId); setMessage(t.fieldSaved)
+    } catch (cause) { console.error(cause); setError(t.error) } finally { setBusy(false) }
+  }
+
+  async function inviteHopePerson() {
+    if (!access || !activeHopeSession || !hopePersonId || !access.canManageImplementation) return
+    const person = data.people.find(item => item.id === hopePersonId)
+    if (!person) return
+    setBusy(true); setError('')
+    try { await setFieldHopeParticipation({ access, session: activeHopeSession, person, status: 'invited' }); await loadScope(access, unitId); setMessage(t.fieldSaved) }
+    catch (cause) { console.error(cause); setError(t.error) } finally { setBusy(false) }
+  }
+
+  async function markHopePresent(personId: string) {
+    if (!access || !activeHopeSession || !access.canManageImplementation) return
+    const person = data.people.find(item => item.id === personId)
+    if (!person) return
+    setBusy(true); setError('')
+    try { await setFieldHopeParticipation({ access, session: activeHopeSession, person, status: 'present' }); await loadScope(access, unitId); setMessage(t.fieldSaved) }
+    catch (cause) { console.error(cause); setError(t.error) } finally { setBusy(false) }
+  }
+
+  async function finishHopeSession() {
+    if (!access || !activeHopeSession || !access.canManageImplementation) return
+    setBusy(true); setError('')
+    try { await completeFieldHopeSession({ access, session: activeHopeSession }); await loadScope(access, unitId); setMessage(t.fieldSaved) }
+    catch (cause) { console.error(cause); setError(t.error) } finally { setBusy(false) }
+  }
+
+  async function startFirstSteps() {
+    if (!access || !firstPersonId || !access.canManageImplementation) return
+    const person = data.people.find(item => item.id === firstPersonId)
+    if (!person) return
+    setBusy(true); setError('')
+    try { await createFieldFirstSteps({ access, congregationId: unitId, person, facilitatorName: auth?.currentUser?.displayName || '' }); await loadScope(access, unitId); setMessage(t.fieldSaved) }
+    catch (cause) { console.error(cause); setError(t.error) } finally { setBusy(false) }
+  }
+
+  async function changeFirstSteps(record: FieldFirstStepsRecord, action: 'advance' | 'pause' | 'resume') {
+    if (!access || !access.canManageImplementation) return
+    setBusy(true); setError('')
+    try { await updateFieldFirstSteps({ access, record, action }); await loadScope(access, unitId); setMessage(t.fieldSaved) }
+    catch (cause) { console.error(cause); setError(t.error) } finally { setBusy(false) }
+  }
 
   async function copyWeeklyReport() {
     try {
@@ -303,7 +390,7 @@ export default function FieldGuidePage() {
       <div className="field-guide-section-head"><span><BarChart3 size={18}/></span><div><small>{t.thisWeek}</small><h2>{t.weeklyReport}</h2></div><button onClick={() => void copyWeeklyReport()}><ClipboardCopy size={15}/>{t.copyReport}</button></div>
       <div className="field-guide-metrics">
         {[
-          [t.visitors, metrics.visitors],[t.returns, metrics.returns],[t.postService, metrics.mesaJoined],[t.prayer, metrics.prayer],
+          [t.visitors, metrics.visitors],[t.returns, metrics.returns],[t.postService, metrics.postServiceJoined],[t.prayer, metrics.prayer],
           [t.onTime, metrics.onTime],[t.responses, metrics.responses],[t.absences, metrics.absences],[t.pastoral, metrics.pastoral],
           [t.mesaInvited, metrics.mesaPeople],[t.mesaJoined, metrics.mesaJoined],[t.explicitNext, metrics.explicitNext],
           [t.rootMeetings, metrics.rootMeetings],[t.rootActive, metrics.rootActive],[t.newRoot, metrics.newRoot],
@@ -312,6 +399,33 @@ export default function FieldGuidePage() {
       <div className="field-guide-attention">
         <div><strong>{t.attention}</strong><span>{t.careDebt}: {metrics.careDebt}</span><span>{t.unassigned}: {metrics.unassigned}</span><span>{t.openPastoral}: {metrics.openPastoral}</span></div>
         <div><strong>{t.nextActions}</strong><a href="/care-integrity">{metrics.careDebt || metrics.unassigned ? (locale === 'en' ? 'Review Care now' : locale === 'es' ? 'Revisar Cuidado ahora' : 'Revisar Cuidado agora') : (locale === 'en' ? 'Open Care' : locale === 'es' ? 'Abrir Cuidado' : 'Abrir Cuidado')}</a><a href="/pastoral-handoff">{locale === 'en' ? 'Open pastoral handoffs' : locale === 'es' ? 'Abrir derivaciones pastorales' : 'Abrir encaminhamentos pastorais'}</a></div>
+      </div>
+    </section>
+
+    <section className="field-guide-section">
+      <div className="field-guide-section-head"><span><HeartHandshake size={18}/></span><div><small>Manual de Campo</small><h2>{t.fieldOps}</h2></div></div>
+      <p className="field-guide-language-note">{t.fieldOpsDesc}</p>
+      <div className="field-guide-operations">
+        <article>
+          <h3>{t.hopeOps}</h3>
+          {access.canManageImplementation ? <div className="field-guide-form-row">
+            <label><span>{t.theme}</span><select value={hopeThemeId} onChange={event=>setHopeThemeId(event.target.value)}>{MESA_DE_ESPERANCA.map(item=><option key={item.id} value={item.id}>{item.title}</option>)}</select></label>
+            <label><span>{t.date}</span><input type="date" value={hopeDate} onChange={event=>setHopeDate(event.target.value)}/></label>
+            <button disabled={busy||!hopeDate} onClick={()=>void createHopeSession()}>{t.newHope}</button>
+          </div> : null}
+          {data.hopeSessions.length ? <>
+            <label className="field-guide-session-select"><span>{t.session}</span><select value={hopeSessionId} onChange={event=>setHopeSessionId(event.target.value)}>{data.hopeSessions.map(item=><option key={item.id} value={item.id}>{new Date(item.scheduledFor).toLocaleDateString(locale)} · {item.title} · {item.status}</option>)}</select></label>
+            {activeHopeSession ? <div className="field-guide-program-card"><div><strong>{activeHopeSession.title}</strong><small>{activeHopeSession.scripture} · {new Date(activeHopeSession.scheduledFor).toLocaleDateString(locale)}</small></div>{activeHopeSession.status==='planned'&&access.canManageImplementation?<button disabled={busy} onClick={()=>void finishHopeSession()}>{t.complete}</button>:null}</div> : null}
+            {activeHopeSession && access.canManageImplementation ? <div className="field-guide-form-row"><label className="grow"><span>{t.person}</span><select value={hopePersonId} onChange={event=>setHopePersonId(event.target.value)}><option value="">—</option>{data.people.map(person=><option key={person.id} value={person.id}>{person.name}</option>)}</select></label><button disabled={busy||!hopePersonId} onClick={()=>void inviteHopePerson()}>{t.invite}</button></div> : null}
+            <div className="field-guide-participants">{activeHopeParticipants.map(item=><div key={item.id}><span><strong>{item.personName||item.personId}</strong><small>{item.status}</small></span>{item.status==='invited'&&access.canManageImplementation?<button disabled={busy} onClick={()=>void markHopePresent(item.personId)}>{t.present}</button>:<CheckCircle2 size={16}/>}</div>)}</div>
+          </> : <p className="field-guide-empty">{t.noHope}</p>}
+        </article>
+
+        <article>
+          <h3>{t.firstOps}</h3>
+          {access.canManageImplementation ? <div className="field-guide-form-row"><label className="grow"><span>{t.person}</span><select value={firstPersonId} onChange={event=>setFirstPersonId(event.target.value)}><option value="">—</option>{data.people.filter(person=>!activeFirstSteps.some(item=>item.personId===person.id)).map(person=><option key={person.id} value={person.id}>{person.name}</option>)}</select></label><button disabled={busy||!firstPersonId} onClick={()=>void startFirstSteps()}>{t.startFirst}</button></div> : null}
+          {activeFirstSteps.length ? <div className="field-guide-first-list">{activeFirstSteps.map(item=><div key={item.id}><span><strong>{item.personName||item.personId}</strong><small>{item.status==='paused'?'Pausado':`Encontro ${item.meeting}/6`}</small></span>{access.canManageImplementation?<div>{item.status==='active'?<><button disabled={busy} onClick={()=>void changeFirstSteps(item,'advance')}>{t.advance}</button><button className="ghost" disabled={busy} onClick={()=>void changeFirstSteps(item,'pause')}>{t.pause}</button></>:<button disabled={busy} onClick={()=>void changeFirstSteps(item,'resume')}>{t.resume}</button>}</div>:null}</div>)}</div> : <p className="field-guide-empty">{t.noFirst}</p>}
+        </article>
       </div>
     </section>
 
