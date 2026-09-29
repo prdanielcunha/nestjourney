@@ -915,14 +915,7 @@ export async function ensureDefaultJourneyPlaybook(access: JourneyAccessContext)
     const hasRoadmapFields = data.groupCapacityPolicy && typeof data.groupCapacityPolicy === 'object'
       && Array.isArray(data.stages) && data.stages.every((stage: unknown) => Boolean(stage && typeof stage === 'object' && 'nextAction' in (stage as Record<string, unknown>)))
     if ((!hasStageIndexes || !hasRoadmapFields) && canConfigureJourneyPlaybooks(access)) {
-      await updateDoc(ref, {
-        groupCapacityPolicy: current.groupCapacityPolicy,
-        stages: current.stages,
-        stageIds: current.stages.map((stage) => stage.id),
-        stageRoles: Object.fromEntries(current.stages.map((stage) => [stage.id, stage.responsibleRoles])),
-        updatedAt: serverTimestamp(),
-        updatedBy: access.userId,
-      })
+      await saveJourneyPlaybook(access, current)
     }
     return current
   }
