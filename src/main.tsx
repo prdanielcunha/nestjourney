@@ -12,6 +12,7 @@ const MesaRuntimePage = lazy(() => import('./MesaRuntimePage.tsx'))
 const JourneyVisionPage = lazy(() => import('./JourneyVisionPage.tsx'))
 const MorePage = lazy(() => import('./MorePage.tsx'))
 const JourneyReportsPage = lazy(() => import('./JourneyReportsPage.tsx'))
+const FieldGuidePage = lazy(() => import('./FieldGuidePage.tsx'))
 const HelpPage = lazy(() => import('./HelpPage.tsx'))
 const WhatsNewPage = lazy(() => import('./WhatsNewPage.tsx'))
 const PresenceAssistPage = lazy(() => import('./PresenceAssistPage.tsx'))
@@ -83,6 +84,8 @@ function JourneyRoute() {
       return <MorePage />
     case 'reports':
       return <JourneyReportsPage />
+    case 'field-guide':
+      return <FieldGuidePage />
     case 'help':
       return <HelpPage />
     case 'whats-new':
