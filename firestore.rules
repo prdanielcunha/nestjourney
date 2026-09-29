@@ -199,6 +199,32 @@ service cloud.firestore {
         || role(orgId, ['owner', 'admin', 'pastor', 'coordinator'])
         || hasPermission(orgId, 'canManageImplementation');
     }
+    function canOperateFieldProgram(orgId, congregationId) {
+      let active = membershipIsActive(orgId);
+      let memberData = active ? membership(orgId) : {};
+      let roleName = active
+        ? memberData.get('organizationRole', memberData.get('role', ''))
+        : '';
+      let permissions = active ? memberData.get('permissions', {}) : {};
+      let privileged = isSystemAdmin() || isOwner(orgId);
+      let allowed = privileged || (
+        active && (
+          roleName in ['owner', 'admin', 'pastor', 'coordinator']
+          || permissions.get('canManageImplementation', false) == true
+        )
+      );
+      let inScope = privileged || (
+        active && (
+          roleName in ['owner', 'admin', 'pastor']
+          || (
+            congregationId is string
+            && congregationId in memberData.get('congregationIds', [])
+          )
+        )
+      );
+      return hasProductAccess(orgId) && allowed && inScope;
+    }
+
     function assignedToCongregation(orgId, congregationId) {
       return membershipIsActive(orgId) && congregationId is string
         && congregationId in membership(orgId).get('congregationIds', []);
@@ -756,6 +782,145 @@ service cloud.firestore {
         && exists(sessionPath)
         && get(sessionPath).data.get('congregationId', '') == congregationId
         && get(sessionPath).data.get('status', '') == 'open';
+    }
+
+    function validFieldHopeSessionCreate(orgId) {
+      let congregationId = request.resource.data.get('congregationId', '');
+      return tenantCreate(orgId)
+        && canOperateFieldProgram(orgId, congregationId)
+        && congregationId is string && congregationId.size() > 0
+        && request.resource.data.get('themeId', '') is string
+        && request.resource.data.get('themeId', '').size() > 0
+        && request.resource.data.get('themeId', '').size() <= 64
+        && request.resource.data.get('title', '') is string
+        && request.resource.data.get('title', '').size() > 0
+        && request.resource.data.get('title', '').size() <= 120
+        && request.resource.data.get('scripture', '') is string
+        && request.resource.data.get('scripture', '').size() <= 80
+        && request.resource.data.get('scheduledFor', null) is timestamp
+        && request.resource.data.get('status', '') == 'planned'
+        && request.resource.data.get('createdAt', null) == request.time
+        && request.resource.data.get('createdBy', '') == request.auth.uid
+        && request.resource.data.get('completedAt', null) == null
+        && request.resource.data.get('completedBy', '') == ''
+        && request.resource.data.keys().hasOnly([
+          'organizationId','congregationId','themeId','title','scripture','scheduledFor',
+          'status','createdAt','createdBy','completedAt','completedBy'
+        ]);
+    }
+
+    function validFieldHopeSessionUpdate(orgId) {
+      return tenantUnchanged(orgId)
+        && congregationUnchanged()
+        && canOperateFieldProgram(orgId, resource.data.get('congregationId', ''))
+        && resource.data.get('status', '') == 'planned'
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','completedAt','completedBy'])
+        && request.resource.data.get('status', '') == 'completed'
+        && request.resource.data.get('completedAt', null) == request.time
+        && request.resource.data.get('completedBy', '') == request.auth.uid;
+    }
+
+    function validFieldHopeParticipationCreate(orgId, recordId) {
+      let congregationId = request.resource.data.get('congregationId', '');
+      let sessionId = request.resource.data.get('sessionId', '');
+      let personId = request.resource.data.get('personId', '');
+      let sessionPath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/fieldHopeSessions/$(sessionId);
+      let personPath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/people/$(personId);
+      return tenantCreate(orgId)
+        && canOperateFieldProgram(orgId, congregationId)
+        && recordId == sessionId + '__' + personId
+        && request.resource.data.get('status', '') in ['invited','present']
+        && request.resource.data.get('personName', '') is string
+        && request.resource.data.get('personName', '').size() <= 120
+        && request.resource.data.get('updatedAt', null) == request.time
+        && request.resource.data.get('updatedBy', '') == request.auth.uid
+        && request.resource.data.keys().hasOnly([
+          'organizationId','congregationId','sessionId','personId','personName',
+          'status','updatedAt','updatedBy'
+        ])
+        && get(sessionPath).data.get('congregationId', '') == congregationId
+        && get(personPath).data.get('congregationId', '') == congregationId;
+    }
+
+    function validFieldHopeParticipationUpdate(orgId) {
+      return tenantUnchanged(orgId)
+        && congregationUnchanged()
+        && canOperateFieldProgram(orgId, resource.data.get('congregationId', ''))
+        && request.resource.data.get('sessionId', '') == resource.data.get('sessionId', '')
+        && request.resource.data.get('personId', '') == resource.data.get('personId', '')
+        && request.resource.data.get('personName', '') == resource.data.get('personName', '')
+        && resource.data.get('status', '') == 'invited'
+        && request.resource.data.get('status', '') == 'present'
+        && request.resource.data.get('updatedAt', null) == request.time
+        && request.resource.data.get('updatedBy', '') == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','updatedAt','updatedBy']);
+    }
+
+    function validFieldFirstStepsCreate(orgId, recordId) {
+      let congregationId = request.resource.data.get('congregationId', '');
+      let personId = request.resource.data.get('personId', '');
+      let personPath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/people/$(personId);
+      return tenantCreate(orgId)
+        && recordId == personId
+        && canOperateFieldProgram(orgId, congregationId)
+        && get(personPath).data.get('congregationId', '') == congregationId
+        && request.resource.data.get('personName', '') is string
+        && request.resource.data.get('personName', '').size() <= 120
+        && request.resource.data.get('facilitatorId', '') == request.auth.uid
+        && request.resource.data.get('facilitatorName', '') is string
+        && request.resource.data.get('facilitatorName', '').size() <= 120
+        && request.resource.data.get('meeting', 0) == 1
+        && request.resource.data.get('targetMeetings', 0) == 6
+        && request.resource.data.get('status', '') == 'active'
+        && request.resource.data.get('startedAt', null) == request.time
+        && request.resource.data.get('createdAt', null) == request.time
+        && request.resource.data.get('createdBy', '') == request.auth.uid
+        && request.resource.data.get('lastCompletedMeeting', null) == null
+        && request.resource.data.get('lastCompletedAt', null) == null
+        && request.resource.data.get('updatedAt', null) == request.time
+        && request.resource.data.get('updatedBy', '') == request.auth.uid
+        && request.resource.data.keys().hasOnly([
+          'organizationId','congregationId','personId','personName','facilitatorId','facilitatorName',
+          'meeting','targetMeetings','status','startedAt','createdAt','createdBy',
+          'lastCompletedMeeting','lastCompletedAt','updatedAt','updatedBy'
+        ]);
+    }
+
+    function validFieldFirstStepsUpdate(orgId) {
+      let oldMeeting = resource.data.get('meeting', 1);
+      let newMeeting = request.resource.data.get('meeting', 1);
+      let oldStatus = resource.data.get('status', '');
+      let newStatus = request.resource.data.get('status', '');
+      let advance = oldStatus == 'active'
+        && request.resource.data.get('lastCompletedMeeting', 0) == oldMeeting
+        && request.resource.data.get('lastCompletedAt', null) == request.time
+        && (
+          (oldMeeting < 6 && newMeeting == oldMeeting + 1 && newStatus == 'active')
+          || (oldMeeting == 6 && newMeeting == 6 && newStatus == 'completed')
+        );
+      let pauseResume = newMeeting == oldMeeting
+        && request.resource.data.get('lastCompletedMeeting', null) == resource.data.get('lastCompletedMeeting', null)
+        && request.resource.data.get('lastCompletedAt', null) == resource.data.get('lastCompletedAt', null)
+        && (
+          (oldStatus == 'active' && newStatus == 'paused')
+          || (oldStatus == 'paused' && newStatus == 'active')
+        );
+      return tenantUnchanged(orgId)
+        && congregationUnchanged()
+        && canOperateFieldProgram(orgId, resource.data.get('congregationId', ''))
+        && request.resource.data.get('personId', '') == resource.data.get('personId', '')
+        && request.resource.data.get('personName', '') == resource.data.get('personName', '')
+        && request.resource.data.get('facilitatorId', '') == resource.data.get('facilitatorId', '')
+        && request.resource.data.get('facilitatorName', '') == resource.data.get('facilitatorName', '')
+        && request.resource.data.get('targetMeetings', 0) == 6
+        && newMeeting is number && newMeeting >= 1 && newMeeting <= 6
+        && newStatus in ['active','paused','completed']
+        && request.resource.data.get('updatedAt', null) == request.time
+        && request.resource.data.get('updatedBy', '') == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'meeting','status','lastCompletedMeeting','lastCompletedAt','updatedAt','updatedBy'
+        ])
+        && (advance || pauseResume);
     }
 
     function validAbsenceCareCreate(orgId, careRequestId, congregationId, personId) {
@@ -1744,6 +1909,24 @@ service cloud.firestore {
             && canAccessCongregation(orgId, resource.data.get('congregationId', ''));
           allow create: if validMesaPreparationCreate(orgId, preparationId);
           allow update: if validMesaPreparationUpdate(orgId);
+          allow delete: if false;
+        }
+        match /fieldHopeSessions/{sessionId} {
+          allow read: if canOperateFieldProgram(orgId, resource.data.get('congregationId', ''));
+          allow create: if validFieldHopeSessionCreate(orgId);
+          allow update: if validFieldHopeSessionUpdate(orgId);
+          allow delete: if false;
+        }
+        match /fieldHopeParticipations/{recordId} {
+          allow read: if canOperateFieldProgram(orgId, resource.data.get('congregationId', ''));
+          allow create: if validFieldHopeParticipationCreate(orgId, recordId);
+          allow update: if validFieldHopeParticipationUpdate(orgId);
+          allow delete: if false;
+        }
+        match /fieldFirstSteps/{recordId} {
+          allow read: if canOperateFieldProgram(orgId, resource.data.get('congregationId', ''));
+          allow create: if validFieldFirstStepsCreate(orgId, recordId);
+          allow update: if validFieldFirstStepsUpdate(orgId);
           allow delete: if false;
         }
         match /careRequests/{careRequestId} {

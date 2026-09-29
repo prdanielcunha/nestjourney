@@ -1610,3 +1610,71 @@ describe('Pastoral Handoff Runtime rules', () => {
     )))
   })
 })
+
+
+describe('Manual de Campo field programs', () => {
+  it('lets a scoped coordinator operate Hope Table and First Steps with factual records only', async () => {
+    await seedMembership('coord-field', 'org-a', 'coordinator', ['unit-a'])
+    await environment.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), 'organizations/org-a/products/raiz_e_mesa/people/person-field'), {
+        organizationId: 'org-a', congregationId: 'unit-a', name: 'Pessoa Campo',
+        consent: false, phone: '', preferredContactChannel: '',
+      })
+    })
+    const db = environment.authenticatedContext('coord-field').firestore()
+    const sessionRef = doc(db, 'organizations/org-a/products/raiz_e_mesa/fieldHopeSessions/hope-a')
+    await assertSucceeds(setDoc(sessionRef, {
+      organizationId: 'org-a', congregationId: 'unit-a',
+      themeId: 'mesa-1', title: 'Quando a alma está cansada', scripture: 'Mateus 11:28-30',
+      scheduledFor: Timestamp.fromDate(new Date('2026-10-04T15:00:00Z')),
+      status: 'planned', createdAt: serverTimestamp(), createdBy: 'coord-field',
+      completedAt: null, completedBy: '',
+    }))
+
+    const participationRef = doc(db, 'organizations/org-a/products/raiz_e_mesa/fieldHopeParticipations/hope-a__person-field')
+    await assertSucceeds(setDoc(participationRef, {
+      organizationId: 'org-a', congregationId: 'unit-a',
+      sessionId: 'hope-a', personId: 'person-field', personName: 'Pessoa Campo',
+      status: 'invited', updatedAt: serverTimestamp(), updatedBy: 'coord-field',
+    }))
+    await assertSucceeds(updateDoc(participationRef, {
+      status: 'present', updatedAt: serverTimestamp(), updatedBy: 'coord-field',
+    }))
+    await assertSucceeds(updateDoc(sessionRef, {
+      status: 'completed', completedAt: serverTimestamp(), completedBy: 'coord-field',
+    }))
+
+    const firstRef = doc(db, 'organizations/org-a/products/raiz_e_mesa/fieldFirstSteps/person-field')
+    await assertSucceeds(setDoc(firstRef, {
+      organizationId: 'org-a', congregationId: 'unit-a',
+      personId: 'person-field', personName: 'Pessoa Campo',
+      facilitatorId: 'coord-field', facilitatorName: 'Coordenador',
+      meeting: 1, targetMeetings: 6, status: 'active',
+      startedAt: serverTimestamp(), createdAt: serverTimestamp(), createdBy: 'coord-field',
+      lastCompletedMeeting: null, lastCompletedAt: null,
+      updatedAt: serverTimestamp(), updatedBy: 'coord-field',
+    }))
+    await assertSucceeds(updateDoc(firstRef, {
+      meeting: 2, status: 'active', lastCompletedMeeting: 1, lastCompletedAt: serverTimestamp(),
+      updatedAt: serverTimestamp(), updatedBy: 'coord-field',
+    }))
+  })
+
+  it('denies field-program writes to roles without implementation responsibility and prevents cross-unit writes', async () => {
+    await seedMembership('care-field', 'org-a', 'care', ['unit-a'])
+    await seedMembership('coord-field', 'org-a', 'coordinator', ['unit-a'])
+    const careDb = environment.authenticatedContext('care-field').firestore()
+    const coordDb = environment.authenticatedContext('coord-field').firestore()
+    const payload = {
+      organizationId: 'org-a', themeId: 'mesa-1', title: 'Mesa', scripture: 'Mateus 11',
+      scheduledFor: Timestamp.fromDate(new Date('2026-10-04T15:00:00Z')),
+      status: 'planned', completedAt: null, completedBy: '',
+    }
+    await assertFails(setDoc(doc(careDb, 'organizations/org-a/products/raiz_e_mesa/fieldHopeSessions/denied-role'), {
+      ...payload, congregationId: 'unit-a', createdAt: serverTimestamp(), createdBy: 'care-field',
+    }))
+    await assertFails(setDoc(doc(coordDb, 'organizations/org-a/products/raiz_e_mesa/fieldHopeSessions/denied-unit'), {
+      ...payload, congregationId: 'unit-b', createdAt: serverTimestamp(), createdBy: 'coord-field',
+    }))
+  })
+})
