@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { ArrowRight, BarChart3, BookOpen, ClipboardCheck, History, Route, Settings2, ShieldCheck, Sparkles, UserCog } from 'lucide-react'
+import { ArrowRight, BarChart3, BookOpen, CalendarDays, ClipboardCheck, History, Route, Settings2, ShieldCheck, Sparkles, UserCog } from 'lucide-react'
 import { auth } from './firebase'
 import { canConfigureJourneyPlaybooks, getActiveJourneyOrganizationId, loadJourneyAccess, type JourneyAccessContext } from './journeyRepository'
 import { canViewJourneyReports } from './journeyExperience'
@@ -12,7 +12,7 @@ const copy={
     loading:'Preparando opções…',available:'Disponível',restricted:'Sem acesso neste papel',
     team:'Equipe e papéis',teamDesc:'Frentes, responsabilidades, membros, convites e permissões.',
     implementation:'Implantação',implementationDesc:'Acompanhe preparação, checklist e progresso da implantação.',playbook:'Jornada e playbook',playbookDesc:'Configure etapas, nomes, responsáveis, critérios e modelo de implantação sem mudar código.',
-    reports:'Relatórios',reportsDesc:'Indicadores operacionais objetivos para coordenação e liderança.',
+    reports:'Relatórios',reportsDesc:'Indicadores operacionais objetivos para coordenação e liderança.',fieldGuide:'Manual de Campo',fieldGuideDesc:'Ritmo mensal, relatório semanal, reuniões e conteúdos prontos do Crescimento Saudável 2026.',
     privacy:'Privacidade',privacyDesc:'Solicitações de correção, consentimento, retenção e proteção de dados.',
     audit:'Auditoria',auditDesc:'Histórico factual de ações e mudanças autorizadas.',
     settings:'Configurações',settingsDesc:'Nomes dos módulos e preferências da organização.',
@@ -25,7 +25,7 @@ const copy={
     loading:'Preparing options…',available:'Available',restricted:'Not available for this role',
     team:'Team & roles',teamDesc:'Ministry fronts, responsibilities, members, invitations, and permissions.',
     implementation:'Implementation',implementationDesc:'Follow preparation, checklist, and rollout progress.',playbook:'Journey & playbook',playbookDesc:'Configure stages, names, owners, criteria, and rollout model without changing code.',
-    reports:'Reports',reportsDesc:'Objective operational indicators for coordinators and leaders.',
+    reports:'Reports',reportsDesc:'Objective operational indicators for coordinators and leaders.',fieldGuide:'Field Guide',fieldGuideDesc:'Monthly rhythm, weekly reporting, leadership meetings, and ready-to-use Healthy Growth 2026 material.',
     privacy:'Privacy',privacyDesc:'Correction, consent, retention, and data protection requests.',
     audit:'Audit',auditDesc:'Factual history of authorized actions and changes.',
     settings:'Settings',settingsDesc:'Organization module names and preferences.',
@@ -38,7 +38,7 @@ const copy={
     loading:'Preparando opciones…',available:'Disponible',restricted:'Sin acceso en este papel',
     team:'Equipo y papeles',teamDesc:'Frentes, responsabilidades, miembros, invitaciones y permisos.',
     implementation:'Implementación',implementationDesc:'Acompaña preparación, checklist y progreso.',playbook:'Jornada y playbook',playbookDesc:'Configura etapas, nombres, responsables, criterios y modelo de implementación sin cambiar código.',
-    reports:'Informes',reportsDesc:'Indicadores operativos objetivos para coordinación y liderazgo.',
+    reports:'Informes',reportsDesc:'Indicadores operativos objetivos para coordinación y liderazgo.',fieldGuide:'Manual de Campo',fieldGuideDesc:'Ritmo mensual, informe semanal, reuniones y contenido listo de Crecimiento Saludable 2026.',
     privacy:'Privacidad',privacyDesc:'Solicitudes de corrección, consentimiento, retención y protección de datos.',
     audit:'Auditoría',auditDesc:'Historial factual de acciones y cambios autorizados.',
     settings:'Configuración',settingsDesc:'Nombres de módulos y preferencias de la organización.',
@@ -71,6 +71,7 @@ export default function MorePage(){
     {title:t.implementation,desc:t.implementationDesc,href:'/implementation-runtime',Icon:ClipboardCheck,allowed:Boolean(access?.canManageImplementation)},
     {title:t.playbook,desc:t.playbookDesc,href:'/playbook-studio',Icon:Route,allowed:Boolean(access&&canConfigureJourneyPlaybooks(access))},
     {title:t.reports,desc:t.reportsDesc,href:'/reports',Icon:BarChart3,allowed:Boolean(access&&canViewJourneyReports(access))},
+    {title:t.fieldGuide,desc:t.fieldGuideDesc,href:'/field-guide',Icon:CalendarDays,allowed:Boolean(access&&(canViewJourneyReports(access)||access.canManageImplementation))},
     {title:t.privacy,desc:t.privacyDesc,href:'/governance-runtime?view=privacy',Icon:ShieldCheck,allowed:Boolean(access?.canManagePrivacy)},
     {title:t.audit,desc:t.auditDesc,href:'/governance-runtime?view=audit',Icon:History,allowed:Boolean(access?.canViewGovernance)},
     {title:t.settings,desc:t.settingsDesc,href:'/settings-runtime',Icon:Settings2,allowed:canManageSettings},
@@ -80,7 +81,7 @@ export default function MorePage(){
 
   const visibleCards=cards.filter(item=>item.allowed)
   const groups=[
-    {label:t.operate,items:visibleCards.filter(item=>['/team-runtime','/implementation-runtime','/playbook-studio','/reports'].includes(item.href))},
+    {label:t.operate,items:visibleCards.filter(item=>['/team-runtime','/implementation-runtime','/playbook-studio','/reports','/field-guide'].includes(item.href))},
     {label:t.govern,items:visibleCards.filter(item=>['/governance-runtime?view=privacy','/governance-runtime?view=audit','/settings-runtime'].includes(item.href))},
     {label:t.support,items:visibleCards.filter(item=>['/help','/whats-new'].includes(item.href))},
   ].filter(group=>group.items.length)
