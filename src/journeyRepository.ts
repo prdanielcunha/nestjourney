@@ -915,30 +915,13 @@ export async function ensureDefaultJourneyPlaybook(access: JourneyAccessContext)
     const hasRoadmapFields = data.groupCapacityPolicy && typeof data.groupCapacityPolicy === 'object'
       && Array.isArray(data.stages) && data.stages.every((stage: unknown) => Boolean(stage && typeof stage === 'object' && 'nextAction' in (stage as Record<string, unknown>)))
     if ((!hasStageIndexes || !hasRoadmapFields) && canConfigureJourneyPlaybooks(access)) {
-      await updateDoc(ref, {
-        groupCapacityPolicy: current.groupCapacityPolicy,
-        stages: current.stages,
-        stageIds: current.stages.map((stage) => stage.id),
-        stageRoles: Object.fromEntries(current.stages.map((stage) => [stage.id, stage.responsibleRoles])),
-        updatedAt: serverTimestamp(),
-        updatedBy: access.userId,
-      })
+      await saveJourneyPlaybook(access, current)
     }
     return current
   }
   const fallback = createRaizEMesaPlaybook(access.organizationId)
   if (!canConfigureJourneyPlaybooks(access)) return fallback
-  const batch = writeBatch(firestore)
-  batch.set(ref, {
-    ...fallback,
-    stageIds: fallback.stages.map((stage) => stage.id),
-    stageRoles: Object.fromEntries(fallback.stages.map((stage) => [stage.id, stage.responsibleRoles])),
-    createdAt: serverTimestamp(),
-    createdBy: access.userId,
-    updatedAt: serverTimestamp(),
-    updatedBy: access.userId,
-  })
-  await batch.commit()
+  await saveJourneyPlaybook(access, fallback)
   return fallback
 }
 
