@@ -396,6 +396,52 @@ export interface MesaPreparationRecord {
   updatedBy: string
 }
 
+export interface FieldHopeSessionRecord {
+  id: string
+  organizationId: string
+  congregationId: string
+  themeId: string
+  title: string
+  scripture: string
+  scheduledFor: string
+  status: 'planned' | 'completed'
+  createdAt: string
+  createdBy: string
+  completedAt?: string
+  completedBy?: string
+}
+
+export interface FieldHopeParticipationRecord {
+  id: string
+  organizationId: string
+  congregationId: string
+  sessionId: string
+  personId: string
+  personName?: string
+  status: 'invited' | 'present'
+  updatedAt: string
+  updatedBy: string
+}
+
+export interface FieldFirstStepsRecord {
+  id: string
+  organizationId: string
+  congregationId: string
+  personId: string
+  personName?: string
+  facilitatorId: string
+  facilitatorName?: string
+  meeting: number
+  targetMeetings: number
+  status: 'active' | 'paused' | 'completed'
+  startedAt: string
+  createdBy: string
+  lastCompletedMeeting?: number
+  lastCompletedAt?: string
+  updatedAt?: string
+  updatedBy?: string
+}
+
 export interface JourneyModuleLabels {
   presence?: string
   table?: string
@@ -578,6 +624,9 @@ export type JourneyLiveCollection =
   | 'privacyRequests'
   | 'audit'
   | 'implementationCycles'
+  | 'fieldHopeSessions'
+  | 'fieldHopeParticipations'
+  | 'fieldFirstSteps'
   | 'retentionRequests'
 
 export function subscribeJourneyLiveChanges(input: {
@@ -2486,6 +2535,221 @@ export function careRequestToPromise(request: CareRequestRecord): CarePromise {
     careType: request.careType, createdAt: request.requestedAt, dueAt: request.dueAt, ownerRef: request.ownerRef || undefined,
     evidenceRef: `careRequest:${request.id}`, resolvedAt: request.resolvedAt,
     resolutionEvidenceRef: request.resolvedAt ? `careRequest:${request.id}` : undefined,
+  }
+}
+
+export async function listFieldHopeSessions(organizationId: string, congregationId: string): Promise<FieldHopeSessionRecord[]> {
+  const firestore = requireDb()
+  const snapshot = await getDocs(query(
+    collection(firestore, journeyCollectionPath(organizationId, 'fieldHopeSessions')),
+    where('congregationId', '==', congregationId),
+  ))
+  return snapshot.docs.map((item): FieldHopeSessionRecord => {
+    const data = item.data()
+    return {
+      id: item.id,
+      organizationId,
+      congregationId,
+      themeId: asString(data.themeId),
+      title: asString(data.title),
+      scripture: asString(data.scripture),
+      scheduledFor: toIso(data.scheduledFor),
+      status: data.status === 'completed' ? 'completed' : 'planned',
+      createdAt: toIso(data.createdAt),
+      createdBy: asString(data.createdBy),
+      completedAt: data.completedAt ? toIso(data.completedAt) : undefined,
+      completedBy: asString(data.completedBy) || undefined,
+    }
+  }).sort((a,b)=>Date.parse(b.scheduledFor)-Date.parse(a.scheduledFor))
+}
+
+export async function createFieldHopeSession(input: {
+  access: JourneyAccessContext
+  congregationId: string
+  themeId: string
+  title: string
+  scripture: string
+  scheduledFor: string
+}) {
+  if (!input.access.canManageImplementation && !input.access.broadJourneyAccess) throw new Error('field_program_forbidden')
+  const scheduled = new Date(input.scheduledFor)
+  if (Number.isNaN(scheduled.getTime())) throw new Error('field_session_date_invalid')
+  const firestore = requireDb()
+  const ref = doc(collection(firestore, journeyCollectionPath(input.access.organizationId, 'fieldHopeSessions')))
+  await setDoc(ref, {
+    organizationId: input.access.organizationId,
+    congregationId: input.congregationId,
+    themeId: input.themeId.trim().slice(0, 64),
+    title: input.title.trim().slice(0, 120),
+    scripture: input.scripture.trim().slice(0, 80),
+    scheduledFor: Timestamp.fromDate(scheduled),
+    status: 'planned',
+    createdAt: serverTimestamp(),
+    createdBy: input.access.userId,
+    completedAt: null,
+    completedBy: '',
+  })
+  return ref.id
+}
+
+export async function completeFieldHopeSession(input: {
+  access: JourneyAccessContext
+  session: FieldHopeSessionRecord
+}) {
+  if (!input.access.canManageImplementation && !input.access.broadJourneyAccess) throw new Error('field_program_forbidden')
+  if (input.session.status === 'completed') return
+  const firestore = requireDb()
+  await updateDoc(doc(firestore, `${journeyCollectionPath(input.access.organizationId, 'fieldHopeSessions')}/${input.session.id}`), {
+    status: 'completed',
+    completedAt: serverTimestamp(),
+    completedBy: input.access.userId,
+  })
+}
+
+export async function listFieldHopeParticipations(
+  organizationId: string,
+  congregationId: string,
+  sessionIds?: string[],
+): Promise<FieldHopeParticipationRecord[]> {
+  const firestore = requireDb()
+  const snapshot = await getDocs(query(
+    collection(firestore, journeyCollectionPath(organizationId, 'fieldHopeParticipations')),
+    where('congregationId', '==', congregationId),
+  ))
+  const filter = sessionIds?.length ? new Set(sessionIds) : null
+  return snapshot.docs.map((item): FieldHopeParticipationRecord => {
+    const data = item.data()
+    return {
+      id: item.id,
+      organizationId,
+      congregationId,
+      sessionId: asString(data.sessionId),
+      personId: asString(data.personId),
+      personName: asString(data.personName) || undefined,
+      status: data.status === 'present' ? 'present' : 'invited',
+      updatedAt: toIso(data.updatedAt),
+      updatedBy: asString(data.updatedBy),
+    }
+  }).filter(item => !filter || filter.has(item.sessionId))
+}
+
+export async function setFieldHopeParticipation(input: {
+  access: JourneyAccessContext
+  session: FieldHopeSessionRecord
+  person: JourneyPersonRecord
+  status: 'invited' | 'present'
+}) {
+  if (!input.access.canManageImplementation && !input.access.broadJourneyAccess) throw new Error('field_program_forbidden')
+  const firestore = requireDb()
+  const id = `${input.session.id}__${input.person.id}`
+  const ref = doc(firestore, `${journeyCollectionPath(input.access.organizationId, 'fieldHopeParticipations')}/${id}`)
+  const snapshot = await getDoc(ref)
+  const payload = {
+    organizationId: input.access.organizationId,
+    congregationId: input.session.congregationId,
+    sessionId: input.session.id,
+    personId: input.person.id,
+    personName: input.person.name.slice(0, 120),
+    status: input.status,
+    updatedAt: serverTimestamp(),
+    updatedBy: input.access.userId,
+  }
+  if (snapshot.exists()) await updateDoc(ref, { status: input.status, updatedAt: serverTimestamp(), updatedBy: input.access.userId })
+  else await setDoc(ref, payload)
+  return id
+}
+
+export async function listFieldFirstSteps(access: JourneyAccessContext, congregationId: string): Promise<FieldFirstStepsRecord[]> {
+  if (!access.canManageImplementation && !access.broadJourneyAccess) return []
+  const firestore = requireDb()
+  const snapshot = await getDocs(query(
+    collection(firestore, journeyCollectionPath(access.organizationId, 'fieldFirstSteps')),
+    where('congregationId', '==', congregationId),
+  ))
+  return snapshot.docs.map((item): FieldFirstStepsRecord => {
+    const data = item.data()
+    const rawStatus = asString(data.status)
+    return {
+      id: item.id,
+      organizationId: access.organizationId,
+      congregationId,
+      personId: asString(data.personId),
+      personName: asString(data.personName) || undefined,
+      facilitatorId: asString(data.facilitatorId),
+      facilitatorName: asString(data.facilitatorName) || undefined,
+      meeting: typeof data.meeting === 'number' ? Math.max(1, Math.min(6, Math.floor(data.meeting))) : 1,
+      targetMeetings: 6,
+      status: rawStatus === 'completed' ? 'completed' : rawStatus === 'paused' ? 'paused' : 'active',
+      startedAt: toIso(data.startedAt),
+      createdBy: asString(data.createdBy),
+      lastCompletedMeeting: typeof data.lastCompletedMeeting === 'number' ? data.lastCompletedMeeting : undefined,
+      lastCompletedAt: data.lastCompletedAt ? toIso(data.lastCompletedAt) : undefined,
+      updatedAt: data.updatedAt ? toIso(data.updatedAt) : undefined,
+      updatedBy: asString(data.updatedBy) || undefined,
+    }
+  }).sort((a,b)=>a.status.localeCompare(b.status)||a.meeting-b.meeting)
+}
+
+export async function createFieldFirstSteps(input: {
+  access: JourneyAccessContext
+  congregationId: string
+  person: JourneyPersonRecord
+  facilitatorName?: string
+}) {
+  if (!input.access.canManageImplementation && !input.access.broadJourneyAccess) throw new Error('field_program_forbidden')
+  const firestore = requireDb()
+  const base = collection(firestore, journeyCollectionPath(input.access.organizationId, 'fieldFirstSteps'))
+  const existing = await getDocs(query(base, where('congregationId', '==', input.congregationId)))
+  if (existing.docs.some(item => asString(item.data().personId) === input.person.id && asString(item.data().status) !== 'completed')) {
+    throw new Error('field_first_steps_already_active')
+  }
+  const ref = doc(base)
+  await setDoc(ref, {
+    organizationId: input.access.organizationId,
+    congregationId: input.congregationId,
+    personId: input.person.id,
+    personName: input.person.name.slice(0, 120),
+    facilitatorId: input.access.userId,
+    facilitatorName: String(input.facilitatorName ?? '').trim().slice(0, 120),
+    meeting: 1,
+    targetMeetings: 6,
+    status: 'active',
+    startedAt: serverTimestamp(),
+    createdAt: serverTimestamp(),
+    createdBy: input.access.userId,
+    lastCompletedMeeting: null,
+    lastCompletedAt: null,
+    updatedAt: serverTimestamp(),
+    updatedBy: input.access.userId,
+  })
+  return ref.id
+}
+
+export async function updateFieldFirstSteps(input: {
+  access: JourneyAccessContext
+  record: FieldFirstStepsRecord
+  action: 'advance' | 'pause' | 'resume'
+}) {
+  if (!input.access.canManageImplementation && !input.access.broadJourneyAccess) throw new Error('field_program_forbidden')
+  const firestore = requireDb()
+  const ref = doc(firestore, `${journeyCollectionPath(input.access.organizationId, 'fieldFirstSteps')}/${input.record.id}`)
+  if (input.action === 'advance') {
+    const current = Math.max(1, Math.min(6, input.record.meeting || 1))
+    const completed = current >= 6
+    await updateDoc(ref, {
+      meeting: completed ? 6 : current + 1,
+      status: completed ? 'completed' : 'active',
+      lastCompletedMeeting: current,
+      lastCompletedAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+      updatedBy: input.access.userId,
+    })
+  } else {
+    await updateDoc(ref, {
+      status: input.action === 'pause' ? 'paused' : 'active',
+      updatedAt: serverTimestamp(),
+      updatedBy: input.access.userId,
+    })
   }
 }
 
