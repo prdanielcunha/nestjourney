@@ -37,8 +37,8 @@ const copy={
     implementation:'Implantação',implementationHelp:'Crie fases e checklists para a igreja saber exatamente o que preparar e executar.',
     addPhase:'Adicionar fase',objective:'Objetivo',items:'Checklist — uma tarefa por linha',targetWeek:'Semana alvo',phaseOwners:'Responsáveis pela fase',remove:'Remover',
     indicators:'Indicadores operacionais',routing:'Encaminhamentos permitidos',safe:'Somente sinais factuais e próximos passos. Nada de ranking espiritual, diagnóstico ou inferência íntima.',
-    draft:'Rascunho',activeStatus:'Ativa',saved:'Jornada salva.',activated:'Jornada ativa atualizada.',error:'Não foi possível salvar a jornada.',
-    noAccess:'Somente liderança autorizada pode configurar a jornada.',select:'Escolha uma jornada',empty:'Nenhuma jornada configurada.',
+    draft:'Rascunho',activeStatus:'Ativa',saved:'Jornada salva.',activated:'Jornada ativa atualizada.',error:'Não conseguimos carregar ou salvar a configuração da jornada agora.',retry:'Tentar novamente',
+    noAccess:'Somente liderança autorizada pode configurar a jornada.',select:'Escolha uma jornada',empty:'Preparando a jornada padrão…',
   },
   en:{
     title:'Configure journey',subtitle:'Define how your church names and organizes the journey without changing code, permissions, or rules.',
@@ -50,8 +50,8 @@ const copy={
     implementation:'Implementation',implementationHelp:'Create phases and checklists so the church knows exactly what to prepare and execute.',
     addPhase:'Add phase',objective:'Objective',items:'Checklist — one task per line',targetWeek:'Target week',phaseOwners:'Phase owners',remove:'Remove',
     indicators:'Operational indicators',routing:'Allowed routing',safe:'Factual signals and next steps only. No spiritual ranking, diagnosis, or intimate inference.',
-    draft:'Draft',activeStatus:'Active',saved:'Journey saved.',activated:'Active journey updated.',error:'The journey could not be saved.',
-    noAccess:'Only authorized leadership can configure the journey.',select:'Choose a journey',empty:'No journey configured.',
+    draft:'Draft',activeStatus:'Active',saved:'Journey saved.',activated:'Active journey updated.',error:'We could not load or save the journey configuration right now.',retry:'Try again',
+    noAccess:'Only authorized leadership can configure the journey.',select:'Choose a journey',empty:'Preparing the default journey…',
   },
   es:{
     title:'Configurar jornada',subtitle:'Define cómo tu iglesia nombra y organiza la jornada sin cambiar código, permisos o reglas.',
@@ -63,8 +63,8 @@ const copy={
     implementation:'Implementación',implementationHelp:'Crea fases y listas para que la iglesia sepa exactamente qué preparar y ejecutar.',
     addPhase:'Agregar fase',objective:'Objetivo',items:'Checklist — una tarea por línea',targetWeek:'Semana objetivo',phaseOwners:'Responsables de la fase',remove:'Eliminar',
     indicators:'Indicadores operativos',routing:'Derivaciones permitidas',safe:'Solo señales factuales y próximos pasos. Sin ranking espiritual, diagnóstico ni inferencia íntima.',
-    draft:'Borrador',activeStatus:'Activa',saved:'Jornada guardada.',activated:'Jornada activa actualizada.',error:'No se pudo guardar la jornada.',
-    noAccess:'Solo liderazgo autorizado puede configurar la jornada.',select:'Elige una jornada',empty:'Ninguna jornada configurada.',
+    draft:'Borrador',activeStatus:'Activa',saved:'Jornada guardada.',activated:'Jornada activa actualizada.',error:'No pudimos cargar o guardar la configuración de la jornada ahora.',retry:'Intentar de nuevo',
+    noAccess:'Solo liderazgo autorizado puede configurar la jornada.',select:'Elige una jornada',empty:'Preparando la jornada predeterminada…',
   },
 } as const
 
@@ -124,15 +124,26 @@ export default function PlaybookStudioPage(){
   const [loading,setLoading]=useState(true),[busy,setBusy]=useState(false),[message,setMessage]=useState(''),[error,setError]=useState('')
 
   const reload=useCallback(async(nextAccess:JourneyAccessContext)=>{
-    await ensureDefaultJourneyPlaybook(nextAccess)
-    const [items,active]=await Promise.all([listJourneyPlaybooks(nextAccess),loadActiveJourneyPlaybook(nextAccess)])
-    setPlaybooks(items)
-    setActiveId(active.id)
-    setSelectedId(current=>items.some(item=>item.id===current)?current:active.id)
-    setForm(current=>{
-      const id=current&&items.some(item=>item.id===current.id)?current.id:active.id
-      return items.find(item=>item.id===id)??active
-    })
+    const fallback=createRaizEMesaPlaybook(nextAccess.organizationId)
+    try{
+      await ensureDefaultJourneyPlaybook(nextAccess)
+      const [items,active]=await Promise.all([listJourneyPlaybooks(nextAccess),loadActiveJourneyPlaybook(nextAccess)])
+      const available=items.length?items:[fallback]
+      const resolvedActive=items.length?active:fallback
+      setPlaybooks(available)
+      setActiveId(resolvedActive.id)
+      setSelectedId(current=>available.some(item=>item.id===current)?current:resolvedActive.id)
+      setForm(current=>{
+        const id=current&&available.some(item=>item.id===current.id)?current.id:resolvedActive.id
+        return available.find(item=>item.id===id)??resolvedActive
+      })
+    }catch(cause){
+      setPlaybooks([fallback])
+      setActiveId(fallback.id)
+      setSelectedId(fallback.id)
+      setForm(fallback)
+      throw cause
+    }
   },[])
 
   const bootstrap=useCallback(async()=>{
@@ -182,7 +193,7 @@ export default function PlaybookStudioPage(){
       <div><span className="journey-section-kicker">NestJourney / Playbook Studio</span><h1>{t.title}</h1><p>{t.subtitle}</p></div>
       <div className="playbook-header-actions"><a className="journey-primary-button" href="/more"><ArrowLeft size={16}/>{t.back}</a><select value={locale} onChange={e=>{const next=e.target.value as AppLocale;setLocale(next);persistLocale(next)}}>{(Object.keys(localeLabels) as AppLocale[]).map(id=><option key={id} value={id}>{localeLabels[id]}</option>)}</select></div>
     </header>
-    {error?<div className="settings-error">{error}</div>:null}{message?<div className="settings-success"><Check size={15}/>{message}</div>:null}
+    {error?<div className="settings-error playbook-error"><span>{error}</span><button type="button" onClick={()=>void bootstrap()} disabled={busy}>{t.retry}</button></div>:null}{message?<div className="settings-success"><Check size={15}/>{message}</div>:null}
 
     <section className="journey-section-note"><ShieldCheck size={18}/><p>{t.safe}</p></section>
 
