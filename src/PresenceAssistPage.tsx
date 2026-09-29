@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Check, ChevronLeft, HeartHandshake, ShieldCheck, UserCheck, X } from 'lucide-react'
 import { auth } from './firebase'
+import { withTimeout } from './asyncGuard'
 import { calculatePresenceCoverage, confirmedAbsencePersonIds, type PresenceCheck, type PresenceVerificationState } from './intelligence'
 import {
   claimJourneyPersonBond,
@@ -109,6 +110,9 @@ export default function PresenceAssistPage() {
   const [checks, setChecks] = useState<PresenceCheck[]>([])
   const [query, setQuery] = useState('')
   const [loading, setLoading] = useState(true)
+  const [loadingSlow, setLoadingSlow] = useState(false)
+  const [bootstrapFailed, setBootstrapFailed] = useState(false)
+  const bootstrapRunRef = useRef(0)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [showSession, setShowSession] = useState(false)
@@ -152,25 +156,41 @@ export default function PresenceAssistPage() {
   }, [])
 
   const bootstrap = useCallback(async () => {
+    const runId = ++bootstrapRunRef.current
     setLoading(true)
+    setLoadingSlow(false)
+    setBootstrapFailed(false)
     setError('')
+    const slowTimer = window.setTimeout(() => {
+      if (bootstrapRunRef.current === runId) setLoadingSlow(true)
+    }, 6000)
+
     try {
-      const user = auth?.currentUser
-      const organizationId = getActiveJourneyOrganizationId()
-      if (!user || !organizationId) throw new Error('missing_ecosystem_context')
-      const nextAccess = await loadJourneyAccess(user.uid, organizationId)
-      setAccess(nextAccess)
-      if (!nextAccess.canManagePresence) return
-      const nextCongregations = await listJourneyCongregations(nextAccess)
-      setCongregations(nextCongregations)
-      const unitId = resolveActiveJourneyCongregationId(nextAccess.organizationId, nextCongregations)
-      setCongregationId(unitId)
-      if (unitId) await refreshScope(organizationId, unitId)
+      await withTimeout((async () => {
+        const user = auth?.currentUser
+        const organizationId = getActiveJourneyOrganizationId()
+        if (!user || !organizationId) throw new Error('missing_ecosystem_context')
+
+        const nextAccess = await loadJourneyAccess(user.uid, organizationId)
+        if (bootstrapRunRef.current !== runId) return
+        setAccess(nextAccess)
+        if (!nextAccess.canManagePresence) return
+
+        const nextCongregations = await listJourneyCongregations(nextAccess)
+        if (bootstrapRunRef.current !== runId) return
+        setCongregations(nextCongregations)
+        const unitId = resolveActiveJourneyCongregationId(nextAccess.organizationId, nextCongregations)
+        setCongregationId(unitId)
+        if (unitId) await refreshScope(organizationId, unitId)
+      })(), 10000, 'presence_bootstrap')
     } catch (cause) {
+      if (bootstrapRunRef.current !== runId) return
       console.error('Presence Assist bootstrap failed', cause)
+      setBootstrapFailed(true)
       setError(t.error)
     } finally {
-      setLoading(false)
+      window.clearTimeout(slowTimer)
+      if (bootstrapRunRef.current === runId) setLoading(false)
     }
   }, [refreshScope, t.error])
 
@@ -287,7 +307,20 @@ export default function PresenceAssistPage() {
         :locale==='es'?'Una acción abre el flujo del culto. Desde allí el equipo confirma presencia y registra visitantes.'
         :'Uma ação abre o fluxo do culto. A partir daí a equipe confirma presença e registra visitantes.'
 
-  if (loading) return <main className="presence-assist"><div className="presence-loading">{t.loading}</div></main>
+  if (loading) {
+    const slowMessage = locale === 'en'
+      ? 'This is taking longer than usual. We will stop the attempt automatically instead of leaving you stuck here.'
+      : locale === 'es'
+        ? 'Esto está tardando más de lo normal. Detendremos el intento automáticamente para que no te quedes atrapado aquí.'
+        : 'Está demorando mais que o normal. Vamos encerrar a tentativa automaticamente para você não ficar preso nesta tela.'
+    return <main className="presence-assist"><div className="presence-loading presence-loading-card"><span className="presence-loading-spinner" aria-hidden="true" /><strong>{t.loading}</strong>{loadingSlow ? <p>{slowMessage}</p> : null}</div></main>
+  }
+
+  if (bootstrapFailed && !access) {
+    const title = locale === 'en' ? 'We could not load this church' : locale === 'es' ? 'No pudimos cargar esta iglesia' : 'Não conseguimos carregar esta igreja'
+    const body = locale === 'en' ? 'Your session is safe. Try again to reload your organization, permissions, and people.' : locale === 'es' ? 'Tu sesión está segura. Inténtalo de nuevo para recargar tu organización, permisos y personas.' : 'Sua sessão continua segura. Tente novamente para recarregar a organização, as permissões e as pessoas.'
+    return <main className="presence-assist"><AccessDeniedState locale={locale} title={title} body={body} retryLabel={t.retry} onRetry={() => void bootstrap()} /></main>
+  }
 
   if (!access?.canManagePresence) {
     return <main className="presence-assist"><AccessDeniedState locale={locale} title={t.noAccessTitle} body={t.noAccess} retryLabel={t.retry} onRetry={() => void bootstrap()} /></main>
@@ -370,11 +403,11 @@ export default function PresenceAssistPage() {
     <p className="presence-rule">{t.sourceRule}<br />{t.correctionRule}</p>
   </div>
 
-  {showSession ? <SessionModal close={() => setShowSession(false)} create={async (eventName, expected, minimum) => {
+  {showSession ? <SessionModal close={() => setShowSession(false)} create={async (eventName, expected) => {
     if (!access) return
     setBusy(true); setError('')
     try {
-      await createPresenceSession({ organizationId: access.organizationId, congregationId, actorId: access.userId, eventName, expectedPeopleCount: expected, minimumCoveragePercent: minimum })
+      await createPresenceSession({ organizationId: access.organizationId, congregationId, actorId: access.userId, eventName, expectedPeopleCount: expected, minimumCoveragePercent: 90 })
       setShowSession(false)
       await refreshScope(access.organizationId, congregationId)
     } catch (cause) { console.error(cause); setError(t.error) }
@@ -407,12 +440,60 @@ export default function PresenceAssistPage() {
   </main>
 }
 
-function SessionModal({ close, create, defaultExpected, locale }: { close: () => void; create: (name: string, expected: number, minimum: number) => Promise<void>; defaultExpected: number; locale: AppLocale }) {
+function SessionModal({ close, create, defaultExpected, locale }: { close: () => void; create: (name: string, expected: number) => Promise<void>; defaultExpected: number; locale: AppLocale }) {
   const t = presenceAssistCopy[locale]
   const [name, setName] = useState(`${t.todayEvent} · ${new Date().toLocaleDateString(locale)}`)
-  const [expected, setExpected] = useState(Math.max(1, defaultExpected))
-  const [minimum, setMinimum] = useState(90)
-  return <div className="presence-modal-backdrop" onMouseDown={close}><section className="presence-panel presence-modal" role="dialog" aria-modal="true" aria-labelledby="presence-session-title" onMouseDown={(event) => event.stopPropagation()}><div className="presence-session-head"><h2 id="presence-session-title">{t.newSession}</h2><button className="presence-button" onClick={close} aria-label={t.cancel}><X size={17} /></button></div><div className="presence-modal-grid"><label className="presence-field"><span>{t.sessionName}</span><input value={name} onChange={(event) => setName(event.target.value)} /></label><label className="presence-field"><span>{t.expected}</span><input type="number" min={1} value={expected} onChange={(event) => setExpected(Number(event.target.value))} /></label><label className="presence-field"><span>{t.minimumCoverage}</span><input type="number" min={0} max={100} value={minimum} onChange={(event) => setMinimum(Number(event.target.value))} /></label></div><div className="presence-modal-actions"><button className="presence-button" onClick={close}>{t.cancel}</button><button className="presence-button primary" disabled={!name.trim() || expected < 1} onClick={() => void create(name, expected, minimum)}>{t.open}</button></div></section></div>
+  const expected = Math.max(0, defaultExpected)
+  const copy = locale === 'en'
+    ? {
+        title: 'Record attendance',
+        subtitle: 'Confirm the service and start marking who is present.',
+        event: 'Service or gathering',
+        people: 'People to check',
+        peopleHint: 'This list is prepared automatically from the people in this campus.',
+        start: 'Start recording attendance',
+      }
+    : locale === 'es'
+      ? {
+          title: 'Registrar asistencia',
+          subtitle: 'Confirma el culto y comienza a marcar quién está presente.',
+          event: 'Culto o encuentro',
+          people: 'Personas para revisar',
+          peopleHint: 'Esta lista se prepara automáticamente con las personas de esta sede.',
+          start: 'Comenzar a registrar asistencia',
+        }
+      : {
+          title: 'Registrar presença',
+          subtitle: 'Confirme o culto e comece a marcar quem está presente.',
+          event: 'Culto ou encontro',
+          people: 'Pessoas para conferir',
+          peopleHint: 'Essa lista é preparada automaticamente com as pessoas desta unidade.',
+          start: 'Começar a registrar presença',
+        }
+
+  return <div className="presence-modal-backdrop" onMouseDown={close}>
+    <section className="presence-panel presence-modal" role="dialog" aria-modal="true" aria-labelledby="presence-session-title" onMouseDown={(event) => event.stopPropagation()}>
+      <div className="presence-modal-header">
+        <div><h2 id="presence-session-title">{copy.title}</h2><p>{copy.subtitle}</p></div>
+        <button className="presence-modal-close" type="button" onClick={close} aria-label={t.cancel}><X size={20} /></button>
+      </div>
+      <div className="presence-modal-grid">
+        <label className="presence-field">
+          <span>{copy.event}</span>
+          <input value={name} onChange={(event) => setName(event.target.value)} autoFocus />
+        </label>
+        <div className="presence-field presence-readonly-field">
+          <span>{copy.people}</span>
+          <strong>{expected}</strong>
+          <small>{copy.peopleHint}</small>
+        </div>
+      </div>
+      <div className="presence-modal-actions">
+        <button className="presence-button" onClick={close}>{t.cancel}</button>
+        <button className="presence-button primary" disabled={!name.trim()} onClick={() => void create(name, expected)}>{copy.start}</button>
+      </div>
+    </section>
+  </div>
 }
 
 function VisitorModal({ close, save, locale }: { close: () => void; save: (name: string, phone: string, consent: boolean, preferredContactChannel: 'whatsapp' | 'phone' | undefined, claimBond: boolean) => Promise<void>; locale: AppLocale }) {
