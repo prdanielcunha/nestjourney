@@ -26,10 +26,9 @@ import {
   type JourneyPastoralHandoff,
   type JourneyPersonRecord,
   type MesaParticipationRecord,
-  type PresenceCheck,
   type PresenceSessionRecord,
 } from './journeyRepository'
-import { evaluateCarePromise } from './intelligence'
+import { evaluateCarePromise, type PresenceCheck } from './intelligence'
 import { canViewJourneyReports } from './journeyExperience'
 import { getInitialLocale, localeLabels, persistLocale, type AppLocale } from './i18n'
 import {
