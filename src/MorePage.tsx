@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { ArrowRight, BarChart3, BookOpen, CalendarDays, ClipboardCheck, History, Route, Settings2, ShieldCheck, Sparkles, UserCog } from 'lucide-react'
+import { ArrowRight, BarChart3, BookOpen, CalendarDays, ClipboardCheck, History, Route, Settings2, ShieldCheck, Sparkles, Upload, UserCog } from 'lucide-react'
 import { auth } from './firebase'
 import { canConfigureJourneyPlaybooks, getActiveJourneyOrganizationId, loadJourneyAccess, type JourneyAccessContext } from './journeyRepository'
 import { canViewJourneyReports } from './journeyExperience'
@@ -11,6 +11,7 @@ const copy={
     title:'Gestão',subtitle:'Equipe, implantação, leitura operacional e governança ficam aqui — sem ocupar o caminho do cuidado diário.',
     loading:'Preparando opções…',available:'Disponível',restricted:'Sem acesso neste papel',
     team:'Equipe e papéis',teamDesc:'Frentes, responsabilidades, membros, convites e permissões.',
+    importList:'Importar inscrições',importListDesc:'Cole planilha ou texto, ou envie uma imagem, para distribuir pessoas nas áreas escolhidas sem criar logins ou escalas.',
     implementation:'Implantação',implementationDesc:'Acompanhe preparação, checklist e progresso da implantação.',playbook:'Jornada e playbook',playbookDesc:'Configure etapas, nomes, responsáveis, critérios e modelo de implantação sem mudar código.',
     reports:'Relatórios',reportsDesc:'Indicadores operacionais objetivos para coordenação e liderança.',fieldGuide:'Manual de Campo',fieldGuideDesc:'Ritmo mensal, relatório semanal, reuniões e conteúdos prontos do Crescimento Saudável 2026.',
     privacy:'Privacidade',privacyDesc:'Solicitações de correção, consentimento, retenção e proteção de dados.',
@@ -24,6 +25,7 @@ const copy={
     title:'Management',subtitle:'Team, implementation, operational insight, and governance live here — outside the daily care workflow.',
     loading:'Preparing options…',available:'Available',restricted:'Not available for this role',
     team:'Team & roles',teamDesc:'Ministry fronts, responsibilities, members, invitations, and permissions.',
+    importList:'Import sign-ups',importListDesc:'Paste a spreadsheet or text, or send an image, to distribute people into selected areas without creating logins or schedules.',
     implementation:'Implementation',implementationDesc:'Follow preparation, checklist, and rollout progress.',playbook:'Journey & playbook',playbookDesc:'Configure stages, names, owners, criteria, and rollout model without changing code.',
     reports:'Reports',reportsDesc:'Objective operational indicators for coordinators and leaders.',fieldGuide:'Field Guide',fieldGuideDesc:'Monthly rhythm, weekly reporting, leadership meetings, and ready-to-use Healthy Growth 2026 material.',
     privacy:'Privacy',privacyDesc:'Correction, consent, retention, and data protection requests.',
@@ -37,6 +39,7 @@ const copy={
     title:'Gestión',subtitle:'Equipo, implementación, lectura operativa y gobernanza quedan aquí, fuera del trabajo diario de cuidado.',
     loading:'Preparando opciones…',available:'Disponible',restricted:'Sin acceso en este papel',
     team:'Equipo y papeles',teamDesc:'Frentes, responsabilidades, miembros, invitaciones y permisos.',
+    importList:'Importar inscripciones',importListDesc:'Pega una hoja o texto, o envía una imagen, para distribuir personas en las áreas elegidas sin crear accesos ni escalas.',
     implementation:'Implementación',implementationDesc:'Acompaña preparación, checklist y progreso.',playbook:'Jornada y playbook',playbookDesc:'Configura etapas, nombres, responsables, criterios y modelo de implementación sin cambiar código.',
     reports:'Informes',reportsDesc:'Indicadores operativos objetivos para coordinación y liderazgo.',fieldGuide:'Manual de Campo',fieldGuideDesc:'Ritmo mensual, informe semanal, reuniones y contenido listo de Crecimiento Saludable 2026.',
     privacy:'Privacidad',privacyDesc:'Solicitudes de corrección, consentimiento, retención y protección de datos.',
@@ -68,6 +71,7 @@ export default function MorePage(){
   const canManageSettings=Boolean(access&&(access.isSystemAdmin||access.isOwner||['owner','admin','pastor'].includes(access.organizationRole)||access.role==='pastor'))
   const cards=[
     {title:t.team,desc:t.teamDesc,href:'/team-runtime',Icon:UserCog,allowed:Boolean(access&&(access.isSystemAdmin||access.isOwner||access.canManageImplementation||access.canViewGovernance))},
+    {title:t.importList,desc:t.importListDesc,href:'/team-import',Icon:Upload,allowed:Boolean(access?.canManageImplementation)},
     {title:t.implementation,desc:t.implementationDesc,href:'/implementation-runtime',Icon:ClipboardCheck,allowed:Boolean(access?.canManageImplementation)},
     {title:t.playbook,desc:t.playbookDesc,href:'/playbook-studio',Icon:Route,allowed:Boolean(access&&canConfigureJourneyPlaybooks(access))},
     {title:t.reports,desc:t.reportsDesc,href:'/reports',Icon:BarChart3,allowed:Boolean(access&&canViewJourneyReports(access))},
@@ -81,7 +85,7 @@ export default function MorePage(){
 
   const visibleCards=cards.filter(item=>item.allowed)
   const groups=[
-    {label:t.operate,items:visibleCards.filter(item=>['/team-runtime','/implementation-runtime','/playbook-studio','/reports','/field-guide'].includes(item.href))},
+    {label:t.operate,items:visibleCards.filter(item=>['/team-runtime','/team-import','/implementation-runtime','/playbook-studio','/reports','/field-guide'].includes(item.href))},
     {label:t.govern,items:visibleCards.filter(item=>['/governance-runtime?view=privacy','/governance-runtime?view=audit','/settings-runtime'].includes(item.href))},
     {label:t.support,items:visibleCards.filter(item=>['/help','/whats-new'].includes(item.href))},
   ].filter(group=>group.items.length)
