@@ -294,6 +294,56 @@ service cloud.firestore {
           || (congregationId == '' && isOrgAdmin(orgId))
         );
     }
+    function validTeamInterestCommon(orgId) {
+      let congregationId = request.resource.data.get('congregationId', '');
+      let name = request.resource.data.get('name', '');
+      let normalizedName = request.resource.data.get('normalizedName', '');
+      let areas = request.resource.data.get('areas', []);
+      return request.resource.data.get('organizationId', '') == orgId
+        && congregationId is string
+        && congregationId.size() > 0
+        && name is string
+        && name.size() > 0
+        && name.size() <= 120
+        && normalizedName is string
+        && normalizedName.size() > 0
+        && normalizedName.size() <= 140
+        && areas is list
+        && areas.size() <= 6
+        && areas.hasOnly(['presence', 'table', 'care', 'house', 'discipleship', 'support'])
+        && request.resource.data.get('active', false) is bool
+        && request.resource.data.get('source', '') in ['paste', 'image', 'manual']
+        && request.resource.data.get('needsReview', false) is bool
+        && request.resource.data.get('importBatchId', '') is string
+        && request.resource.data.get('updatedAt', null) == request.time
+        && request.resource.data.get('updatedBy', '') == request.auth.uid;
+    }
+    function validTeamInterestCreate(orgId) {
+      let congregationId = request.resource.data.get('congregationId', '');
+      return canOperateFieldProgram(orgId, congregationId)
+        && tenantCreate(orgId)
+        && request.resource.data.keys().hasOnly([
+          'organizationId', 'congregationId', 'name', 'normalizedName', 'areas',
+          'active', 'source', 'needsReview', 'importBatchId',
+          'createdAt', 'createdBy', 'updatedAt', 'updatedBy'
+        ])
+        && validTeamInterestCommon(orgId)
+        && request.resource.data.get('createdAt', null) == request.time
+        && request.resource.data.get('createdBy', '') == request.auth.uid;
+    }
+    function validTeamInterestUpdate(orgId) {
+      let congregationId = resource.data.get('congregationId', '');
+      return canOperateFieldProgram(orgId, congregationId)
+        && tenantUnchanged(orgId)
+        && congregationUnchanged()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'name', 'normalizedName', 'areas', 'active', 'source',
+          'needsReview', 'importBatchId', 'updatedAt', 'updatedBy'
+        ])
+        && request.resource.data.get('createdAt', null) == resource.data.get('createdAt', null)
+        && request.resource.data.get('createdBy', '') == resource.data.get('createdBy', '')
+        && validTeamInterestCommon(orgId);
+    }
     function validPastoralHandoffCreate(orgId, handoffId) {
       let sourceCareRequestId = request.resource.data.get('sourceCareRequestId', '');
       let source = getAfter(/databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/careRequests/$(sourceCareRequestId)).data;
@@ -1853,6 +1903,12 @@ service cloud.firestore {
             && canAccessCongregation(orgId, resource.data.get('congregationId', ''))
             && personBondUnchanged()
             && validPrivacyPersonUpdate(orgId, personId);
+          allow delete: if false;
+        }
+        match /teamInterests/{interestId} {
+          allow read: if canOperateFieldProgram(orgId, resource.data.get('congregationId', ''));
+          allow create: if validTeamInterestCreate(orgId);
+          allow update: if validTeamInterestUpdate(orgId);
           allow delete: if false;
         }
         match /presenceSessions/{sessionId} {

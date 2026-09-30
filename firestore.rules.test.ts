@@ -1678,3 +1678,69 @@ describe('Manual de Campo field programs', () => {
     }))
   })
 })
+
+
+describe('Bulk team interest import rules', () => {
+  function teamInterest(actorId: string, congregationId = 'unit-a', areas = ['presence', 'support']) {
+    return {
+      organizationId: 'org-a',
+      congregationId,
+      name: 'Andrea de Oliveira',
+      normalizedName: 'andrea de oliveira',
+      areas,
+      active: true,
+      source: 'paste',
+      needsReview: false,
+      importBatchId: 'team-import-test',
+      createdAt: serverTimestamp(),
+      createdBy: actorId,
+      updatedAt: serverTimestamp(),
+      updatedBy: actorId,
+    }
+  }
+
+  it('lets a scoped coordinator import, read, update and archive team interests without deleting them', async () => {
+    await seedMembership('coord-import', 'org-a', 'coordinator', ['unit-a'])
+    const db = environment.authenticatedContext('coord-import').firestore()
+    const ref = doc(db, 'organizations/org-a/products/raiz_e_mesa/teamInterests/andrea')
+
+    await assertSucceeds(setDoc(ref, teamInterest('coord-import')))
+    await assertSucceeds(getDoc(ref))
+    await assertSucceeds(updateDoc(ref, {
+      name: 'Andrea de Oliveira',
+      normalizedName: 'andrea de oliveira',
+      areas: ['support'],
+      active: false,
+      needsReview: false,
+      updatedAt: serverTimestamp(),
+      updatedBy: 'coord-import',
+    }))
+    await assertFails(deleteDoc(ref))
+  })
+
+  it('denies import to unrelated roles and outside the assigned congregation', async () => {
+    await seedMembership('care-import', 'org-a', 'care', ['unit-a'])
+    await seedMembership('coord-import-scope', 'org-a', 'coordinator', ['unit-a'])
+
+    const careDb = environment.authenticatedContext('care-import').firestore()
+    await assertFails(setDoc(
+      doc(careDb, 'organizations/org-a/products/raiz_e_mesa/teamInterests/care-denied'),
+      teamInterest('care-import'),
+    ))
+
+    const coordDb = environment.authenticatedContext('coord-import-scope').firestore()
+    await assertFails(setDoc(
+      doc(coordDb, 'organizations/org-a/products/raiz_e_mesa/teamInterests/cross-unit'),
+      teamInterest('coord-import-scope', 'unit-b'),
+    ))
+  })
+
+  it('accepts only the known ministry interest codes', async () => {
+    await seedMembership('coord-import-area', 'org-a', 'coordinator', ['unit-a'])
+    const db = environment.authenticatedContext('coord-import-area').firestore()
+    await assertFails(setDoc(
+      doc(db, 'organizations/org-a/products/raiz_e_mesa/teamInterests/invalid-area'),
+      teamInterest('coord-import-area', 'unit-a', ['finance']),
+    ))
+  })
+})
