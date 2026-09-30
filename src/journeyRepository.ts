@@ -8,6 +8,7 @@ import { createRaizEMesaPlaybook, JOURNEY_PLAYBOOK_DEFAULT_ID, normalizeJourneyP
 import { planFollowupOutcome, type FollowupNextActionCode, type FollowupOutcomeCode } from './followup'
 import { calculatePresenceCoverage, canUseAbsenceEvidence, type CarePromise, type PresenceCheck, type PresenceSession, type PresenceSource, type PresenceVerificationState } from './intelligence'
 import { evaluateAuthorizedContact, normalizeGroupCapacity, type GroupCapacityPolicy, type PreferredContactChannel } from './roadmapReadiness'
+import type { TeamInterestArea } from './teamBulkImport'
 
 const HUB_API_BASE = (import.meta.env.VITE_MILLIONSNEST_URL || 'https://www.millionsnest.com').replace(/\/$/, '')
 const SYSTEM_ROLES = new Set(['ceo', 'global_admin', 'ecosystem_owner', 'founder'])
@@ -213,6 +214,31 @@ export interface JourneyOrganizationMember {
   journeyRole: string
   congregationIds: string[]
   status: string
+}
+
+export type JourneyTeamInterestSource = 'paste' | 'image' | 'manual'
+
+export interface JourneyTeamInterestRecord {
+  id: string
+  organizationId: string
+  congregationId: string
+  name: string
+  normalizedName: string
+  areas: TeamInterestArea[]
+  active: boolean
+  source: JourneyTeamInterestSource
+  needsReview: boolean
+  importBatchId?: string
+  createdAt?: string
+  createdBy?: string
+  updatedAt?: string
+  updatedBy?: string
+}
+
+export interface JourneyTeamInterestDraft {
+  name: string
+  areas: TeamInterestArea[]
+  needsReview?: boolean
 }
 
 export interface PresencePerson {
@@ -1161,6 +1187,186 @@ export async function listJourneyPeople(organizationId: string, congregationId: 
       createdAt: data.createdAt ? toIso(data.createdAt) : undefined,
     }
   }).sort((a, b) => a.name.localeCompare(b.name))
+}
+
+function normalizeJourneyTeamInterestName(value: string) {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLocaleLowerCase('pt-BR')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+    .replace(/\s+/g, ' ')
+}
+
+function canManageJourneyTeamInterests(access: JourneyAccessContext) {
+  return access.isSystemAdmin || access.isOwner || access.canManageImplementation
+}
+
+function assertJourneyTeamInterestScope(access: JourneyAccessContext, congregationId: string) {
+  if (!canManageJourneyTeamInterests(access)) throw new Error('team_interest_forbidden')
+  if (
+    !access.broadJourneyAccess
+    && !access.isSystemAdmin
+    && !access.congregationIds.includes(congregationId)
+  ) throw new Error('team_interest_scope_forbidden')
+}
+
+export async function listJourneyTeamInterests(
+  access: JourneyAccessContext,
+  congregationId: string,
+): Promise<JourneyTeamInterestRecord[]> {
+  assertJourneyTeamInterestScope(access, congregationId)
+  const firestore = requireDb()
+  const snapshot = await getDocs(query(
+    collection(firestore, journeyCollectionPath(access.organizationId, 'teamInterests')),
+    where('congregationId', '==', congregationId),
+  ))
+
+  return snapshot.docs.map((item): JourneyTeamInterestRecord => {
+    const data = item.data()
+    const areas = Array.isArray(data.areas)
+      ? data.areas.filter((area): area is TeamInterestArea => ['presence','table','care','house','discipleship','support'].includes(String(area)))
+      : []
+    return {
+      id: item.id,
+      organizationId: access.organizationId,
+      congregationId,
+      name: asString(data.name) || '—',
+      normalizedName: asString(data.normalizedName),
+      areas,
+      active: data.active !== false,
+      source: data.source === 'image' ? 'image' : data.source === 'manual' ? 'manual' : 'paste',
+      needsReview: Boolean(data.needsReview),
+      importBatchId: asString(data.importBatchId) || undefined,
+      createdAt: data.createdAt ? toIso(data.createdAt) : undefined,
+      createdBy: asString(data.createdBy) || undefined,
+      updatedAt: data.updatedAt ? toIso(data.updatedAt) : undefined,
+      updatedBy: asString(data.updatedBy) || undefined,
+    }
+  }).sort((a, b) => a.name.localeCompare(b.name))
+}
+
+export async function importJourneyTeamInterests(input: {
+  access: JourneyAccessContext
+  congregationId: string
+  source: JourneyTeamInterestSource
+  rows: JourneyTeamInterestDraft[]
+}) {
+  assertJourneyTeamInterestScope(input.access, input.congregationId)
+  if (input.rows.length === 0) throw new Error('team_interest_rows_required')
+  if (input.rows.length > 200) throw new Error('team_interest_batch_too_large')
+
+  const cleaned = input.rows.map((row) => ({
+    name: row.name.trim().slice(0, 120),
+    normalizedName: normalizeJourneyTeamInterestName(row.name).slice(0, 140),
+    areas: [...new Set(row.areas.filter((area) => ['presence','table','care','house','discipleship','support'].includes(area)))].slice(0, 6) as TeamInterestArea[],
+    needsReview: Boolean(row.needsReview),
+  })).filter((row) => row.name && row.normalizedName)
+
+  if (!cleaned.length) throw new Error('team_interest_rows_required')
+
+  const existing = await listJourneyTeamInterests(input.access, input.congregationId)
+  const existingByName = new Map(existing.map((record) => [record.normalizedName || normalizeJourneyTeamInterestName(record.name), record]))
+  const firestore = requireDb()
+  const batch = writeBatch(firestore)
+  const importBatchId = `team-import-${Date.now().toString(36)}-${input.access.userId.slice(0, 8)}`
+  let created = 0
+  let updated = 0
+
+  for (const row of cleaned) {
+    const current = existingByName.get(row.normalizedName)
+    if (current) {
+      const mergedAreas = [...new Set([...current.areas, ...row.areas])] as TeamInterestArea[]
+      batch.update(
+        doc(firestore, `${journeyCollectionPath(input.access.organizationId, 'teamInterests')}/${current.id}`),
+        {
+          name: row.name,
+          normalizedName: row.normalizedName,
+          areas: mergedAreas,
+          active: true,
+          source: input.source,
+          needsReview: row.needsReview || mergedAreas.length === 0,
+          importBatchId,
+          updatedAt: serverTimestamp(),
+          updatedBy: input.access.userId,
+        },
+      )
+      updated += 1
+      continue
+    }
+
+    const ref = doc(collection(firestore, journeyCollectionPath(input.access.organizationId, 'teamInterests')))
+    batch.set(ref, {
+      organizationId: input.access.organizationId,
+      congregationId: input.congregationId,
+      name: row.name,
+      normalizedName: row.normalizedName,
+      areas: row.areas,
+      active: true,
+      source: input.source,
+      needsReview: row.needsReview || row.areas.length === 0,
+      importBatchId,
+      createdAt: serverTimestamp(),
+      createdBy: input.access.userId,
+      updatedAt: serverTimestamp(),
+      updatedBy: input.access.userId,
+    })
+    existingByName.set(row.normalizedName, {
+      id: ref.id,
+      organizationId: input.access.organizationId,
+      congregationId: input.congregationId,
+      name: row.name,
+      normalizedName: row.normalizedName,
+      areas: row.areas,
+      active: true,
+      source: input.source,
+      needsReview: row.needsReview || row.areas.length === 0,
+    })
+    created += 1
+  }
+
+  const auditRef = doc(collection(firestore, journeyCollectionPath(input.access.organizationId, 'audit')))
+  batch.set(auditRef, {
+    organizationId: input.access.organizationId,
+    congregationId: input.congregationId,
+    actorId: input.access.userId,
+    action: 'team_interest.bulk_import',
+    targetRef: `teamImport:${importBatchId}`,
+    createdAt: serverTimestamp(),
+  })
+
+  await batch.commit()
+  return { created, updated, total: created + updated, importBatchId }
+}
+
+export async function updateJourneyTeamInterest(input: {
+  access: JourneyAccessContext
+  record: JourneyTeamInterestRecord
+  name: string
+  areas: TeamInterestArea[]
+  active?: boolean
+  needsReview?: boolean
+}) {
+  assertJourneyTeamInterestScope(input.access, input.record.congregationId)
+  if (input.record.organizationId !== input.access.organizationId) throw new Error('team_interest_tenant_mismatch')
+  const name = input.name.trim().slice(0, 120)
+  if (!name) throw new Error('team_interest_name_required')
+  const normalizedName = normalizeJourneyTeamInterestName(name).slice(0, 140)
+  const areas = [...new Set(input.areas.filter((area) => ['presence','table','care','house','discipleship','support'].includes(area)))].slice(0, 6) as TeamInterestArea[]
+  const firestore = requireDb()
+  await updateDoc(
+    doc(firestore, `${journeyCollectionPath(input.access.organizationId, 'teamInterests')}/${input.record.id}`),
+    {
+      name,
+      normalizedName,
+      areas,
+      active: input.active ?? input.record.active,
+      needsReview: input.needsReview ?? areas.length === 0,
+      updatedAt: serverTimestamp(),
+      updatedBy: input.access.userId,
+    },
+  )
 }
 
 export async function listJourneyGroups(organizationId: string, congregationId: string): Promise<JourneyGroupRecord[]> {
