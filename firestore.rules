@@ -302,7 +302,6 @@ service cloud.firestore {
       return request.resource.data.get('organizationId', '') == orgId
         && congregationId is string
         && congregationId.size() > 0
-        && canAccessCongregation(orgId, congregationId)
         && name is string
         && name.size() > 0
         && name.size() <= 120
@@ -320,7 +319,8 @@ service cloud.firestore {
         && request.resource.data.get('updatedBy', '') == request.auth.uid;
     }
     function validTeamInterestCreate(orgId) {
-      return canManageImplementation(orgId)
+      let congregationId = request.resource.data.get('congregationId', '');
+      return canOperateFieldProgram(orgId, congregationId)
         && tenantCreate(orgId)
         && request.resource.data.keys().hasOnly([
           'organizationId', 'congregationId', 'name', 'normalizedName', 'areas',
@@ -332,7 +332,8 @@ service cloud.firestore {
         && request.resource.data.get('createdBy', '') == request.auth.uid;
     }
     function validTeamInterestUpdate(orgId) {
-      return canManageImplementation(orgId)
+      let congregationId = resource.data.get('congregationId', '');
+      return canOperateFieldProgram(orgId, congregationId)
         && tenantUnchanged(orgId)
         && congregationUnchanged()
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
@@ -1905,8 +1906,7 @@ service cloud.firestore {
           allow delete: if false;
         }
         match /teamInterests/{interestId} {
-          allow read: if canManageImplementation(orgId)
-            && canAccessCongregation(orgId, resource.data.get('congregationId', ''));
+          allow read: if canOperateFieldProgram(orgId, resource.data.get('congregationId', ''));
           allow create: if validTeamInterestCreate(orgId);
           allow update: if validTeamInterestUpdate(orgId);
           allow delete: if false;
