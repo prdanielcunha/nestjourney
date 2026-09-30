@@ -229,7 +229,7 @@ function parseFreeLine(line: string, sourceLine: number) {
   const clean = sanitizeName(line)
   if (!clean) return null
 
-  const separatorMatch = clean.match(/\s(?:-|–|—|:)\s/)
+  const separatorMatch = clean.match(/\s(?:-|–|—)\s|:\s*/)
   if (separatorMatch?.index !== undefined) {
     const left = clean.slice(0, separatorMatch.index)
     const right = clean.slice(separatorMatch.index + separatorMatch[0].length)
