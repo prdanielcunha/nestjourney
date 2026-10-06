@@ -42,7 +42,7 @@ export default function JourneyJoinPage(){
   const locale=getInitialLocale()
   const t=copy[locale]
   const [state,setState]=useState<'joining'|'success'|'error'>('joining')
-  const [message,setMessage]=useState(t.joiningHelp)
+  const [message,setMessage]=useState<string>(t.joiningHelp)
 
   useEffect(()=>{
     let disposed=false
