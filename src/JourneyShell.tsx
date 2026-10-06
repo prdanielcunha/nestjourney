@@ -17,6 +17,7 @@ import {
 import { canOpenJourneyArea, canViewJourneyPeople, canViewJourneyVision, resolveJourneyResponsibility } from './journeyExperience'
 import { getInitialLocale, localeLabels, persistLocale, type AppLocale } from './i18n'
 import { useJourneyLabels } from './journeyLabels'
+import { isJourneyInvitationPath } from './journeyInvitation'
 import './JourneyShell.css'
 
 type NavItem={
@@ -263,6 +264,8 @@ export function JourneyShell({children}:{children:ReactNode}){
     setAccessOpen(false)
     window.location.reload()
   }
+
+  if(isJourneyInvitationPath(pathname))return <>{children}</>
 
   return <div className={'journey-app-frame'+(collapsed?' sidebar-collapsed':'')}>
     {!online?<div className="journey-network-banner" role="status"><CloudOff size={15}/><span>{t.offline}</span></div>:null}
