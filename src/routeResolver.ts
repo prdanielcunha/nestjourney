@@ -1,5 +1,6 @@
 export type JourneyRoute =
   | 'today'
+  | 'join'
   | 'areas'
   | 'mesa'
   | 'vision'
@@ -30,7 +31,9 @@ function normalizePathname(pathname: string) {
 }
 
 export function resolveJourneyRoute(pathname: string): JourneyRoute {
-  switch (normalizePathname(pathname)) {
+  const normalized=normalizePathname(pathname)
+  if(/^\/join\/[A-Za-z0-9_-]{1,128}$/.test(normalized))return 'join'
+  switch (normalized) {
     case '/areas':
       return 'areas'
     case '/mesa-runtime':
