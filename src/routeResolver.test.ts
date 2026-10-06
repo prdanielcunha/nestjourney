@@ -11,6 +11,11 @@ describe('NestJourney route resolver', () => {
     expect(resolveJourneyRoute('/legacy/')).toBe('today')
   })
 
+  it('resolves secure invitation deep links', () => {
+    expect(resolveJourneyRoute('/join/org-123')).toBe('join')
+    expect(resolveJourneyRoute('/join/org_ABC/')).toBe('join')
+  })
+
   it('preserves every real runtime deep link', () => {
     expect(resolveJourneyRoute('/presence-assist')).toBe('presence')
     expect(resolveJourneyRoute('/care-integrity')).toBe('care')
