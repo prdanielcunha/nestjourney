@@ -18,6 +18,7 @@ import { useJourneyLabels } from './journeyLabels'
 import { GuidedEmptyState } from './GuidedEmptyState'
 import { emptyGuidance } from './emptyGuidance'
 import { JourneyAreaFocus } from './JourneyAreaFocus'
+import { JourneyInviteModal } from './JourneyInviteModal'
 import './TeamSetupPage.css'
 
 const HUB_MEMBERS_URL='https://www.millionsnest.com/dashboard/organization/members'
@@ -66,7 +67,7 @@ function responsibilityCopy(locale:AppLocale){
 const copy={
   'pt-BR':{
     title:'Equipe & Papéis',subtitle:'Defina claramente quem faz o quê. Cada pessoa entra no NestJourney vendo somente o trabalho que depende dela.',
-    back:'Início',loading:'Carregando equipe…',yourAccess:'Seu acesso no NestJourney',role:'Função no NestJourney',
+    back:'Início',loading:'Carregando equipe…',yourAccess:'Seu acesso no NestJourney',role:'Função no NestJourney',invite:'Convidar pessoa',
     full:'Acesso amplo',yes:'Permitido',no:'Sem acesso',members:'Membros & Convites',roles:'Cargos da organização',
     hubNote:'Identidade, convites e cargos da organização continuam no MillionsNest Hub. Aqui você define a responsabilidade operacional específica do NestJourney.',
     fronts:'Frentes do projeto',frontsDesc:'Estrutura inicial baseada nos manuais do Raiz e Mesa. Comece pequeno e aumente conforme a cultura amadurecer.',
@@ -86,7 +87,7 @@ const copy={
   },
   en:{
     title:'Team & Roles',subtitle:'Define clearly who does what. Each person enters NestJourney seeing only the work that depends on them.',
-    back:'Home',loading:'Loading team…',yourAccess:'Your NestJourney access',role:'NestJourney responsibility',
+    back:'Home',loading:'Loading team…',yourAccess:'Your NestJourney access',role:'NestJourney responsibility',invite:'Invite person',
     full:'Broad access',yes:'Allowed',no:'No access',members:'Members & Invites',roles:'Organization roles',
     hubNote:'Identity, invitations, and organization roles stay in MillionsNest Hub. Here you define each person’s NestJourney operational responsibility.',
     fronts:'Ministry fronts',frontsDesc:'Initial structure based on the Raiz e Mesa manuals. Start small and expand as the culture matures.',
@@ -106,7 +107,7 @@ const copy={
   },
   es:{
     title:'Equipo & Papeles',subtitle:'Define con claridad quién hace qué. Cada persona entra en NestJourney viendo solo el trabajo que depende de ella.',
-    back:'Inicio',loading:'Cargando equipo…',yourAccess:'Tu acceso en NestJourney',role:'Función en NestJourney',
+    back:'Inicio',loading:'Cargando equipo…',yourAccess:'Tu acceso en NestJourney',role:'Función en NestJourney',invite:'Invitar persona',
     full:'Acceso amplio',yes:'Permitido',no:'Sin acceso',members:'Miembros & Invitaciones',roles:'Cargos de la organización',
     hubNote:'Identidad, invitaciones y cargos siguen en MillionsNest Hub. Aquí defines la responsabilidad operativa específica de NestJourney.',
     fronts:'Frentes del proyecto',frontsDesc:'Estructura inicial basada en los manuales de Raiz e Mesa. Empieza pequeño y crece con la cultura.',
@@ -144,6 +145,7 @@ export default function TeamSetupPage(){
   const [savedId,setSavedId]=useState('')
   const [loading,setLoading]=useState(true)
   const [error,setError]=useState('')
+  const [inviteOpen,setInviteOpen]=useState(false)
 
   const canAssign=Boolean(access&&(access.isSystemAdmin||access.isOwner||['owner','admin'].includes(access.organizationRole)))
 
@@ -249,6 +251,7 @@ export default function TeamSetupPage(){
   return <main className="team-setup"><div className="team-shell">
     <header className="team-topbar"><div><span className="team-kicker">NestJourney / Team</span><h1>{t.title}</h1><p>{t.subtitle}</p></div><select value={locale} onChange={e=>{const next=e.target.value as AppLocale;setLocale(next);persistLocale(next)}}>{(Object.keys(localeLabels) as AppLocale[]).map(id=><option value={id} key={id}>{localeLabels[id]}</option>)}</select></header>
     {error?<div className="team-error">{error}</div>:null}
+    {access&&canAssign?<JourneyInviteModal access={access} locale={locale} open={inviteOpen} onClose={()=>setInviteOpen(false)}/>:null}
 
     <JourneyAreaFocus
       locale={locale}
@@ -261,7 +264,8 @@ export default function TeamSetupPage(){
         {label:locale==='en'?'Broad access':locale==='es'?'Acceso amplio':'Acesso amplo',value:orgWideMembers,tone:orgWideMembers?'good':'muted'},
       ]:capabilities.slice(0,3).map(([label,allowed])=>({label:String(label),value:allowed?t.yes:t.no,tone:allowed?'good' as const:'muted' as const}))}
       actions={canAssign?[
-        {label:unassignedMembers>0?(locale==='en'?'Assign responsibilities':locale==='es'?'Asignar responsabilidades':'Atribuir responsabilidades'):(locale==='en'?'Review team':locale==='es'?'Revisar equipo':'Revisar equipe'),href:'#team-responsibilities',primary:true},
+        {label:t.invite,onClick:()=>setInviteOpen(true),primary:true},
+        {label:unassignedMembers>0?(locale==='en'?'Assign responsibilities':locale==='es'?'Asignar responsabilidades':'Atribuir responsabilidades'):(locale==='en'?'Review team':locale==='es'?'Revisar equipo':'Revisar equipe'),href:'#team-responsibilities'},
         {label:t.members,href:HUB_MEMBERS_URL},
       ]:[{label:t.members,href:HUB_MEMBERS_URL,primary:true}]}
     />
