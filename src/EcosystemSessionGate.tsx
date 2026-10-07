@@ -13,6 +13,7 @@ import {
 import { auth, db, firebaseConfigured } from './firebase'
 import { OperationTimeoutError, withTimeout } from './asyncGuard'
 import { resolveJourneyDirectEntry, type JourneyEntryOrganization } from './directEntry'
+import { isJourneyInvitationPath } from './journeyInvitation'
 
 const HUB_LAUNCH_URL = 'https://www.millionsnest.com/apps/nestjourney/launch'
 const RECOVERY_KEY = 'mn_sso_recovery_nestjourney'
@@ -155,6 +156,11 @@ export function EcosystemSessionGate({ children }: { children: ReactNode }) {
     if (!db) throw new Error('firebase_unavailable')
     setState('checking')
     setMessage(c.checking)
+
+    if (isJourneyInvitationPath(window.location.pathname)) {
+      setState('ready')
+      return
+    }
 
     if (!navigator.onLine) throw new Error('offline')
     const eligible = await withTimeout(resolveJourneyDirectEntry(db, user), 15000, 'access')

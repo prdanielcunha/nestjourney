@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "appId": "nestjourney",
+  "name": "NestJourney",
+  "ai": {
+    "enabled": true,
+    "tasks": [
+      "journey.form.extract",
+      "journey.followup.summarize"
+    ],
+    "defaultSensitivity": "P3_SENSITIVE"
+  },
+  "locales": [
+    "pt-BR",
+    "en",
+    "es"
+  ],
+  "owner": {
+    "repository": "prdanielcunha/nestjourney"
+  }
+}

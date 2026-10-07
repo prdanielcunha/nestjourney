@@ -27,6 +27,7 @@ const ImplementationRuntimePage = lazy(() => import('./ImplementationRuntimePage
 const PlaybookStudioPage = lazy(() => import('./PlaybookStudioPage.tsx'))
 const TeamSetupPage = lazy(() => import('./TeamSetupPage.tsx'))
 const TeamBulkImportPage = lazy(() => import('./TeamBulkImportPage.tsx'))
+const JourneyJoinPage = lazy(() => import('./JourneyJoinPage.tsx'))
 const JourneySettingsPage = lazy(() => import('./JourneySettingsPage.tsx'))
 const GovernanceRuntimePage = lazy(() => import('./GovernanceRuntimePage.tsx'))
 const PastoralHandoffPage = lazy(() => import('./PastoralHandoffPage.tsx'))
@@ -75,6 +76,8 @@ function JourneyRoute() {
   }, [])
 
   switch (resolveJourneyRoute(pathname)) {
+    case 'join':
+      return <JourneyJoinPage />
     case 'areas':
       return <AreasPage />
     case 'mesa':
