@@ -198,6 +198,17 @@ jobs:
           curl --fail --silent --show-error --location --retry 6 --retry-delay 2 "https://mn-nestjourney-555464791734.web.app$ASSET_PATH" -o /tmp/firebase-app.js
           grep -Fq 'millionsnest.firebaseapp.com' /tmp/firebase-app.js
           grep -Fq '555464791734' /tmp/firebase-app.js
-          curl --fail --silent --show-error --location --retry 6 --retry-delay 2 "https://nestjourney.millionsnest.com/" -o /tmp/custom-domain-index.html
-          grep -Fq '<title>NestJourney | MillionsNest</title>' /tmp/custom-domain-index.html
+          custom_ready=0
+          for attempt in $(seq 1 20); do
+            if curl --fail --silent --show-error --location --connect-timeout 10 --max-time 30 \
+              "https://nestjourney.millionsnest.com/?smoke=${GITHUB_SHA}-${attempt}" \
+              -o /tmp/custom-domain-index.html 2>/dev/null \
+              && grep -Fq '<title>NestJourney | MillionsNest</title>' /tmp/custom-domain-index.html; then
+              custom_ready=1
+              break
+            fi
+            echo "Waiting for NestJourney custom domain propagation (attempt ${attempt}/20)" >&2
+            sleep 5
+          done
+          test "$custom_ready" = "1"
           echo "FIREBASE_HOSTING_SMOKE_OK=NestJourney"
