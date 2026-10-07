@@ -38,6 +38,23 @@ jobs:
       VITE_FIREBASE_APP_ID: "1:555464791734:web:3059e8ac2b8089a1767817"
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Detect Firestore Rules changes
+        id: rules_changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          changed=true
+          if [ "${{ github.event_name }}" = "push" ]; then
+            before="${{ github.event.before }}"
+            if [ -n "$before" ] && ! [[ "$before" =~ ^0+$ ]]; then
+              git fetch --no-tags --depth=1 origin "$before"
+              if git diff --quiet "$before" "${GITHUB_SHA}" -- firestore.rules; then
+                changed=false
+              fi
+            fi
+          fi
+          echo "changed=$changed" >> "$GITHUB_OUTPUT"
+          echo "FIRESTORE_RULES_CHANGED=$changed"
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: 22
@@ -61,6 +78,7 @@ jobs:
       - name: Validate
         run: npm run check
       - name: Deploy Firestore Rules
+        if: steps.rules_changes.outputs.changed == 'true'
         shell: bash
         run: |
           set -uo pipefail
