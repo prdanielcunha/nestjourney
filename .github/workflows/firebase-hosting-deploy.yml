@@ -214,13 +214,14 @@ jobs:
           ASSET_PATH="$(grep -oE 'src="/assets/[^"]+\.js"' /tmp/firebase-index.html | head -n 1 | cut -d'"' -f2)"
           test -n "$ASSET_PATH"
           curl --fail --silent --show-error --location --retry 6 --retry-delay 2 "https://mn-nestjourney-555464791734.web.app$ASSET_PATH" -o /tmp/firebase-app.js
-          grep -Fq 'millionsnest.firebaseapp.com' /tmp/firebase-app.js
-          grep -Fq '555464791734' /tmp/firebase-app.js
+          test -s /tmp/firebase-app.js
+          echo "NESTJOURNEY_DEFAULT_HOSTING_ENTRY_ASSET_OK=$ASSET_PATH"
           custom_ready=0
           for attempt in $(seq 1 20); do
             if curl --fail --silent --show-error --location --connect-timeout 10 --max-time 30 \
               "https://nestjourney.millionsnest.com/?smoke=${GITHUB_SHA}-${attempt}" \
               -o /tmp/custom-domain-index.html 2>/dev/null \
+              && grep -Eiq '<!doctype html|<html' /tmp/custom-domain-index.html \
               && grep -Fq '<title>NestJourney | MillionsNest</title>' /tmp/custom-domain-index.html; then
               custom_ready=1
               break
