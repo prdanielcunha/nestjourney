@@ -13,6 +13,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@millionsnest/ai": "https://github.com/prdanielcunha/NestAI/releases/download/sdk-v0.2.0/millionsnest-ai-0.2.0.tgz",
     "firebase": "^12.18.0",
     "lucide-react": "^1.39.0",
     "react": "^19.2.8",
