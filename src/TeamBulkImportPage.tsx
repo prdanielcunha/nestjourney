@@ -4,6 +4,7 @@ import {
   Pencil, Save, ShieldCheck, Sparkles, Upload, UserRoundCheck, UsersRound, X,
 } from 'lucide-react'
 import { auth } from './firebase'
+import { extractJourneyTeamListImage, journeyExtractionToReviewText } from './nestAi'
 import {
   getActiveJourneyOrganizationId,
   importJourneyTeamInterests,
@@ -47,7 +48,7 @@ const copy = {
     unassigned: 'Revisar / sem área', edit: 'Editar', editTitle: 'Editar inscrição', cancel: 'Cancelar', save: 'Salvar alterações',
     archive: 'Arquivar da lista', saving: 'Salvando…', privacyTitle: 'Importação segura',
     privacy: 'Este recurso registra somente nome, unidade e áreas de interesse. Não cria login, convite, escala, permissão ou prontuário pastoral. Registros repetidos são mesclados em vez de duplicados.',
-    imagePrivacy: 'A imagem é lida no navegador para extrair texto e sempre passa por revisão antes de qualquer gravação.',
+    imagePrivacy: 'A imagem é processada somente para extrair candidatos e sempre passa por revisão antes de qualquer gravação.',
     empty: 'Ainda não há inscrições importadas nesta unidade.', error: 'Não foi possível concluir a operação.',
     noRows: 'Não encontrei pessoas nessa lista. Confira o formato e tente novamente.',
     headerDetected: 'Cabeçalho de planilha reconhecido.', needsReview: 'Confira este registro antes de importar.',
@@ -68,7 +69,7 @@ const copy = {
     unassigned: 'Review / no area', edit: 'Edit', editTitle: 'Edit sign-up', cancel: 'Cancel', save: 'Save changes',
     archive: 'Archive from list', saving: 'Saving…', privacyTitle: 'Safe import',
     privacy: 'This feature stores only name, campus, and areas of interest. It does not create logins, invitations, schedules, permissions, or pastoral case files. Repeated records are merged instead of duplicated.',
-    imagePrivacy: 'The image is read in the browser to extract text and always goes through review before anything is saved.',
+    imagePrivacy: 'The image is processed only to extract candidates and always goes through review before anything is saved.',
     empty: 'There are no imported sign-ups for this campus yet.', error: 'The operation could not be completed.',
     noRows: 'I could not find people in this list. Check the format and try again.',
     headerDetected: 'Spreadsheet header recognized.', needsReview: 'Review this record before importing.',
@@ -89,7 +90,7 @@ const copy = {
     unassigned: 'Revisar / sin área', edit: 'Editar', editTitle: 'Editar inscripción', cancel: 'Cancelar', save: 'Guardar cambios',
     archive: 'Archivar de la lista', saving: 'Guardando…', privacyTitle: 'Importación segura',
     privacy: 'Este recurso guarda solo nombre, sede y áreas de interés. No crea login, invitación, escala, permiso ni expediente pastoral. Los registros repetidos se mezclan en lugar de duplicarse.',
-    imagePrivacy: 'La imagen se lee en el navegador para extraer texto y siempre pasa por revisión antes de guardar.',
+    imagePrivacy: 'La imagen se procesa solo para extraer candidatos y siempre pasa por revisión antes de guardar.',
     empty: 'Todavía no hay inscripciones importadas en esta sede.', error: 'No se pudo completar la operación.',
     noRows: 'No encontré personas en esta lista. Revisa el formato e inténtalo de nuevo.',
     headerDetected: 'Encabezado de hoja reconocido.', needsReview: 'Revisa este registro antes de importar.',
@@ -187,28 +188,48 @@ export default function TeamBulkImportPage() {
   async function readImage(file: File) {
     if (!file.type.startsWith('image/')) return
     setOcrBusy(true)
-    setOcrProgress(0)
+    setOcrProgress(5)
     setError('')
     setNotice('')
     try {
-      const module = await import(/* @vite-ignore */ OCR_MODULE_URL) as {
-        recognize: (
-          image: File,
-          language: string,
-          options?: { logger?: (message: { status?: string; progress?: number }) => void },
-        ) => Promise<{ data: { text: string } }>
-      }
-      const result = await module.recognize(file, 'por', {
-        logger: (message) => {
-          if (typeof message.progress === 'number') setOcrProgress(Math.round(message.progress * 100))
-        },
+      if (!access?.organizationId || !congregationId) throw new Error('missing_ecosystem_context')
+      const extraction = await extractJourneyTeamListImage({
+        file,
+        organizationId: access.organizationId,
+        congregationId,
+        locale,
       })
-      const text = result.data.text.trim()
+      setOcrProgress(90)
+      const text = journeyExtractionToReviewText(extraction).trim()
+      if (!text) throw new Error('NESTJOURNEY_EMPTY_FORM_EXTRACTION')
       setSourceText(text)
       analyze(text, 'image')
-    } catch (cause) {
-      console.error('Image OCR failed', cause)
-      setError(t.ocrFailed)
+      setOcrProgress(100)
+    } catch (nestAiCause) {
+      // Graceful zero-cost fallback: OCR remains local in the browser. It never
+      // registers or persists a person; the deterministic parser + human review
+      // remain the authority before commit.
+      console.warn('NestAI image extraction unavailable; using local OCR fallback', nestAiCause)
+      try {
+        const module = await import(/* @vite-ignore */ OCR_MODULE_URL) as {
+          recognize: (
+            image: File,
+            language: string,
+            options?: { logger?: (message: { status?: string; progress?: number }) => void },
+          ) => Promise<{ data: { text: string } }>
+        }
+        const result = await module.recognize(file, 'por', {
+          logger: (message) => {
+            if (typeof message.progress === 'number') setOcrProgress(Math.round(message.progress * 100))
+          },
+        })
+        const text = result.data.text.trim()
+        setSourceText(text)
+        analyze(text, 'image')
+      } catch (fallbackCause) {
+        console.error('Image OCR failed', fallbackCause)
+        setError(t.ocrFailed)
+      }
     } finally {
       setOcrBusy(false)
     }
