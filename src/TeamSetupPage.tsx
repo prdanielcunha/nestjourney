@@ -209,7 +209,7 @@ export default function TeamSetupPage(){
   function setPrimaryFront(memberId:string,front:ServiceFront){
     const team=drafts[memberId]?.team
     if(!team)return
-    setTeamDraft(memberId,{primaryArea:front,teamRole:front==='support'&&team.teamRole==='leader'?'auxiliary':team.teamRole})
+    setTeamDraft(memberId,{primaryArea:front,teamRole:front==='support'&&team.teamRole==='leader'?'auxiliary':team.teamRole,supportAreas:team.supportAreas.filter(area=>area!==front)})
   }
   function toggleHelpFront(memberId:string,front:WorkFront){
     const team=drafts[memberId]?.team
