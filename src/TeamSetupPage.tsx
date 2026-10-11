@@ -19,17 +19,16 @@ import { GuidedEmptyState } from './GuidedEmptyState'
 import { emptyGuidance } from './emptyGuidance'
 import { JourneyAreaFocus } from './JourneyAreaFocus'
 import { JourneyInviteModal } from './JourneyInviteModal'
+import { SERVICE_FRONTS, SERVICE_WORK_FRONTS, SERVICE_TEAM_ROLES, SERVICE_FRONT_LABELS, SERVICE_TEAM_ROLE_LABELS,
+  teamFromLegacy, parseJourneyServiceTeam, legacyResponsibilityForTeam,
+  type JourneyServiceTeam, type ServiceFront, type ServiceTeamRole, type WorkFront,
+} from './journeyServiceTeams'
 import './TeamSetupPage.css'
 
 const HUB_MEMBERS_URL='https://www.millionsnest.com/dashboard/organization/members'
 const HUB_API_BASE=(import.meta.env.VITE_MILLIONSNEST_URL||'https://www.millionsnest.com').replace(/\/$/,'')
 
-type Responsibility='member'|'presence_host'|'mesa_team'|'caregiver'|'group_leader'|'discipler'|'coordinator'|'pastor'
-type ResponsibilityDraft={responsibility:Responsibility}
-
-const responsibilityOrder:Responsibility[]=[
-  'member','presence_host','mesa_team','caregiver','group_leader','discipler','coordinator','pastor',
-]
+type ResponsibilityDraft={team:JourneyServiceTeam}
 
 function responsibilityCopy(locale:AppLocale){
   if(locale==='en')return{
@@ -167,7 +166,7 @@ export default function TeamSetupPage(){
         setDrafts(Object.fromEntries(nextMembers.map(member=>[
           member.id,
           {
-            responsibility:(responsibilityOrder.includes(member.journeyRole as Responsibility)?member.journeyRole:'member') as Responsibility,
+            team:teamFromLegacy(member.journeyRole,member.nestJourneyTeam),
           },
         ])))
       }
@@ -182,6 +181,9 @@ export default function TeamSetupPage(){
     {icon:HeartHandshake,title:careName,description:t.careDesc,size:t.careSize},
     {icon:House,title:groupsName,description:t.housesDesc,size:t.housesSize},
     {icon:Leaf,title:rootName,description:t.rootDesc,size:t.rootSize},
+    {icon:HeartHandshake,title:SERVICE_FRONT_LABELS[locale].support,
+      description:locale==='en'?'Helps wherever needed without leading another team.':locale==='es'?'Ayuda donde hace falta, sin asumir liderazgo.':'Ajuda qualquer frente de serviço, sem assumir liderança.',
+      size:locale==='en'?'On request · no administrative access':locale==='es'?'Bajo solicitud · sin acceso administrativo':'Sob solicitação · sem acesso administrativo'},
   ]
   const capabilities=access?[
     [t.people,access.canManagePeople||access.broadJourneyAccess],
@@ -196,12 +198,23 @@ export default function TeamSetupPage(){
   ]:[]
 
 
-  function setResponsibility(memberId:string,responsibility:Responsibility){
+  function setTeamDraft(memberId:string,changes:Partial<JourneyServiceTeam>){
     setSavedId('')
-    setDrafts(current=>({
-      ...current,
-      [memberId]:{responsibility},
-    }))
+    setDrafts(current=>{
+      const team=current[memberId]?.team
+      if(!team)return current
+      return {...current,[memberId]:{team:{...team,...changes}}}
+    })
+  }
+  function setPrimaryFront(memberId:string,front:ServiceFront){
+    const team=drafts[memberId]?.team
+    if(!team)return
+    setTeamDraft(memberId,{primaryArea:front,teamRole:front==='support'&&team.teamRole==='leader'?'auxiliary':team.teamRole})
+  }
+  function toggleHelpFront(memberId:string,front:WorkFront){
+    const team=drafts[memberId]?.team
+    if(!team)return
+    setTeamDraft(memberId,{supportAreas:team.supportAreas.includes(front)?team.supportAreas.filter(a=>a!==front):[...team.supportAreas,front]})
   }
 
   async function saveResponsibility(memberId:string){
@@ -209,6 +222,8 @@ export default function TeamSetupPage(){
     const user=auth?.currentUser
     const draft=drafts[memberId]
     if(!user||!draft)return
+    const validTeam=parseJourneyServiceTeam(draft.team)
+    if(!validTeam){setError(t.error);return}
     setSavingId(memberId);setSavedId('');setError('')
     try{
       const token=await user.getIdToken()
@@ -217,14 +232,15 @@ export default function TeamSetupPage(){
         {
           method:'PATCH',
           headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},
-          body:JSON.stringify({responsibility:draft.responsibility}),
+          body:JSON.stringify({responsibility:legacyResponsibilityForTeam(validTeam),nestJourneyTeam:validTeam}),
         },
       )
       const data=await response.json().catch(()=>({}))
       if(!response.ok||data?.success!==true)throw new Error(data?.reasonCode||'RESPONSIBILITY_UPDATE_FAILED')
       setMembers(current=>current.map(member=>member.id===memberId?{
         ...member,
-        journeyRole:draft.responsibility,
+        journeyRole:legacyResponsibilityForTeam(validTeam),
+        nestJourneyTeam:validTeam,
       }:member))
       setSavedId(memberId)
     }catch(cause){console.error(cause);setError(t.error)}
@@ -233,7 +249,7 @@ export default function TeamSetupPage(){
 
   const empty=emptyGuidance(locale,'team_no_members')
   const orgWideMembers=members.filter(member=>['owner','admin'].includes(member.organizationRole)).length
-  const unassignedMembers=members.filter(member=>!['owner','admin'].includes(member.organizationRole)&&(!member.journeyRole||member.journeyRole==='member')).length
+  const unassignedMembers=members.filter(member=>!['owner','admin'].includes(member.organizationRole)&&!member.nestJourneyTeam&&(!member.journeyRole||member.journeyRole==='member')).length
   const assignedMembers=Math.max(0,members.length-orgWideMembers-unassignedMembers)
   const focusTitle=!canAssign
     ?(locale==='en'?'Your access is managed by the organization':locale==='es'?'Tu acceso es gestionado por la organización':'Seu acesso é gerenciado pela organização')
@@ -275,18 +291,36 @@ export default function TeamSetupPage(){
       <div className="team-member-list">
         {members.map(member=>{
           const orgWide=['owner','admin'].includes(member.organizationRole)
-          const draft=drafts[member.id]??{responsibility:'member' as Responsibility}
-          const roleMeta=responsibilities[draft.responsibility]
-          const changed=!orgWide&&draft.responsibility!==member.journeyRole
+          const draft=drafts[member.id]??{team:teamFromLegacy(member.journeyRole,member.nestJourneyTeam)}
+          const team=draft.team
+          const roleMeta=responsibilities[legacyResponsibilityForTeam(team)]
+          const teamSaved=teamFromLegacy(member.journeyRole,member.nestJourneyTeam)
+          const changed=!orgWide&&JSON.stringify(team)!==JSON.stringify(teamSaved)
+          const canChooseLeader=canAssign
           return <article className="team-member-card" key={member.id}>
             <div className="team-member-identity"><span className="team-member-avatar">{member.name.split(' ').filter(Boolean).map(part=>part[0]).slice(0,2).join('').toUpperCase()}</span><div><strong>{member.name}</strong><small>{member.email||member.organizationRole}</small></div></div>
             {orgWide?<div className="team-org-wide"><ShieldCheck size={17}/><div><strong>{t.orgAccess}</strong><small>{t.orgAccessDesc}</small></div></div>:<>
               <div className="team-role-editor">
-                <label><span>{t.role}</span><select value={draft.responsibility} disabled={savingId===member.id} onChange={e=>setResponsibility(member.id,e.target.value as Responsibility)}>{responsibilityOrder.map(role=><option key={role} value={role}>{responsibilities[role][0]}</option>)}</select></label>
-                <p>{roleMeta[1]}</p>
+                <label><span>{locale==='en'?'Primary service team':locale==='es'?'Equipo principal':'Frente principal de serviço'}</span>
+                  <select value={team.primaryArea} disabled={savingId===member.id} onChange={e=>setPrimaryFront(member.id,e.target.value as ServiceFront)}>
+                    {SERVICE_FRONTS.map(front=><option key={front} value={front}>{SERVICE_FRONT_LABELS[locale][front]}</option>)}
+                  </select></label>
+                <label><span>{locale==='en'?'Team role':locale==='es'?'Papel en el equipo':'Papel na equipe'}</span>
+                  <select value={team.teamRole} disabled={savingId===member.id} onChange={e=>setTeamDraft(member.id,{teamRole:e.target.value as ServiceTeamRole,otherLabel:undefined})}>
+                    {SERVICE_TEAM_ROLES.filter(role=>role!=='leader'||(team.primaryArea!=='support'&&canChooseLeader)).map(role=><option key={role} value={role}>{SERVICE_TEAM_ROLE_LABELS[locale][role]}</option>)}
+                  </select></label>
+                {team.teamRole==='other'?<label><span>{locale==='en'?'Specify function':locale==='es'?'Especifique la función':'Qual função?'}</span>
+                  <input maxLength={80} value={team.otherLabel||''} onChange={e=>setTeamDraft(member.id,{otherLabel:e.target.value})}/></label>:null}
+                <fieldset className="journey-team-help"><legend>{locale==='en'?'Can also help in':locale==='es'?'También puede apoyar':'Também pode apoiar'}</legend>
+                  <div>{SERVICE_WORK_FRONTS.filter(front=>front!==team.primaryArea).map(front=><label key={front}>
+                    <input type="checkbox" disabled={savingId===member.id} checked={team.supportAreas.includes(front)} onChange={()=>toggleHelpFront(member.id,front)}/>
+                    <span>{SERVICE_FRONT_LABELS[locale][front]}</span>
+                  </label>)}</div>
+                </fieldset>
+                <p>{team.primaryArea==='support'?(locale==='en'?'Support does not grant leadership or unrestricted access.':locale==='es'?'Apoyo no otorga liderazgo ni acceso general.':'Apoio não concede liderança nem acesso amplo.'):roleMeta[1]}</p>
               </div>
               <div className="team-scope-editor readonly"><span>{t.scope}</span><div>{member.congregationIds.length?member.congregationIds.map(id=><span className="team-scope-chip" key={id}>{congregations.find(unit=>unit.id===id)?.name||id}</span>):<span className="team-scope-chip muted">—</span>}</div><small>{t.scopeHint}</small></div>
-              <div className="team-member-actions"><span>{savedId===member.id?t.saved:''}</span><button className="team-save-button" disabled={!changed||savingId===member.id} onClick={()=>void saveResponsibility(member.id)}><Save size={14}/>{savingId===member.id?t.saving:t.save}</button></div>
+              <div className="team-member-actions"><span>{savedId===member.id?t.saved:''}</span><button className="team-save-button" disabled={!changed||savingId===member.id||!parseJourneyServiceTeam(team)} onClick={()=>void saveResponsibility(member.id)}><Save size={14}/>{savingId===member.id?t.saving:t.save}</button></div>
             </>}
           </article>
         })}
