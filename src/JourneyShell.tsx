@@ -177,7 +177,7 @@ export function JourneyShell({children}:{children:ReactNode}){
     {href:'/care-integrity',label:names.care,description:t.careDesc,icon:HeartHandshake,enabled:a=>canOpenJourneyArea(a,'care')},
     {href:'/groups-runtime',label:names.groups,description:t.groupsDesc,icon:House,enabled:a=>canOpenJourneyArea(a,'groups')},
     {href:'/discipleship-runtime',label:names.root,description:t.rootDesc,icon:Leaf,enabled:a=>canOpenJourneyArea(a,'discipleship')},
-    {href:'/support-runtime',label:t.support,description:t.supportDesc,icon:HeartHandshake,enabled:a=>Boolean(a.isSystemAdmin||a.isOwner||['owner','admin'].includes(a.organizationRole)||a.nestJourneyTeam?.primaryArea==='support'||a.nestJourneyTeam?.supportAreas.length||a.nestJourneyTeam?.teamRole==='leader'||(!a.nestJourneyTeam&&['presence_host','mesa_team','caregiver','group_leader','discipler'].includes(a.role)))},
+    {href:'/support-runtime',label:t.support,description:t.supportDesc,icon:HeartHandshake,enabled:a=>Boolean(a.isSystemAdmin||a.isOwner||['owner','admin'].includes(a.organizationRole)||Boolean(a.nestJourneyTeam)||(!a.nestJourneyTeam&&['presence_host','mesa_team','caregiver','group_leader','discipler'].includes(a.role)))},
   ]
 
   const visiblePrimary=primary.filter(item=>!item.enabled||Boolean(access&&item.enabled(access)))
