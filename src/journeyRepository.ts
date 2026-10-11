@@ -9,6 +9,7 @@ import { planFollowupOutcome, type FollowupNextActionCode, type FollowupOutcomeC
 import { calculatePresenceCoverage, canUseAbsenceEvidence, type CarePromise, type PresenceCheck, type PresenceSession, type PresenceSource, type PresenceVerificationState } from './intelligence'
 import { evaluateAuthorizedContact, normalizeGroupCapacity, type GroupCapacityPolicy, type PreferredContactChannel } from './roadmapReadiness'
 import type { TeamInterestArea } from './teamBulkImport'
+import { parseJourneyServiceTeam, type JourneyServiceTeam } from './journeyServiceTeams'
 
 const HUB_API_BASE = (import.meta.env.VITE_MILLIONSNEST_URL || 'https://www.millionsnest.com').replace(/\/$/, '')
 const SYSTEM_ROLES = new Set(['ceo', 'global_admin', 'ecosystem_owner', 'founder'])
@@ -174,6 +175,7 @@ export interface JourneyAccessContext {
   organizationRole: string
   permissions: Record<string, boolean>
   congregationIds: string[]
+  nestJourneyTeam?: JourneyServiceTeam
   isSystemAdmin: boolean
   isOwner: boolean
   canManagePresence: boolean
@@ -212,6 +214,7 @@ export interface JourneyOrganizationMember {
   email?: string
   organizationRole: string
   journeyRole: string
+  nestJourneyTeam?: JourneyServiceTeam
   congregationIds: string[]
   status: string
 }
@@ -767,6 +770,7 @@ export async function listJourneyOrganizationMembers(access: JourneyAccessContex
       email: asString(data.email) || undefined,
       organizationRole: asString(data.organizationRole || data.role) || 'member',
       journeyRole: asString(data.journeyRole) || 'member',
+      nestJourneyTeam: parseJourneyServiceTeam(data.nestJourneyTeam) || undefined,
       congregationIds: asStringArray(data.congregationIds),
       status: asString(data.status) || 'active',
     }
@@ -828,6 +832,7 @@ export async function loadJourneyAccess(userId: string, organizationId: string):
     organizationRole,
     permissions,
     congregationIds,
+    nestJourneyTeam: parseJourneyServiceTeam(membership.nestJourneyTeam) || undefined,
     isSystemAdmin,
     isOwner,
     canManagePresence: isSystemAdmin || isOwner || PRESENCE_ROLES.has(organizationRole) || PRESENCE_ROLES.has(role) || permissions.canManagePresence === true,
