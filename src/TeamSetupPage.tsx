@@ -291,6 +291,9 @@ export default function TeamSetupPage(){
       <div className="team-member-list">
         {members.map(member=>{
           const orgWide=['owner','admin'].includes(member.organizationRole)
+          // Preserve elevated legacy operational roles until they receive a dedicated
+          // migration UI. Auto-mapping them to "Support" could revoke pastoral access.
+          const privilegedLegacy=!member.nestJourneyTeam&&['pastor','coordinator','data_admin'].includes(member.journeyRole)
           const draft=drafts[member.id]??{team:teamFromLegacy(member.journeyRole,member.nestJourneyTeam)}
           const team=draft.team
           const roleMeta=responsibilities[legacyResponsibilityForTeam(team)]
@@ -299,7 +302,7 @@ export default function TeamSetupPage(){
           const canChooseLeader=canAssign
           return <article className="team-member-card" key={member.id}>
             <div className="team-member-identity"><span className="team-member-avatar">{member.name.split(' ').filter(Boolean).map(part=>part[0]).slice(0,2).join('').toUpperCase()}</span><div><strong>{member.name}</strong><small>{member.email||member.organizationRole}</small></div></div>
-            {orgWide?<div className="team-org-wide"><ShieldCheck size={17}/><div><strong>{t.orgAccess}</strong><small>{t.orgAccessDesc}</small></div></div>:<>
+            {orgWide||privilegedLegacy?<div className="team-org-wide"><ShieldCheck size={17}/><div><strong>{privilegedLegacy?(locale==='en'?'Protected operational role':locale==='es'?'Función operativa protegida':'Função operacional protegida'):t.orgAccess}</strong><small>{privilegedLegacy?(locale==='en'?member.journeyRole+' · Edit the specialized role through authorized governance.':locale==='es'?member.journeyRole+' · Edición especializada mediante gobernanza autorizada.':member.journeyRole+' · Mantenha este acesso; a alteração deve ser feita pela gestão autorizada.'):t.orgAccessDesc}</small></div></div>:<>
               <div className="team-role-editor">
                 <label><span>{locale==='en'?'Primary service team':locale==='es'?'Equipo principal':'Frente principal de serviço'}</span>
                   <select value={team.primaryArea} disabled={savingId===member.id} onChange={e=>setPrimaryFront(member.id,e.target.value as ServiceFront)}>

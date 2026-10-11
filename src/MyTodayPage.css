@@ -82,3 +82,5 @@
 .today-service-team strong{font-size:15px;font-weight:800}
 .today-service-team p{margin:0;font-size:12px;line-height:1.55;color:var(--nj-text-muted)}
 .today-service-team>svg{flex:0 0 auto;color:var(--nj-accent)}
+
+.today-support-link{display:inline-flex;align-items:center;gap:7px;width:max-content;margin-top:6px;font-weight:750;font-size:12px;color:var(--nj-accent-strong);text-decoration:none}
