@@ -26,6 +26,7 @@ const JourneyMilestonesPage = lazy(() => import('./JourneyMilestonesPage.tsx'))
 const ImplementationRuntimePage = lazy(() => import('./ImplementationRuntimePage.tsx'))
 const PlaybookStudioPage = lazy(() => import('./PlaybookStudioPage.tsx'))
 const TeamSetupPage = lazy(() => import('./TeamSetupPage.tsx'))
+const SupportPage = lazy(() => import('./SupportPage.tsx'))
 const TeamBulkImportPage = lazy(() => import('./TeamBulkImportPage.tsx'))
 const JourneyJoinPage = lazy(() => import('./JourneyJoinPage.tsx'))
 const JourneySettingsPage = lazy(() => import('./JourneySettingsPage.tsx'))
@@ -116,6 +117,8 @@ function JourneyRoute() {
       return <PlaybookStudioPage />
     case 'team':
       return <TeamSetupPage />
+    case 'support':
+      return <SupportPage />
     case 'team-import':
       return <TeamBulkImportPage />
     case 'settings':
