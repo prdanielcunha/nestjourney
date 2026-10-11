@@ -96,7 +96,9 @@ export default function SupportPage(){
   const team=access?.nestJourneyTeam
   const available=useMemo(()=>{
     if(!team)return [] as WorkFront[]
-    return team.supportAreas.length?team.supportAreas:team.primaryArea==='support'?[...SERVICE_WORK_FRONTS]:[]
+    if (team.primaryArea === 'support' && team.supportAreas.length === 0) return [...SERVICE_WORK_FRONTS]
+    const primary = team.primaryArea!=='support' && team.teamRole!=='leader' ? [team.primaryArea] : []
+    return [...new Set([...primary,...team.supportAreas])] as WorkFront[]
   },[team])
 
   const api=useCallback(async (endpoint:string,method='GET',body?:unknown)=>{
