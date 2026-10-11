@@ -19,6 +19,7 @@ export type JourneyRoute =
   | 'implementation'
   | 'playbook-studio'
   | 'team'
+  | 'support'
   | 'team-import'
   | 'settings'
   | 'governance'
@@ -72,6 +73,8 @@ export function resolveJourneyRoute(pathname: string): JourneyRoute {
       return 'playbook-studio'
     case '/team-runtime':
       return 'team'
+    case '/support-runtime':
+      return 'support'
     case '/team-import':
       return 'team-import'
     case '/settings-runtime':

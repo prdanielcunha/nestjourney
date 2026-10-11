@@ -36,6 +36,7 @@ describe('NestJourney route resolver', () => {
     expect(resolveJourneyRoute('/implementation-runtime')).toBe('implementation')
     expect(resolveJourneyRoute('/playbook-studio')).toBe('playbook-studio')
     expect(resolveJourneyRoute('/team-runtime')).toBe('team')
+    expect(resolveJourneyRoute('/support-runtime')).toBe('support')
     expect(resolveJourneyRoute('/team-import')).toBe('team-import')
     expect(resolveJourneyRoute('/settings-runtime')).toBe('settings')
     expect(resolveJourneyRoute('/governance-runtime')).toBe('governance')

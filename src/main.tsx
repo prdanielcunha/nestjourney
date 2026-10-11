@@ -28,6 +28,7 @@ import JourneyMilestonesPage from './JourneyMilestonesPage.tsx'
 import ImplementationRuntimePage from './ImplementationRuntimePage.tsx'
 import PlaybookStudioPage from './PlaybookStudioPage.tsx'
 import TeamSetupPage from './TeamSetupPage.tsx'
+import SupportPage from './SupportPage.tsx'
 import TeamBulkImportPage from './TeamBulkImportPage.tsx'
 import JourneyJoinPage from './JourneyJoinPage.tsx'
 import JourneySettingsPage from './JourneySettingsPage.tsx'
@@ -118,6 +119,8 @@ function JourneyRoute() {
       return <PlaybookStudioPage />
     case 'team':
       return <TeamSetupPage />
+    case 'support':
+      return <SupportPage />
     case 'team-import':
       return <TeamBulkImportPage />
     case 'settings':
