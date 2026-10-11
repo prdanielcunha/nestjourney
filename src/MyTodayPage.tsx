@@ -332,6 +332,7 @@ export default function MyTodayPage(){
         <p>{access.nestJourneyTeam.supportAreas.length
           ?(locale==='en'?'Can also help in: ':locale==='es'?'También puede apoyar en: ':'Também pode apoiar: ')+access.nestJourneyTeam.supportAreas.map(front=>SERVICE_FRONT_LABELS[locale][front]).join(', ')
           :(locale==='en'?'Other service tasks require a separate assignment.':locale==='es'?'Otras tareas requieren una asignación específica.':'Outras tarefas dependem de uma atribuição específica.')}</p>
+        <a className="today-support-link" href="/support-runtime">{locale==='en'?'View support requests':locale==='es'?'Ver solicitudes de apoyo':'Ver solicitações de apoio'}<ArrowRight size={14}/></a>
       </div><ShieldCheck size={20}/>
     </section>:null}
 
