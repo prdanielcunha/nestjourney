@@ -175,6 +175,7 @@ export interface JourneyAccessContext {
   organizationRole: string
   permissions: Record<string, boolean>
   congregationIds: string[]
+  nestJourneyTeam?: JourneyServiceTeam
   isSystemAdmin: boolean
   isOwner: boolean
   canManagePresence: boolean
@@ -831,6 +832,7 @@ export async function loadJourneyAccess(userId: string, organizationId: string):
     organizationRole,
     permissions,
     congregationIds,
+    nestJourneyTeam: parseJourneyServiceTeam(membership.nestJourneyTeam) || undefined,
     isSystemAdmin,
     isOwner,
     canManagePresence: isSystemAdmin || isOwner || PRESENCE_ROLES.has(organizationRole) || PRESENCE_ROLES.has(role) || permissions.canManagePresence === true,
