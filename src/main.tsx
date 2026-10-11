@@ -1,4 +1,4 @@
-import { StrictMode, Suspense, lazy, useEffect, useState } from 'react'
+import { StrictMode, useEffect, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
 import { EcosystemSessionGate } from './EcosystemSessionGate.tsx'
@@ -7,31 +7,33 @@ import { JourneyErrorBoundary } from './JourneyErrorBoundary.tsx'
 import { JourneyLabelsProvider } from './journeyLabels.tsx'
 import { resolveJourneyRoute } from './routeResolver'
 
-const AreasPage = lazy(() => import('./AreasPage.tsx'))
-const MesaRuntimePage = lazy(() => import('./MesaRuntimePage.tsx'))
-const JourneyVisionPage = lazy(() => import('./JourneyVisionPage.tsx'))
-const MorePage = lazy(() => import('./MorePage.tsx'))
-const JourneyReportsPage = lazy(() => import('./JourneyReportsPage.tsx'))
-const FieldGuidePage = lazy(() => import('./FieldGuidePage.tsx'))
-const HelpPage = lazy(() => import('./HelpPage.tsx'))
-const WhatsNewPage = lazy(() => import('./WhatsNewPage.tsx'))
-const PresenceAssistPage = lazy(() => import('./PresenceAssistPage.tsx'))
-const CareIntegrityPage = lazy(() => import('./CareIntegrityPage.tsx'))
-const FollowupRuntimePage = lazy(() => import('./FollowupRuntimePage.tsx'))
-const JourneyProfilePage = lazy(() => import('./JourneyProfilePage.tsx'))
-const MyTodayPage = lazy(() => import('./MyTodayPage.tsx'))
-const GroupsRuntimePage = lazy(() => import('./GroupsRuntimePage.tsx'))
-const DiscipleshipRuntimePage = lazy(() => import('./DiscipleshipRuntimePage.tsx'))
-const JourneyMilestonesPage = lazy(() => import('./JourneyMilestonesPage.tsx'))
-const ImplementationRuntimePage = lazy(() => import('./ImplementationRuntimePage.tsx'))
-const PlaybookStudioPage = lazy(() => import('./PlaybookStudioPage.tsx'))
-const TeamSetupPage = lazy(() => import('./TeamSetupPage.tsx'))
-const SupportPage = lazy(() => import('./SupportPage.tsx'))
-const TeamBulkImportPage = lazy(() => import('./TeamBulkImportPage.tsx'))
-const JourneyJoinPage = lazy(() => import('./JourneyJoinPage.tsx'))
-const JourneySettingsPage = lazy(() => import('./JourneySettingsPage.tsx'))
-const GovernanceRuntimePage = lazy(() => import('./GovernanceRuntimePage.tsx'))
-const PastoralHandoffPage = lazy(() => import('./PastoralHandoffPage.tsx'))
+// Load all route modules with the app entry: reopening any workspace must not
+// depend on a historical chunk that Firebase Hosting no longer serves.
+import AreasPage from './AreasPage.tsx'
+import MesaRuntimePage from './MesaRuntimePage.tsx'
+import JourneyVisionPage from './JourneyVisionPage.tsx'
+import MorePage from './MorePage.tsx'
+import JourneyReportsPage from './JourneyReportsPage.tsx'
+import FieldGuidePage from './FieldGuidePage.tsx'
+import HelpPage from './HelpPage.tsx'
+import WhatsNewPage from './WhatsNewPage.tsx'
+import PresenceAssistPage from './PresenceAssistPage.tsx'
+import CareIntegrityPage from './CareIntegrityPage.tsx'
+import FollowupRuntimePage from './FollowupRuntimePage.tsx'
+import JourneyProfilePage from './JourneyProfilePage.tsx'
+import MyTodayPage from './MyTodayPage.tsx'
+import GroupsRuntimePage from './GroupsRuntimePage.tsx'
+import DiscipleshipRuntimePage from './DiscipleshipRuntimePage.tsx'
+import JourneyMilestonesPage from './JourneyMilestonesPage.tsx'
+import ImplementationRuntimePage from './ImplementationRuntimePage.tsx'
+import PlaybookStudioPage from './PlaybookStudioPage.tsx'
+import TeamSetupPage from './TeamSetupPage.tsx'
+import SupportPage from './SupportPage.tsx'
+import TeamBulkImportPage from './TeamBulkImportPage.tsx'
+import JourneyJoinPage from './JourneyJoinPage.tsx'
+import JourneySettingsPage from './JourneySettingsPage.tsx'
+import GovernanceRuntimePage from './GovernanceRuntimePage.tsx'
+import PastoralHandoffPage from './PastoralHandoffPage.tsx'
 
 if ('serviceWorker' in navigator && import.meta.env.PROD) {
   window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js'))
@@ -132,23 +134,13 @@ function JourneyRoute() {
   }
 }
 
-function RouteFallback() {
-  return <main className="journey-route-loading" aria-live="polite">
-    <img src="/brand/nestjourney-symbol-light.png" alt="" />
-    <strong>NestJourney</strong>
-    <span>cuidado em cada passo</span>
-  </main>
-}
-
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <EcosystemSessionGate>
       <JourneyLabelsProvider>
         <JourneyErrorBoundary>
           <JourneyShell>
-            <Suspense fallback={<RouteFallback />}>
-              <JourneyRoute />
-            </Suspense>
+            <JourneyRoute />
           </JourneyShell>
         </JourneyErrorBoundary>
       </JourneyLabelsProvider>
