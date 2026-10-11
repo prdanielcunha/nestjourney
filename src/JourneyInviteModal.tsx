@@ -94,7 +94,7 @@ export function JourneyInviteModal({access,locale,open,onClose}:{access:JourneyA
     setError('')
   }
   function setFront(front:ServiceFront){
-    setTeam(current=>({...current,primaryArea:front,teamRole:front==='support'&&current.teamRole==='leader'?'auxiliary':current.teamRole}))
+    setTeam(current=>({...current,primaryArea:front,teamRole:front==='support'&&current.teamRole==='leader'?'auxiliary':current.teamRole,supportAreas:current.supportAreas.filter(area=>area!==front)}))
     setError('')
   }
   function toggleSupport(front:WorkFront){
