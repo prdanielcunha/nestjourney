@@ -35,6 +35,7 @@ import {
   type PresenceSessionRecord,
 } from './journeyRepository'
 import { resolveJourneyResponsibility, type JourneyResponsibility } from './journeyExperience'
+import { SERVICE_FRONT_LABELS, SERVICE_TEAM_ROLE_LABELS } from './journeyServiceTeams'
 import { getInitialLocale, localeLabels, myTodayCopy, persistLocale, type AppLocale } from './i18n'
 import { useJourneyLabels } from './journeyLabels'
 import './MyTodayPage.css'
@@ -323,6 +324,16 @@ export default function MyTodayPage(){
       <div><span className="today-section-label">{ui.currentContext}</span><strong>{focus.title}</strong><p>{focus.body}</p></div>
       <div className="today-context-meta"><span><Building2 size={14}/>{activeUnit?.name||ui.unit}</span><span><UserRound size={14}/>{people.length} {ui.people}</span></div>
     </section>
+
+    {access?.nestJourneyTeam?<section className="today-service-team" aria-label={locale==='en'?'My service team':locale==='es'?'Mi equipo de servicio':'Meu serviço'}>
+      <div><span className="today-section-label">{locale==='en'?'My service':locale==='es'?'Mi servicio':'Meu serviço'}</span>
+        <strong>{SERVICE_FRONT_LABELS[locale][access.nestJourneyTeam.primaryArea]} · {SERVICE_TEAM_ROLE_LABELS[locale][access.nestJourneyTeam.teamRole]}</strong>
+        {access.nestJourneyTeam.otherLabel?<p>{access.nestJourneyTeam.otherLabel}</p>:null}
+        <p>{access.nestJourneyTeam.supportAreas.length
+          ?(locale==='en'?'Can also help in: ':locale==='es'?'También puede apoyar en: ':'Também pode apoiar: ')+access.nestJourneyTeam.supportAreas.map(front=>SERVICE_FRONT_LABELS[locale][front]).join(', ')
+          :(locale==='en'?'Other service tasks require a separate assignment.':locale==='es'?'Otras tareas requieren una asignación específica.':'Outras tarefas dependem de uma atribuição específica.')}</p>
+      </div><ShieldCheck size={20}/>
+    </section>:null}
 
     <section className="today-action-center">
       <header className="today-section-head">

@@ -75,3 +75,10 @@
   .today-empty-premium{grid-template-columns:1fr}.today-next-move{grid-column:1}
   .today-shortcuts>div:last-child{grid-template-columns:1fr}
 }
+
+
+.today-service-team{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;padding:18px 21px;background:var(--nj-surface);border:1px solid var(--nj-border);border-radius:18px;color:var(--nj-text)}
+.today-service-team>div{display:grid;gap:6px}
+.today-service-team strong{font-size:15px;font-weight:800}
+.today-service-team p{margin:0;font-size:12px;line-height:1.55;color:var(--nj-text-muted)}
+.today-service-team>svg{flex:0 0 auto;color:var(--nj-accent)}

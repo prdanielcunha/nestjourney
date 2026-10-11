@@ -35,7 +35,7 @@ const copy={
     vision:'Visão',visionDesc:'Leitura pastoral, operacional e executiva',management:'Gestão',managementDesc:'Equipe, implantação, relatórios e ajustes',
     areas:'Áreas de cuidado',presence:'Presença',presenceDesc:'Cultos, visitantes e vínculo',table:'Mesa Aberta',tableDesc:'Hospitalidade e participação',
     care:'Cuidado & Conexão',careDesc:'Contato em 24–48h e próximos passos',groups:'Casas de Paz',groupsDesc:'Casas, participantes e operação',
-    root:'Raiz',rootDesc:'Discipulado inicial 1–7',restricted:'Sem acesso neste papel',
+    root:'Raiz',rootDesc:'Discipulado inicial 1–7',support:'Apoio Geral',supportDesc:'Onde posso servir e ajudar',restricted:'Sem acesso neste papel',
     language:'Idioma',role:'Seu acesso',realAccess:'Acesso real',viewAs:'Visualizar experiência como',
     viewing:'Visualizando como',backCeo:'Voltar à visão CEO',offline:'Sem conexão. As ações serão retomadas quando a internet voltar.',collapse:'Recolher navegação',expand:'Expandir navegação',scope:'Escopo',globalScope:'Ecossistema',organizationScope:'Organização',unitsScope:'unidades',
   },
@@ -45,7 +45,7 @@ const copy={
     vision:'Vision',visionDesc:'Pastoral, operational, and executive read',management:'Management',managementDesc:'Team, rollout, reports, and settings',
     areas:'Care areas',presence:'Presence',presenceDesc:'Services, visitors, and relationships',table:'Open Table',tableDesc:'Hospitality and participation',
     care:'Care & Connection',careDesc:'24–48h contact and next steps',groups:'Peace Houses',groupsDesc:'Groups, participants, and operations',
-    root:'Root',rootDesc:'Initial discipleship 1–7',restricted:'Not available for this role',
+    root:'Root',rootDesc:'Initial discipleship 1–7',support:'General Support',supportDesc:'Where I can help',restricted:'Not available for this role',
     language:'Language',role:'Your access',realAccess:'Real access',viewAs:'View experience as',
     viewing:'Viewing as',backCeo:'Return to CEO view',offline:'You are offline. Actions will resume when your internet connection returns.',collapse:'Collapse navigation',expand:'Expand navigation',scope:'Scope',globalScope:'Ecosystem',organizationScope:'Organization',unitsScope:'campuses',
   },
@@ -55,7 +55,7 @@ const copy={
     vision:'Visión',visionDesc:'Lectura pastoral, operativa y ejecutiva',management:'Gestión',managementDesc:'Equipo, implementación, informes y ajustes',
     areas:'Áreas de cuidado',presence:'Presencia',presenceDesc:'Cultos, visitantes y vínculo',table:'Mesa Abierta',tableDesc:'Hospitalidad y participación',
     care:'Cuidado & Conexión',careDesc:'Contacto en 24–48h y próximos pasos',groups:'Casas de Paz',groupsDesc:'Casas, participantes y operación',
-    root:'Raíz',rootDesc:'Discipulado inicial 1–7',restricted:'Sin acceso en este rol',
+    root:'Raíz',rootDesc:'Discipulado inicial 1–7',support:'Apoyo General',supportDesc:'Dónde puedo ayudar',restricted:'Sin acceso en este rol',
     language:'Idioma',role:'Tu acceso',realAccess:'Acceso real',viewAs:'Visualizar experiencia como',
     viewing:'Visualizando como',backCeo:'Volver a la visión CEO',offline:'Sin conexión. Las acciones se reanudarán cuando vuelva internet.',collapse:'Contraer navegación',expand:'Expandir navegación',scope:'Alcance',globalScope:'Ecosistema',organizationScope:'Organización',unitsScope:'sedes',
   },
@@ -177,6 +177,7 @@ export function JourneyShell({children}:{children:ReactNode}){
     {href:'/care-integrity',label:names.care,description:t.careDesc,icon:HeartHandshake,enabled:a=>canOpenJourneyArea(a,'care')},
     {href:'/groups-runtime',label:names.groups,description:t.groupsDesc,icon:House,enabled:a=>canOpenJourneyArea(a,'groups')},
     {href:'/discipleship-runtime',label:names.root,description:t.rootDesc,icon:Leaf,enabled:a=>canOpenJourneyArea(a,'discipleship')},
+    {href:'/support-runtime',label:t.support,description:t.supportDesc,icon:HeartHandshake,enabled:a=>Boolean(a.isSystemAdmin||a.isOwner||['owner','admin'].includes(a.organizationRole)||a.nestJourneyTeam?.primaryArea==='support'||a.nestJourneyTeam?.supportAreas.length)},
   ]
 
   const visiblePrimary=primary.filter(item=>!item.enabled||Boolean(access&&item.enabled(access)))
