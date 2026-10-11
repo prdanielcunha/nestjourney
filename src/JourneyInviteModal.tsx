@@ -89,12 +89,15 @@ export function JourneyInviteModal({access,locale,open,onClose}:{access:JourneyA
   const validTeam=parseJourneyServiceTeam(team)
   const frontendRole=validTeam?legacyResponsibilityForTeam(validTeam):'member'
   const roleOptions=SERVICE_TEAM_ROLES.filter(role=>role!=='leader'||(team.primaryArea!=='support'&&canInviteLeader))
+  const assignableOrgRoles=team.teamRole==='leader'?allowed:allowed.filter(role=>role==='member'||role==='viewer')
   function updateTeam(next:Partial<JourneyServiceTeam>){
     setTeam(current=>({...current,...next}))
+    if (next.teamRole && next.teamRole !== 'leader') setOrganizationRole('member')
     setError('')
   }
   function setFront(front:ServiceFront){
     setTeam(current=>({...current,primaryArea:front,teamRole:front==='support'&&current.teamRole==='leader'?'auxiliary':current.teamRole,supportAreas:current.supportAreas.filter(area=>area!==front)}))
+    if (front==='support') setOrganizationRole('member')
     setError('')
   }
   function toggleSupport(front:WorkFront){
@@ -103,7 +106,7 @@ export function JourneyInviteModal({access,locale,open,onClose}:{access:JourneyA
 
   async function createInvite(){
     const user=auth?.currentUser
-    if(!user||creating||!validTeam)return
+    if(!user||creating||!validTeam||!assignableOrgRoles.includes(organizationRole))return
     setCreating(true);setError('');setCopied(false)
     try{
       const idToken=await user.getIdToken()
@@ -166,13 +169,13 @@ export function JourneyInviteModal({access,locale,open,onClose}:{access:JourneyA
         </div>
         <details className="journey-invite-advanced"><summary>{t.advanced}</summary>
           <label><span>{t.orgRole}</span><select value={organizationRole} onChange={event=>setOrganizationRole(event.target.value as JourneyOrganizationInviteRole)} disabled={creating}>
-            {allowed.map(role=><option key={role} value={role}>{roleLabels[locale][role]}</option>)}
+            {assignableOrgRoles.map(role=><option key={role} value={role}>{roleLabels[locale][role]}</option>)}
           </select><small>{t.orgHint}</small></label>
         </details>
         {organizationRole==='admin'||organizationRole==='manager'?<div className="journey-invite-warning">{t.orgHint}</div>:null}
         {team.primaryArea==='support'&&team.teamRole==='leader'?<div className="journey-invite-error">{t.restricted}</div>:null}
         {error?<div className="journey-invite-error">{error}</div>:null}
-        <button className="journey-invite-primary" type="button" disabled={creating||!validTeam||!allowed.includes(organizationRole)} onClick={()=>void createInvite()}><Link2 size={16}/>{creating?t.creating:t.create}</button>
+        <button className="journey-invite-primary" type="button" disabled={creating||!validTeam||!assignableOrgRoles.includes(organizationRole)} onClick={()=>void createInvite()}><Link2 size={16}/>{creating?t.creating:t.create}</button>
         <p className="journey-invite-note"><ShieldCheck size={14}/>{t.safe}</p>
       </div>:<div className="journey-invite-result">
         <div className="journey-invite-success"><Check size={18}/><div><strong>{t.created}</strong><span>{teamDescription} · {roleLabels[locale][organizationRole]}</span></div></div>
