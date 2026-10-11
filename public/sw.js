@@ -1,4 +1,4 @@
-const CACHE='nestjourney-static-v4';
+const CACHE='nestjourney-static-v5';
 const STATIC=[
   '/manifest.webmanifest',
   '/brand/nestjourney-horizontal-light.png',
@@ -37,7 +37,15 @@ self.addEventListener('fetch',event=>{
   if(url.pathname.startsWith('/assets/')){
     event.respondWith(
       caches.match(request).then(cached=>cached||fetch(request).then(response=>{
-        if(response.ok){
+        // Firebase Hosting rewrites missing asset URLs to index.html (HTTP 200).
+        // Never cache that HTML under a JavaScript/CSS asset URL.
+        const type=(response.headers.get('content-type')||'').toLowerCase();
+        const validAsset=response.ok && (
+          (url.pathname.endsWith('.js') && type.includes('javascript')) ||
+          (url.pathname.endsWith('.css') && type.includes('text/css')) ||
+          (!url.pathname.endsWith('.js') && !url.pathname.endsWith('.css'))
+        );
+        if(validAsset){
           const copy=response.clone();
           caches.open(CACHE).then(cache=>cache.put(request,copy));
         }
