@@ -3,6 +3,10 @@ import type { User } from 'firebase/auth'
 
 const GLOBAL_ROLES = new Set(['ceo', 'global_admin', 'ecosystem_owner', 'founder'])
 const ACTIVE_PRODUCT_STATUSES = new Set(['active', 'trialing'])
+const JOURNEY_INVITE_ROLES = new Set([
+  'member', 'presence_host', 'mesa_team', 'caregiver',
+  'group_leader', 'discipler', 'coordinator', 'pastor',
+])
 const ACTIVE_MEMBERSHIP_STATUSES = new Set(['active', 'ativo', ''])
 
 export type JourneyEntryOrganization = {
@@ -26,11 +30,18 @@ function inactive(data: DocumentData | undefined) {
   return ['inactive', 'suspended', 'disabled', 'removed', 'revoked', 'archived'].includes(clean(data.status).toLowerCase())
 }
 
-function productEnabled(org: DocumentData, global: boolean) {
+export function productEnabled(org: DocumentData, member: DocumentData | undefined, global: boolean) {
   if (global) return true
   const apps = org.apps || {}
   const current = apps.nestjourney || apps.raiz_e_mesa || {}
-  return ACTIVE_PRODUCT_STATUSES.has(clean(current.status).toLowerCase())
+  const status = clean(current.status).toLowerCase()
+  if (ACTIVE_PRODUCT_STATUSES.has(status)) return true
+
+  // A canonical Journey invitation establishes access for its new member,
+  // even when the organization has not yet configured a Journey product flag.
+  // Explicitly disabled or suspended products are never bypassed.
+  if (status && status !== 'not_configured' && status !== 'coming_soon') return false
+  return JOURNEY_INVITE_ROLES.has(clean(member?.journeyRole).toLowerCase())
 }
 
 function collectProfileCandidates(data: DocumentData) {
@@ -79,7 +90,7 @@ async function candidateIsEligible(db: Firestore, uid: string, orgId: string, is
 
     if (!orgSnap.exists() || inactive(orgSnap.data())) return null
     const org = orgSnap.data()
-    if (!productEnabled(org, isGlobal)) return null
+    if (!productEnabled(org, memberSnap.exists() ? memberSnap.data() : undefined, isGlobal)) return null
 
     const ownerUid = clean(org.ownerUid || org.ownerId)
     if (!isGlobal && ownerUid !== uid) {
