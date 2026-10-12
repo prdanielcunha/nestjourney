@@ -851,7 +851,7 @@ export async function loadJourneyAccess(userId: string, organizationId: string):
     canManageImplementation: isSystemAdmin || isOwner || IMPLEMENTATION_ROLES.has(organizationRole) || IMPLEMENTATION_ROLES.has(role) || permissions.canManageImplementation === true,
     canViewGovernance: isSystemAdmin || isOwner || GOVERNANCE_ROLES.has(organizationRole) || GOVERNANCE_ROLES.has(role) || permissions.canViewGovernance === true,
     canManagePrivacy: isSystemAdmin || isOwner || PRIVACY_ROLES.has(organizationRole) || PRIVACY_ROLES.has(role) || permissions.canManagePrivacy === true,
-    canManagePastoral: hasPastoralChurchRole,
+    canManagePastoral: hasPastoralChurchRole || (isActiveChurchMember && permissions.canManagePastoral === true),
     broadJourneyAccess: isSystemAdmin
       || isOwner
       || organizationHasBroadAccess
