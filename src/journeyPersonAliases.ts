@@ -42,22 +42,23 @@ export async function linkJourneyPersonAlias(input:{
   assertTenantAdmin(input.access)
   const {access,duplicate,canonical}=input
   checkHumanPersonLink({duplicatePersonId:duplicate.id,canonicalPersonId:canonical.id,reason:input.reason})
-  if(!db)throw new Error('firebase_not_configured')
+  const firestore=db
+  if(!firestore)throw new Error('firebase_not_configured')
   if([duplicate,canonical].some(person=>person.organizationId!==access.organizationId))
     throw new Error('alias_tenant_mismatch')
-  const aliasRef=doc(db,root(access.organizationId,'personAliases')+'/'+duplicate.id)
-  const canonicalAliasRef=doc(db,root(access.organizationId,'personAliases')+'/'+canonical.id)
-  const sourceRef=doc(db,root(access.organizationId,'people')+'/'+duplicate.id)
-  const targetRef=doc(db,root(access.organizationId,'people')+'/'+canonical.id)
+  const aliasRef=doc(firestore,root(access.organizationId,'personAliases')+'/'+duplicate.id)
+  const canonicalAliasRef=doc(firestore,root(access.organizationId,'personAliases')+'/'+canonical.id)
+  const sourceRef=doc(firestore,root(access.organizationId,'people')+'/'+duplicate.id)
+  const targetRef=doc(firestore,root(access.organizationId,'people')+'/'+canonical.id)
   // Prevent obvious alias chains and multiple active alias targets before commit.
   const [inbound,canonicalExisting]=await Promise.all([
-    getDocs(query(collection(db,root(access.organizationId,'personAliases')),
+    getDocs(query(collection(firestore,root(access.organizationId,'personAliases')),
       where('canonicalPersonId','==',duplicate.id),where('status','==','active'))),
     getDoc(canonicalAliasRef),
   ])
   if(!inbound.empty||(canonicalExisting.exists()&&canonicalExisting.data().status==='active'))
     throw new Error('alias_chain_forbidden')
-  await runTransaction(db,async tx=>{
+  await runTransaction(firestore,async tx=>{
     const [source,target,existing,targetAlias]=await Promise.all([
       tx.get(sourceRef),tx.get(targetRef),tx.get(aliasRef),tx.get(canonicalAliasRef),
     ])
@@ -69,7 +70,7 @@ export async function linkJourneyPersonAlias(input:{
        source.data().congregationId!==duplicate.congregationId||
        target.data().congregationId!==canonical.congregationId)
       throw new Error('alias_scopes_changed')
-    const eventRef=doc(collection(db,root(access.organizationId,'personAliasEvents')))
+    const eventRef=doc(collection(firestore,root(access.organizationId,'personAliasEvents')))
     tx.set(aliasRef,{
       organizationId:access.organizationId,duplicatePersonId:duplicate.id,
       canonicalPersonId:canonical.id,sourceCongregationId:duplicate.congregationId,
@@ -94,14 +95,15 @@ export async function revertJourneyPersonAlias(input:{
   if(input.alias.organizationId!==input.access.organizationId||
     input.alias.status!=='active'||input.reason.trim().length<15||input.reason.trim().length>300)
     throw new Error('alias_reversal_invalid')
-  if(!db)throw new Error('firebase_not_configured')
-  const ref=doc(db,root(input.access.organizationId,'personAliases')+'/'+input.alias.id)
-  await runTransaction(db,async tx=>{
+  const firestore=db
+  if(!firestore)throw new Error('firebase_not_configured')
+  const ref=doc(firestore,root(input.access.organizationId,'personAliases')+'/'+input.alias.id)
+  await runTransaction(firestore,async tx=>{
     const old=await tx.get(ref)
     if(!old.exists()||old.data().status!=='active'||old.data().revision!==input.alias.revision||
       old.data().canonicalPersonId!==input.alias.canonicalPersonId)
       throw new Error('alias_reversal_stale')
-    const eventRef=doc(collection(db,root(input.access.organizationId,'personAliasEvents')))
+    const eventRef=doc(collection(firestore,root(input.access.organizationId,'personAliasEvents')))
     const revision=input.alias.revision+1
     tx.update(ref,{
       status:'reverted',revision,lastEventId:eventRef.id,
@@ -118,8 +120,9 @@ export async function revertJourneyPersonAlias(input:{
 }
 export async function getJourneyPersonAlias(access:JourneyAccessContext,personId:string):Promise<JourneyPersonAlias|null>{
   assertTenantAdmin(access)
-  if(!db)throw new Error('firebase_not_configured')
-  const snap=await getDoc(doc(db,root(access.organizationId,'personAliases')+'/'+personId))
+  const firestore=db
+  if(!firestore)throw new Error('firebase_not_configured')
+  const snap=await getDoc(doc(firestore,root(access.organizationId,'personAliases')+'/'+personId))
   if(!snap.exists())return null
   const v=snap.data()
   return {id:snap.id,organizationId:access.organizationId,
@@ -132,8 +135,9 @@ export async function getJourneyPersonAlias(access:JourneyAccessContext,personId
 }
 export async function listJourneyPersonInboundAliases(access:JourneyAccessContext,canonicalId:string):Promise<JourneyPersonAlias[]>{
   assertTenantAdmin(access)
-  if(!db)throw new Error('firebase_not_configured')
-  const snap=await getDocs(query(collection(db,root(access.organizationId,'personAliases')),
+  const firestore=db
+  if(!firestore)throw new Error('firebase_not_configured')
+  const snap=await getDocs(query(collection(firestore,root(access.organizationId,'personAliases')),
     where('canonicalPersonId','==',canonicalId),where('status','==','active')))
   return snap.docs.map(r=>({...r.data(),id:r.id}) as JourneyPersonAlias)
 }
