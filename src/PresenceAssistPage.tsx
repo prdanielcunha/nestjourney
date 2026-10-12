@@ -30,6 +30,8 @@ import { GuidedEmptyState } from './GuidedEmptyState'
 import { emptyGuidance } from './emptyGuidance'
 import { AccessDeniedState } from './AccessDeniedState'
 import { JourneyAreaFocus } from './JourneyAreaFocus'
+import { CrossUnitPresencePanel } from './CrossUnitPresencePanel'
+import { loadJourneyRolloutFlags, DEFAULT_JOURNEY_ROLLOUT_FLAGS, type JourneyRolloutFlags } from './journeyReleaseFlags'
 import './PresenceAssistPage.css'
 
 function initials(name: string) {
@@ -103,6 +105,7 @@ export default function PresenceAssistPage() {
     title: labels.presence || defaultTitle,
   }
   const [access, setAccess] = useState<JourneyAccessContext | null>(null)
+  const [rollout, setRollout] = useState<JourneyRolloutFlags>(DEFAULT_JOURNEY_ROLLOUT_FLAGS)
   const [congregations, setCongregations] = useState<JourneyCongregation[]>([])
   const [congregationId, setCongregationId] = useState('')
   const [people, setPeople] = useState<PresencePerson[]>([])
@@ -195,6 +198,14 @@ export default function PresenceAssistPage() {
   }, [refreshScope, t.error])
 
   useEffect(() => { void bootstrap() }, [bootstrap])
+  useEffect(()=>{
+    if(!access){setRollout(DEFAULT_JOURNEY_ROLLOUT_FLAGS);return}
+    let alive=true
+    void loadJourneyRolloutFlags(access).then(flags=>{if(alive)setRollout(flags)})
+      .catch(()=>{if(alive)setRollout(DEFAULT_JOURNEY_ROLLOUT_FLAGS)})
+    return()=>{alive=false}
+  },[access])
+
 
   useEffect(() => {
     if (!access?.canManagePresence || !congregationId) return
@@ -373,6 +384,8 @@ export default function PresenceAssistPage() {
       <div className="presence-session-head"><div><span className="presence-kicker">{t.session}</span><h2>{displaySession.eventName ?? new Date(displaySession.openedAt).toLocaleString(locale)}</h2><p>{new Date(displaySession.openedAt).toLocaleString(locale)} · {displaySession.status === 'closed' ? t.closed : displaySession.eventRef}</p></div><span className="presence-badge"><UserCheck size={15} /> {displaySession.status === 'open' ? t.session : t.closed}</span></div>
       {coverage ? <><div className="coverage-wrap"><span className="coverage-number">{coverage.percent}%</span><div className="coverage-track" aria-label={`${t.coverage}: ${coverage.percent}%`}><span style={{ width: `${coverage.percent}%` }} /></div><div className="coverage-meta">{coverage.verified} {t.verified}<br />{coverage.unverified} {t.unverified}</div></div><p className="coverage-note">{coverage.meetsMinimum ? t.qualityReady : t.qualityNotReady}</p>{displaySession.status === 'closed' ? <p className="coverage-note">{coverage.meetsMinimum ? `${t.absenceEvidence}: ${confirmedAbsences.length}` : t.absenceBlocked}</p> : null}</> : null}
     </section> : <div className="presence-panel"><GuidedEmptyState icon={UserCheck} title={noSessionGuide.title} body={noSessionGuide.body} primary={{label:noSessionGuide.primary,onClick:()=>setShowSession(true)}} secondary={{label:noSessionGuide.secondary||t.back,href:'/my-today'}}/></div>}
+
+    {rollout.crossUnitPresence && displaySession?.status==='open' && access ? <CrossUnitPresencePanel access={access} congregationId={congregationId} units={congregations} session={displaySession} checks={checks} locale={locale} onChanged={()=>refreshScope(access.organizationId,congregationId)}/> : null}
 
     <div className="presence-list-head" id="presence-people"><h2>{t.people} · {visiblePeople.length}</h2><span className="presence-badge"><ShieldCheck size={14} /> {t.sourceRule}</span></div>
     <section className="presence-grid">
