@@ -1784,3 +1784,60 @@ describe('Canonical member registration authority', () => {
     }))
   })
 })
+
+describe('Universal family registry tenant/privacy contract', () => {
+  it('allows only admin-created explicit family memberships and immutable unlink facts', async () => {
+    await seedMembership('admin-family', 'org-a', 'admin')
+    await seedMembership('reception-family', 'org-a', 'presence_host', ['unit-a'], { canManagePeople: true })
+    const personPath = 'organizations/org-a/products/raiz_e_mesa/people/family-person'
+    const familyPath = 'organizations/org-a/products/raiz_e_mesa/families/family-one'
+    const eventPath = 'organizations/org-a/products/raiz_e_mesa/familyEvents/link-one'
+    await environment.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), personPath), {
+        organizationId: 'org-a', congregationId: 'unit-a', name: 'Person', consent: false,
+      })
+    })
+    const receptionist = environment.authenticatedContext('reception-family').firestore()
+    const admin = environment.authenticatedContext('admin-family').firestore()
+    await assertFails(setDoc(doc(receptionist, familyPath), {
+      organizationId: 'org-a', congregationId: 'unit-a', label: 'Family One',
+      createdAt: serverTimestamp(), createdBy: 'reception-family',
+    }))
+    const batch = writeBatch(admin)
+    batch.set(doc(admin, familyPath), {
+      organizationId: 'org-a', congregationId: 'unit-a', label: 'Family One',
+      createdAt: serverTimestamp(), createdBy: 'admin-family',
+    })
+    batch.set(doc(admin, eventPath), {
+      organizationId: 'org-a', congregationId: 'unit-a', familyId: 'family-one',
+      personId: 'family-person', action: 'link', relationshipType: 'child',
+      guardianFlag: false, recordedAt: serverTimestamp(), recordedBy: 'admin-family',
+    })
+    await assertSucceeds(batch.commit())
+    await assertFails(getDoc(doc(receptionist, familyPath)))
+    await assertSucceeds(getDoc(doc(admin, familyPath)))
+    await assertFails(updateDoc(doc(admin, eventPath), { guardianFlag: true }))
+    await assertFails(deleteDoc(doc(admin, eventPath)))
+    await assertFails(setDoc(doc(admin, 'organizations/org-a/products/raiz_e_mesa/familyEvents/guardian-spoof'), {
+      organizationId: 'org-a', congregationId: 'unit-a', familyId: 'family-one',
+      personId: 'family-person', action: 'link', relationshipType: 'relative',
+      guardianFlag: true, recordedAt: serverTimestamp(), recordedBy: 'admin-family',
+    }))
+    await assertFails(setDoc(doc(admin, 'organizations/org-a/products/raiz_e_mesa/familyEvents/wrong-unit'), {
+      organizationId: 'org-a', congregationId: 'unit-b', familyId: 'family-one',
+      personId: 'family-person', action: 'link', relationshipType: 'child',
+      guardianFlag: false, recordedAt: serverTimestamp(), recordedBy: 'admin-family',
+    }))
+    await assertFails(setDoc(doc(admin, 'organizations/org-a/products/raiz_e_mesa/familyEvents/unlink-without-reason'), {
+      organizationId: 'org-a', congregationId: 'unit-a', familyId: 'family-one',
+      personId: 'family-person', action: 'unlink', relationshipType: 'child',
+      guardianFlag: false, recordedAt: serverTimestamp(), recordedBy: 'admin-family',
+    }))
+    await assertSucceeds(setDoc(doc(admin, 'organizations/org-a/products/raiz_e_mesa/familyEvents/unlink-one'), {
+      organizationId: 'org-a', congregationId: 'unit-a', familyId: 'family-one',
+      personId: 'family-person', action: 'unlink', relationshipType: 'child',
+      guardianFlag: false, reason: 'Operador corrigiu o vínculo',
+      recordedAt: serverTimestamp(), recordedBy: 'admin-family',
+    }))
+  })
+})
