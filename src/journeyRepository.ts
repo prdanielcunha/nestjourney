@@ -488,6 +488,7 @@ export interface MinimalVisitorInput {
   congregationId: string
   actorId: string
   name: string
+  requestId?: string
   phone?: string
   consent: boolean
   preferredContactChannel?: PreferredContactChannel
@@ -2757,6 +2758,8 @@ export async function createJourneyMember(input: { access: JourneyAccessContext;
 
 export async function createMinimalVisitor(input: MinimalVisitorInput) {
   assertSensitiveJourneyWriteIsOnline()
+  if(input.requestId && !/^[A-Za-z0-9_-]{8,120}$/.test(input.requestId))
+    throw new Error('visitor_request_id_invalid')
   const firestore = requireDb()
   const name = input.name.trim()
   if (!name) throw new Error('visitor_name_required')
@@ -2765,7 +2768,9 @@ export async function createMinimalVisitor(input: MinimalVisitorInput) {
   const readiness = evaluateAuthorizedContact({ consent, phone, preferredContactChannel: input.preferredContactChannel })
   if (!readiness.ok) throw new Error('visitor_contact_required')
   const preferredContactChannel = readiness.preferredContactChannel
-  const personRef = doc(collection(firestore, journeyCollectionPath(input.organizationId, 'people')))
+  const personRef = input.requestId
+    ? doc(firestore,journeyCollectionPath(input.organizationId,'people')+'/req_'+input.requestId)
+    : doc(collection(firestore, journeyCollectionPath(input.organizationId, 'people')))
   const factRef = doc(firestore, `${journeyCollectionPath(input.organizationId, 'facts')}/visitor-${personRef.id}`)
   const careRef = input.consent ? doc(collection(firestore, journeyCollectionPath(input.organizationId, 'careRequests'))) : null
   const careRequestedFactRef = careRef
@@ -2829,7 +2834,31 @@ export async function createMinimalVisitor(input: MinimalVisitorInput) {
     })
   }
 
-  await batch.commit()
+  try {
+    await batch.commit()
+  } catch (cause) {
+    if(input.requestId){
+      // If the server committed but the acknowledgement was lost, return only
+      // a verified matching registration; do not recreate a second care task.
+      try{
+        const prior=await getDocFromServer(personRef)
+        const value=prior.data()
+        if(prior.exists()
+          && value?.organizationId===input.organizationId
+          && value.congregationId===input.congregationId
+          && value.createdBy===input.actorId
+          && value.name===name
+          && value.consent===consent
+          && (value.phone||'')===(consent?phone:'')
+          && (value.preferredContactChannel||'')===(consent?preferredContactChannel:''))
+          return {id:personRef.id,organizationId:input.organizationId,congregationId:input.congregationId,
+            name,phone:consent?phone:undefined,consent,preferredContactChannel,visits:1} satisfies PresencePerson
+      }catch{
+        // Server verification unavailable: preserve original error.
+      }
+    }
+    throw cause
+  }
   return { id: personRef.id, organizationId: input.organizationId, congregationId: input.congregationId, name, phone: consent ? phone : undefined, consent, preferredContactChannel, visits: 1 } satisfies PresencePerson
 }
 
