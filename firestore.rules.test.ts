@@ -2021,7 +2021,7 @@ describe('Tenant-controlled feature rollout',()=>{
     const root='organizations/org-a/products/raiz_e_mesa/settings/releaseFlags'
     const payload={organizationId:'org-a',flags:{
       memberBulkImport:true,personProfileEdit:false,familyLinks:false,
-      verifiedFrequency:false,optionalProjects:false,crossUnitPresence:false,eventSeries:false,personAliases:false,
+      verifiedFrequency:false,optionalProjects:false,crossUnitPresence:false,eventSeries:false,personAliases:false,personAvailability:false,
     },updatedAt:serverTimestamp(),updatedBy:'rollout-admin'}
     await assertFails(setDoc(doc(environment.authenticatedContext('rollout-reception').firestore(),root),{
       ...payload,updatedBy:'rollout-reception',
@@ -2255,5 +2255,44 @@ describe('Reversible person alias and tenant protection',()=>{
       recordedAt:serverTimestamp(),recordedBy:'alias-admin',
     })
     await assertFails(batch.commit())
+  })
+})
+
+describe('Person-declared availability never becomes a presence fact',()=>{
+  it('limits voluntary travel/pauses to tenant administrators and append-only corrections',async()=>{
+    await seedMembership('availability-admin','org-a','admin')
+    await seedMembership('availability-reception','org-a','presence_host',['unit-a'],{canManagePeople:true})
+    const root='organizations/org-a/products/raiz_e_mesa/'
+    await environment.withSecurityRulesDisabled(async ctx=>{
+      await setDoc(doc(ctx.firestore(),root+'people/person-one'),{
+        organizationId:'org-a',congregationId:'unit-a',name:'Known member',
+      })
+    })
+    const db=environment.authenticatedContext('availability-admin').firestore()
+    const receptionist=environment.authenticatedContext('availability-reception').firestore()
+    const path=root+'personAvailabilityEvents/report-one'
+    const report={
+      organizationId:'org-a',congregationId:'unit-a',personId:'person-one',
+      action:'reported',kind:'travel',startsOn:'2026-10-12',endsOn:'2026-10-18',
+      sourceEventId:'',recordedAt:serverTimestamp(),recordedBy:'availability-admin',
+    }
+    await assertFails(setDoc(doc(receptionist,path),{...report,recordedBy:'availability-reception'}))
+    await assertFails(setDoc(doc(db,root+'personAvailabilityEvents/fake-person'),{
+      ...report,personId:'missing-person',
+    }))
+    await assertFails(setDoc(doc(db,root+'personAvailabilityEvents/invented-category'),{
+      ...report,kind:'spiritual_crisis',
+    }))
+    await assertSucceeds(setDoc(doc(db,path),report))
+    await assertFails(updateDoc(doc(db,path),{endsOn:'2026-10-19'}))
+    await assertFails(setDoc(doc(db,root+'personAvailabilityEvents/fake-withdrawal'),{
+      ...report,action:'withdrawn',sourceEventId:'not-existing',
+    }))
+    await assertSucceeds(setDoc(doc(db,root+'personAvailabilityEvents/withdrawal-one'),{
+      ...report,action:'withdrawn',sourceEventId:'report-one',
+    }))
+    await assertFails(deleteDoc(doc(db,path)))
+    const person=await getDoc(doc(db,root+'people/person-one'))
+    expect(person.data()?.name).toBe('Known member')
   })
 })
