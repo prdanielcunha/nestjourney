@@ -2554,6 +2554,7 @@ export async function createPresenceSession(input: {
   eligiblePersonIds?: string[]
   eventTypeId?: string
   eventSeriesId?: string
+  requestId?: string
 }) {
   assertSensitiveJourneyWriteIsOnline()
   const roster = input.eligiblePersonIds
@@ -2561,9 +2562,10 @@ export async function createPresenceSession(input: {
   const eventTypeId = String(input.eventTypeId || 'general').trim()
   if (!/^[a-z][a-z0-9_-]{0,39}$/.test(eventTypeId)) throw new Error('event_type_invalid')
   if (input.eventSeriesId && !/^[A-Za-z0-9_-]{1,120}$/.test(input.eventSeriesId)) throw new Error('event_series_id_invalid')
+  if (input.requestId && !/^[A-Za-z0-9_-]{8,120}$/.test(input.requestId)) throw new Error('session_request_id_invalid')
   const firestore = requireDb()
   const sessions = collection(firestore, journeyCollectionPath(input.organizationId, 'presenceSessions'))
-  const sessionRef = doc(sessions)
+  const sessionRef = input.requestId ? doc(sessions, 'req_'+input.requestId) : doc(sessions)
   const factRef = doc(firestore, `${journeyCollectionPath(input.organizationId, 'facts')}/presence-session-${sessionRef.id}`)
   const batch = writeBatch(firestore)
   const eventRef = `event:${sessionRef.id}`
@@ -2598,7 +2600,31 @@ export async function createPresenceSession(input: {
     version: 1,
     payload: { sessionId: sessionRef.id },
   })
-  await batch.commit()
+  try {
+    await batch.commit()
+  } catch (cause) {
+    // A successful write can lose its network acknowledgement. Do not create
+    // another session on retry, and accept only the exact persisted request.
+    if (input.requestId) {
+      try {
+        const existing=await getDocFromServer(sessionRef)
+        const value=existing.data()
+        if(existing.exists()
+          && value?.organizationId===input.organizationId
+          && value.congregationId===input.congregationId
+          && value.createdBy===input.actorId
+          && value.eventName===input.eventName
+          && value.eventTypeId===eventTypeId
+          && value.expectedPeopleCount===input.expectedPeopleCount
+          && (value.eventSeriesId||'')===(input.eventSeriesId||'')){
+          return sessionRef.id
+        }
+      } catch {
+        // Preserve the original failure if server verification is unavailable.
+      }
+    }
+    throw cause
+  }
   return sessionRef.id
 }
 
