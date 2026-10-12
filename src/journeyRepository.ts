@@ -2535,6 +2535,12 @@ export async function claimJourneyPersonBond(input: {
   return String(data.bondHostRef || input.access.userId)
 }
 
+/** Do not deliberately queue sensitive church facts in offline browser storage. */
+function assertSensitiveJourneyWriteIsOnline() {
+  if(typeof navigator!=='undefined' && navigator.onLine===false)
+    throw new Error('sensitive_write_offline_blocked')
+}
+
 export async function createPresenceSession(input: {
   organizationId: string
   congregationId: string
@@ -2546,6 +2552,7 @@ export async function createPresenceSession(input: {
   eventTypeId?: string
   eventSeriesId?: string
 }) {
+  assertSensitiveJourneyWriteIsOnline()
   const roster = input.eligiblePersonIds
   if (roster && (roster.length > 2000 || new Set(roster).size !== roster.length || roster.some(id => !id || id.includes('/')) || input.expectedPeopleCount !== roster.length)) throw new Error('session_roster_invalid')
   const eventTypeId = String(input.eventTypeId || 'general').trim()
@@ -2602,6 +2609,7 @@ export async function recordPresenceCheck(input: {
   correctedFromCheckId?: string
   correctionReason?: string
 }) {
+  assertSensitiveJourneyWriteIsOnline()
   if (input.state === 'unverified' && !input.correctedFromCheckId) throw new Error('unverified_requires_previous_check')
   if (input.correctedFromCheckId && (!input.correctionReason?.trim() || input.correctionReason.trim().length > 240)) throw new Error('correction_reason_required')
   const firestore = requireDb()
@@ -2657,6 +2665,7 @@ export async function closePresenceSession(
   checks: PresenceCheck[],
   actorId: string,
 ) {
+  assertSensitiveJourneyWriteIsOnline()
   const firestore = requireDb()
   const ref = doc(firestore, `${journeyCollectionPath(organizationId, 'presenceSessions')}/${session.id}`)
   const coverage = calculatePresenceCoverage(session, checks)
@@ -2674,6 +2683,7 @@ export async function closePresenceSession(
 
 /** Create a church person (without Hub login, invented visits, or implicit consent). */
 export async function createJourneyMember(input: { access: JourneyAccessContext; congregationId: string; name: string; preferredName?: string }): Promise<string> {
+  assertSensitiveJourneyWriteIsOnline()
   const { access } = input
   if (!(access.isSystemAdmin || access.isOwner || ['owner', 'admin', 'pastor'].includes(access.organizationRole))) throw new Error('member_registration_forbidden')
   if (!access.broadJourneyAccess && !access.congregationIds.includes(input.congregationId)) throw new Error('member_unit_forbidden')
@@ -2692,6 +2702,7 @@ export async function createJourneyMember(input: { access: JourneyAccessContext;
 }
 
 export async function createMinimalVisitor(input: MinimalVisitorInput) {
+  assertSensitiveJourneyWriteIsOnline()
   const firestore = requireDb()
   const name = input.name.trim()
   if (!name) throw new Error('visitor_name_required')
