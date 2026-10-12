@@ -120,6 +120,16 @@ export default function PresenceAssistPage() {
   const bootstrapRunRef = useRef(0)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const [online,setOnline]=useState(()=>typeof navigator==='undefined'||navigator.onLine!==false)
+  useEffect(()=>{
+    const sync=()=>setOnline(navigator.onLine!==false)
+    window.addEventListener('online',sync)
+    window.addEventListener('offline',sync)
+    return()=>{window.removeEventListener('online',sync);window.removeEventListener('offline',sync)}
+  },[])
+  const offlineNote=locale==='en'?'This device is offline. Attendance recording is paused to avoid unsynchronized or duplicated evidence. Reconnect before saving.'
+    :locale==='es'?'Este dispositivo no tiene conexión. Las nuevas marcas están pausadas para evitar registros pendientes o duplicados.'
+    :'Este dispositivo está sem conexão. Novas marcações estão suspensas para evitar registros pendentes ou duplicados. Reconecte antes de registrar.'
   const [showSession, setShowSession] = useState(false)
   const [seriesPreset, setSeriesPreset] = useState<JourneyEventSeries|null>(null)
   const [showVisitor, setShowVisitor] = useState(false)
@@ -233,7 +243,7 @@ export default function PresenceAssistPage() {
   }
 
   async function markPresenceState(person: PresencePerson, state: PresenceVerificationState) {
-    if (!access || !displaySession || displaySession.status !== 'open') return
+    if (!access || !displaySession || displaySession.status !== 'open' || !online) return
     const previous = latest.get(person.id)
     if (previous?.state === state) return
     if (state === 'absent_confirmed' && !window.confirm(t.confirmAbsent.replace('{name}', person.name))) return
@@ -258,7 +268,7 @@ export default function PresenceAssistPage() {
   }
 
   async function claimBond(person: PresencePerson) {
-    if (!access || person.bondHostRef) return
+    if (!access || person.bondHostRef || !online) return
     setBusy(true)
     setError('')
     try {
@@ -287,7 +297,7 @@ export default function PresenceAssistPage() {
   }
 
   async function routeAbsenceToCare(person: PresencePerson) {
-    if (!access || !displaySession || displaySession.status !== 'closed') return
+    if (!access || !displaySession || displaySession.status !== 'closed' || !online) return
     if (!confirmedAbsences.includes(person.id) || routedAbsenceIds.has(person.id)) return
     setBusy(true)
     setError('')
@@ -304,7 +314,7 @@ export default function PresenceAssistPage() {
 
   const noSessionGuide=emptyGuidance(locale,'presence_no_session')
   const noPeopleGuide=emptyGuidance(locale,'presence_no_people')
-  const canAddVisitor=Boolean(access?.canManagePeople&&displaySession?.status==='open')
+  const canAddVisitor=Boolean(access?.canManagePeople&&displaySession?.status==='open'&&online)
   const activeUnit=congregations.find(item=>item.id===congregationId)
   const unverifiedCount=coverage?.unverified??people.length
   const focusTitle=displaySession?.status==='open'
@@ -357,6 +367,7 @@ export default function PresenceAssistPage() {
     </section>
 
     {error ? <div className="presence-error" role="alert">{error}</div> : null}
+    {!online?<div className="presence-error" role="status">{offlineNote}</div>:null}
 
     <JourneyAreaFocus
       locale={locale}
@@ -372,9 +383,9 @@ export default function PresenceAssistPage() {
         ?[
           {label:locale==='en'?'Go to people':locale==='es'?'Ir a personas':'Ir para pessoas',href:'#presence-people',primary:true},
           ...(canAddVisitor?[{label:t.newVisitor,onClick:()=>setShowVisitor(true)}]:[]),
-          {label:t.close,onClick:()=>void closeSession(),disabled:busy},
+          {label:t.close,onClick:()=>void closeSession(),disabled:busy||!online},
         ]
-        :[{label:t.newSession,onClick:()=>setShowSession(true),disabled:!congregationId||busy,primary:true}]
+        :[{label:t.newSession,onClick:()=>setShowSession(true),disabled:!congregationId||busy||!online,primary:true}]
       }
     />
 
@@ -406,18 +417,18 @@ export default function PresenceAssistPage() {
           <span className={`presence-state ${present ? 'confirmed' : absent ? 'absent' : ''}`}>{present ? t.present : absent ? t.absent : t.notVerified}{current?.correctedFromCheckId ? ` · ${t.correcting}` : ''}</span>
           <div className="presence-bond-row">
             <span className={`presence-bond-state ${person.bondHostRef ? 'assigned' : ''}`}><HeartHandshake size={14}/>{person.bondHostRef ? (person.bondHostRef === access.userId ? bond.mine : bond.assigned) : bond.none}</span>
-            {!person.bondHostRef && displaySession?.status === 'open' ? <button className="presence-bond-button" disabled={busy} onClick={() => void claimBond(person)}>{bond.claim}</button> : null}
+            {!person.bondHostRef && displaySession?.status === 'open' ? <button className="presence-bond-button" disabled={busy||!online} onClick={() => void claimBond(person)}>{bond.claim}</button> : null}
           </div>
           {absenceUsable ? <div className={`presence-absence-care ${contactAllowed ? '' : 'blocked'}`}>
             <HeartHandshake size={15}/>
             <div><strong>{routedToCare ? absenceCare.routed : contactAllowed ? absenceCare.route : absenceCare.noContact}</strong><p>{contactAllowed ? absenceCare.routeHint : absenceCare.noContactHint}</p></div>
-            {contactAllowed && !routedToCare ? <button className="presence-bond-button" disabled={busy} onClick={() => void routeAbsenceToCare(person)}>{absenceCare.route}</button> : null}
+            {contactAllowed && !routedToCare ? <button className="presence-bond-button" disabled={busy||!online} onClick={() => void routeAbsenceToCare(person)}>{absenceCare.route}</button> : null}
           </div> : null}
           {!eligible?<p className="presence-eligibility-note">{locale==='en'?'Outside this event’s eligible roster: only a verified presence may be recorded.':locale==='es'?'Fuera de la lista elegible: solo se puede confirmar presencia.':'Fora do público elegível deste evento: somente presença real pode ser confirmada.'}</p>:null}
           <div className="presence-person-actions">
-            <button className={`presence-button ${present ? 'success' : 'primary'}`} disabled={busy || present || displaySession?.status !== 'open'} onClick={() => void markPresenceState(person, 'present_confirmed')}>{present ? <><Check size={17} /> {t.present}</> : t.markPresent}</button>
-            <button className={`presence-button ${absent ? 'absence' : ''}`} disabled={busy || absent || !eligible || displaySession?.status !== 'open'} onClick={() => void markPresenceState(person, 'absent_confirmed')}>{absent ? <><X size={17} /> {t.absent}</> : t.markAbsent}</button>
-            <button className="presence-button" disabled={busy || !current || current.state === 'unverified' || displaySession?.status !== 'open'} onClick={() => void markPresenceState(person, 'unverified')} aria-label={locale === 'en' ? `Undo check for ${person.name}` : locale === 'es' ? `Deshacer verificación de ${person.name}` : `Desfazer conferência de ${person.name}`}>{t.notVerified}</button>
+            <button className={`presence-button ${present ? 'success' : 'primary'}`} disabled={busy || !online || present || displaySession?.status !== 'open'} onClick={() => void markPresenceState(person, 'present_confirmed')}>{present ? <><Check size={17} /> {t.present}</> : t.markPresent}</button>
+            <button className={`presence-button ${absent ? 'absence' : ''}`} disabled={busy || !online || absent || !eligible || displaySession?.status !== 'open'} onClick={() => void markPresenceState(person, 'absent_confirmed')}>{absent ? <><X size={17} /> {t.absent}</> : t.markAbsent}</button>
+            <button className="presence-button" disabled={busy || !online || !current || current.state === 'unverified' || displaySession?.status !== 'open'} onClick={() => void markPresenceState(person, 'unverified')} aria-label={locale === 'en' ? `Undo check for ${person.name}` : locale === 'es' ? `Deshacer verificación de ${person.name}` : `Desfazer conferência de ${person.name}`}>{t.notVerified}</button>
           </div>
         </article>
       })}
@@ -427,7 +438,7 @@ export default function PresenceAssistPage() {
   </div>
 
   {showSession ? <SessionModal preset={seriesPreset} close={() => {setShowSession(false);setSeriesPreset(null)}} create={async (eventName, expected, eventTypeId, eligiblePersonIds, eventSeriesId) => {
-    if (!access) return
+    if (!access || !online) return
     setBusy(true); setError('')
     try {
       await createPresenceSession({ organizationId: access.organizationId, congregationId, actorId: access.userId, eventName, expectedPeopleCount: expected, minimumCoveragePercent: 90, eventTypeId, eligiblePersonIds, eventSeriesId })
@@ -436,10 +447,10 @@ export default function PresenceAssistPage() {
       await refreshScope(access.organizationId, congregationId)
     } catch (cause) { console.error(cause); setError(t.error) }
     finally { setBusy(false) }
-  }} eligiblePeople={people} locale={locale} /> : null}
+  }} eligiblePeople={people} locale={locale} online={online} /> : null}
 
   {showVisitor ? <VisitorModal close={() => setShowVisitor(false)} save={async (name, phone, consent, preferredContactChannel, claimBond) => {
-    if (!access || !displaySession) return
+    if (!access || !displaySession || !online) return
     setBusy(true); setError('')
     try {
       const person = await createMinimalVisitor({ organizationId: access.organizationId, congregationId, actorId: access.userId, name, phone, consent, preferredContactChannel })
@@ -464,7 +475,7 @@ export default function PresenceAssistPage() {
   </main>
 }
 
-function SessionModal({ close, create, eligiblePeople, locale, preset }: { close: () => void; create: (name: string, expected: number, eventTypeId: string, eligiblePersonIds: string[], eventSeriesId?: string) => Promise<void>; eligiblePeople: PresencePerson[]; locale: AppLocale; preset:JourneyEventSeries|null }) {
+function SessionModal({ close, create, eligiblePeople, locale, preset, online }: { close: () => void; create: (name: string, expected: number, eventTypeId: string, eligiblePersonIds: string[], eventSeriesId?: string) => Promise<void>; eligiblePeople: PresencePerson[]; locale: AppLocale; preset:JourneyEventSeries|null; online:boolean }) {
   const t = presenceAssistCopy[locale]
   const [name, setName] = useState(`${preset?.title||t.todayEvent} · ${new Date().toLocaleDateString(locale)}`)
   const [eventTypeId, setEventTypeId] = useState<string>(preset?.eventTypeId||'general')
@@ -532,7 +543,7 @@ function SessionModal({ close, create, eligiblePeople, locale, preset }: { close
       </div>:null}
       <div className="presence-modal-actions">
         <button className="presence-button" onClick={close}>{t.cancel}</button>
-        <button className="presence-button primary" disabled={!name.trim() || (requiresSelection && expected === 0)} onClick={() => void create(name, expected, eventTypeId, [...selectedIds], preset?.id)}>{copy.start}</button>
+        <button className="presence-button primary" disabled={!online || !name.trim() || (requiresSelection && expected === 0)} onClick={() => void create(name, expected, eventTypeId, [...selectedIds], preset?.id)}>{copy.start}</button>
       </div>
     </section>
   </div>
