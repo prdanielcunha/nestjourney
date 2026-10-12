@@ -708,11 +708,11 @@ service cloud.firestore {
         && flags is map
         && flags.keys().hasAll([
           'memberBulkImport','personProfileEdit','familyLinks',
-          'verifiedFrequency','optionalProjects','crossUnitPresence','eventSeries','personAliases'
+          'verifiedFrequency','optionalProjects','crossUnitPresence','eventSeries','personAliases','personAvailability'
         ])
         && flags.keys().hasOnly([
           'memberBulkImport','personProfileEdit','familyLinks',
-          'verifiedFrequency','optionalProjects','crossUnitPresence','eventSeries','personAliases'
+          'verifiedFrequency','optionalProjects','crossUnitPresence','eventSeries','personAliases','personAvailability'
         ])
         && flags.get('memberBulkImport',null) is bool
         && flags.get('personProfileEdit',null) is bool
@@ -722,6 +722,7 @@ service cloud.firestore {
         && flags.get('crossUnitPresence',null) is bool
         && flags.get('eventSeries',null) is bool
         && flags.get('personAliases',null) is bool
+        && flags.get('personAvailability',null) is bool
         && request.resource.data.get('updatedAt',null) == request.time
         && request.resource.data.get('updatedBy','') == request.auth.uid;
     }
