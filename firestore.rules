@@ -2220,6 +2220,15 @@ service cloud.firestore {
             && request.resource.data.get('enrollmentId','') is string
             && request.resource.data.get('enrollmentId','').size() > 0
             && eventId == request.resource.data.enrollmentId + '_v' + request.resource.data.revision
+            && get(
+              /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/projectEnrollments/$(request.resource.data.enrollmentId)
+            ).data.get('projectId','') == request.resource.data.projectId
+            && get(
+              /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/projectEnrollments/$(request.resource.data.enrollmentId)
+            ).data.get('personId','') == request.resource.data.personId
+            && get(
+              /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/projectEnrollments/$(request.resource.data.enrollmentId)
+            ).data.get('congregationId','') == request.resource.data.congregationId
             && request.resource.data.get('recordedAt',null) == request.time
             && request.resource.data.get('recordedBy','') == request.auth.uid
             && enrollmentTransitionAllowed(
