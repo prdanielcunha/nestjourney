@@ -259,6 +259,8 @@ export interface PresencePerson {
 }
 
 export interface JourneyPersonRecord extends PresencePerson {
+  communityStatus?: 'member' | 'regular' | 'visitor' | 'former_member' | 'not_informed'
+  preferredName?: string
   firstVisit?: string
   stage?: string
   groupId?: string
@@ -1188,6 +1190,8 @@ export async function listJourneyPeople(organizationId: string, congregationId: 
       bondHostRef: asString(data.bondHostRef) || undefined,
       bondAssignedAt: data.bondAssignedAt ? toIso(data.bondAssignedAt) : undefined,
       firstVisit: asString(data.firstVisit) || undefined,
+      preferredName: asString(data.preferredName) || undefined,
+      communityStatus: (asString(data.communityStatus) || undefined) as JourneyPersonRecord['communityStatus'],
       stage: asString(data.stage) || undefined,
       groupId: asString(data.groupId) || undefined,
       createdAt: data.createdAt ? toIso(data.createdAt) : undefined,
@@ -2649,6 +2653,26 @@ export async function closePresenceSession(
     absenceEvidenceEligible: coverage.meetsMinimum,
   })
   await batch.commit()
+}
+
+
+/** Create a church person (without Hub login, invented visits, or implicit consent). */
+export async function createJourneyMember(input: { access: JourneyAccessContext; congregationId: string; name: string; preferredName?: string }): Promise<string> {
+  const { access } = input
+  if (!(access.isSystemAdmin || access.isOwner || ['owner', 'admin', 'pastor'].includes(access.organizationRole))) throw new Error('member_registration_forbidden')
+  if (!access.broadJourneyAccess && !access.congregationIds.includes(input.congregationId)) throw new Error('member_unit_forbidden')
+  const name = input.name.trim().replace(/\s+/g, ' ')
+  const preferredName = String(input.preferredName ?? '').trim().replace(/\s+/g, ' ')
+  if (name.length < 2 || name.length > 160 || preferredName.length > 120) throw new Error('member_name_invalid')
+  const firestore = requireDb()
+  const normalize = (value: string) => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR').trim().replace(/\s+/g, ' ')
+  const existing = await getDocs(collection(firestore, journeyCollectionPath(access.organizationId, 'people')))
+  if (existing.docs.some(item => normalize(asString(item.data().name)) === normalize(name))) throw new Error('person_possible_duplicate')
+  const ref = doc(collection(firestore, journeyCollectionPath(access.organizationId, 'people')))
+  await setDoc(ref, { organizationId: access.organizationId, congregationId: input.congregationId,
+    name, preferredName, communityStatus: 'member', consent: false, phone: '', preferredContactChannel: '',
+    visits: 0, stage: 'new', createdAt: serverTimestamp(), createdBy: access.userId, dataSource: 'manual_member_registration' })
+  return ref.id
 }
 
 export async function createMinimalVisitor(input: MinimalVisitorInput) {
