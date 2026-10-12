@@ -1,8 +1,9 @@
 import {
-  Timestamp, collection, doc, getDoc, getDocs, onSnapshot, query, runTransaction, serverTimestamp, setDoc, updateDoc, where, writeBatch,
+  Timestamp, collection, doc, getDoc, getDocFromServer, getDocs, onSnapshot, query, runTransaction, serverTimestamp, setDoc, updateDoc, where, writeBatch,
   type Firestore,
 } from 'firebase/firestore'
 import { db } from './firebase'
+import { presenceIntentCheckId } from './presenceIntent'
 import { journeyCollectionPath } from './productIdentity'
 import { createRaizEMesaPlaybook, createNeutralJourneyPlaybook, JOURNEY_PLAYBOOK_DEFAULT_ID, normalizeJourneyPlaybook, type JourneyPlaybookDefinition } from './playbookEngine'
 import { planFollowupOutcome, type FollowupNextActionCode, type FollowupOutcomeCode } from './followup'
@@ -2613,7 +2614,8 @@ export async function recordPresenceCheck(input: {
   if (input.state === 'unverified' && !input.correctedFromCheckId) throw new Error('unverified_requires_previous_check')
   if (input.correctedFromCheckId && (!input.correctionReason?.trim() || input.correctionReason.trim().length > 240)) throw new Error('correction_reason_required')
   const firestore = requireDb()
-  const checkRef = doc(collection(firestore, journeyCollectionPath(input.organizationId, 'presenceChecks')))
+  const intentId=await presenceIntentCheckId(input)
+  const checkRef = doc(firestore, journeyCollectionPath(input.organizationId, 'presenceChecks')+'/'+intentId)
   const batch = writeBatch(firestore)
   const isCorrection = Boolean(input.correctedFromCheckId)
   const source: PresenceSource = isCorrection ? 'retroactive_human_correction' : 'human_check'
@@ -2655,7 +2657,31 @@ export async function recordPresenceCheck(input: {
     })
   }
 
-  await batch.commit()
+  try {
+    await batch.commit()
+  } catch (cause) {
+    // Firestore rejects an attempted rewrite of a previously committed check.
+    // If the first response was lost, verify the exact persisted intent server-side.
+    // Do not trust offline cache or suppress unrelated validation failures.
+    try {
+      const existing=await getDocFromServer(checkRef)
+      const value=existing.data()
+      if(existing.exists()
+        && value?.organizationId===input.organizationId
+        && value.congregationId===input.congregationId
+        && value.sessionId===input.sessionId
+        && value.personId===input.personId
+        && value.actorId===input.actorId
+        && value.state===input.state
+        && (value.correctedFromCheckId||'')===(input.correctedFromCheckId||'')
+        && (value.correctionReason||'')===(input.correctionReason?.trim()||'')){
+        return checkRef.id
+      }
+    } catch {
+      // A server read can fail during a real outage; preserve the original error.
+    }
+    throw cause
+  }
   return checkRef.id
 }
 
