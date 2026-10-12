@@ -1,0 +1,15 @@
+.optional-projects-panel{display:grid;gap:15px;margin:20px 0;padding:20px;border:1px solid var(--nj-border);border-radius:18px;background:var(--nj-navy-900);color:var(--nj-text)}
+.optional-projects-panel>header{display:flex;gap:12px;align-items:flex-start}.optional-projects-panel>header svg{color:var(--nj-accent);flex:none}
+.optional-projects-panel h2{font-size:19px;margin:0 0 5px}.optional-projects-panel header p{font-size:14px;line-height:1.5;color:var(--nj-text-muted);margin:0}
+.optional-projects-fields,.optional-projects-enroll{display:grid;gap:12px}.optional-projects-fields label,.optional-projects-select,.optional-projects-enroll label{display:grid;gap:6px;font-size:13px;color:var(--nj-text-muted)}
+.optional-projects-panel input:not([type=checkbox]),.optional-projects-panel select{width:100%;min-height:44px;padding:9px 11px;border:1px solid var(--nj-border);border-radius:11px;background:var(--nj-bg);color:var(--nj-text);font:inherit;font-size:15px}
+.optional-projects-fields fieldset{border:1px solid var(--nj-border);border-radius:12px;display:flex;flex-wrap:wrap;gap:12px;padding:12px}.optional-projects-fields legend{font-size:13px;color:var(--nj-text-muted)}.optional-projects-fields fieldset label{display:flex;gap:8px;align-items:center;min-height:34px;font-size:13px}
+.optional-projects-button,.optional-projects-primary{display:inline-flex;align-items:center;justify-content:center;gap:8px;justify-self:start;min-height:44px;padding:9px 14px;border:1px solid var(--nj-border);border-radius:10px;color:var(--nj-text);background:var(--nj-surface);font:inherit;font-size:14px;font-weight:650;cursor:pointer}
+.optional-projects-primary{background:var(--nj-accent-strong);border-color:var(--nj-accent-strong);color:var(--nj-on-accent)}
+.optional-projects-panel button:disabled{cursor:not-allowed;opacity:.45}
+.optional-projects-detail{display:grid;gap:14px;padding:16px;border:1px solid var(--nj-border);border-radius:12px}.optional-projects-detail>div:first-child{display:grid;gap:5px}
+.optional-projects-detail strong{font-size:17px}.optional-projects-detail span,.optional-projects-muted,.optional-projects-count{font-size:13px;color:var(--nj-text-muted);line-height:1.5}.optional-projects-detail p{margin:0;line-height:1.5;color:var(--nj-text-muted);font-size:14px}
+.optional-projects-enroll{padding-top:12px;border-top:1px solid var(--nj-border)}.optional-projects-enroll>div{display:flex;gap:8px;align-items:center;font-size:14px}
+.optional-projects-muted{display:flex;align-items:center;gap:7px;margin:0}.optional-projects-muted svg{flex:none}
+.optional-projects-error{font-size:13px;color:var(--nj-danger-text)}.optional-projects-success{font-size:13px;color:var(--nj-positive-text)}
+@media(max-width:620px){.optional-projects-panel{padding:15px}.optional-projects-button,.optional-projects-primary{width:100%}}
