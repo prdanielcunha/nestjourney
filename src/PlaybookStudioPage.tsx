@@ -120,6 +120,7 @@ export default function PlaybookStudioPage(){
   const [playbooks,setPlaybooks]=useState<JourneyPlaybookDefinition[]>([])
   const [activeId,setActiveId]=useState('')
   const [selectedId,setSelectedId]=useState('')
+  const [showTemplates,setShowTemplates]=useState(false)
   const [form,setForm]=useState<JourneyPlaybookDefinition|null>(null)
   const [loading,setLoading]=useState(true),[busy,setBusy]=useState(false),[message,setMessage]=useState(''),[error,setError]=useState('')
 
@@ -200,9 +201,10 @@ export default function PlaybookStudioPage(){
     <section className="playbook-layout">
       <aside className="journey-section-block playbook-list">
         <span className="journey-section-kicker">{t.select}</span>
-        {playbooks.map(item=><button key={item.id} className={selectedId===item.id?'active':''} onClick={()=>setSelectedId(item.id)}>
+        {playbooks.filter(item=>showTemplates||item.id!==JOURNEY_PLAYBOOK_DEFAULT_ID||item.id===activeId).map(item=><button key={item.id} className={selectedId===item.id?'active':''} onClick={()=>setSelectedId(item.id)}>
           <span><strong>{item.name}</strong><small>{item.id===activeId?t.active:item.status==='active'?t.activeStatus:t.draft}</small></span>{item.id===activeId?<Check size={16}/>:null}
         </button>)}
+        {playbooks.some(item=>item.id===JOURNEY_PLAYBOOK_DEFAULT_ID&&item.id!==activeId)?<button type="button" onClick={()=>setShowTemplates(value=>!value)} aria-expanded={showTemplates}>{showTemplates?(locale==='en'?'Hide optional templates':locale==='es'?'Ocultar modelos opcionales':'Ocultar modelos opcionais'):(locale==='en'?'Browse optional templates':locale==='es'?'Ver modelos opcionales':'Ver modelos opcionais')}</button>:null}
         {!playbooks.length?<p>{t.empty}</p>:null}
       </aside>
 
