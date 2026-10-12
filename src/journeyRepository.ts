@@ -2711,7 +2711,7 @@ export async function closePresenceSession(
 export async function createJourneyMember(input: { access: JourneyAccessContext; congregationId: string; name: string; preferredName?: string }): Promise<string> {
   assertSensitiveJourneyWriteIsOnline()
   const { access } = input
-  if (!(access.isSystemAdmin || access.isOwner || ['owner', 'admin', 'pastor'].includes(access.organizationRole))) throw new Error('member_registration_forbidden')
+  if (!(access.isOwner || ['owner', 'admin', 'pastor', 'data_admin'].includes(access.organizationRole))) throw new Error('member_registration_forbidden')
   if (!access.broadJourneyAccess && !access.congregationIds.includes(input.congregationId)) throw new Error('member_unit_forbidden')
   const name = input.name.trim().replace(/\s+/g, ' ')
   const preferredName = String(input.preferredName ?? '').trim().replace(/\s+/g, ' ')
