@@ -1864,6 +1864,23 @@ describe('Versioned presence eligibility contract', () => {
     const sessionDoc=doc(db,base+'eligibility-one')
     await assertSucceeds(setDoc(sessionDoc,payload))
     await assertFails(updateDoc(sessionDoc,{eligiblePersonIds:['person-1']}))
+    await environment.withSecurityRulesDisabled(async context => {
+      await setDoc(doc(context.firestore(),'organizations/org-a/products/raiz_e_mesa/people/person-outside'), {
+        organizationId:'org-a', congregationId:'unit-a',name:'Outside audience',
+      })
+    })
+    const checkBase='organizations/org-a/products/raiz_e_mesa/presenceChecks/'
+    const outsideCheck = {
+      organizationId:'org-a', congregationId:'unit-a',sessionId:'eligibility-one',
+      personId:'person-outside',source:'human_check',actorId:'presence-scope',
+      recordedAt:serverTimestamp(),
+    }
+    await assertFails(setDoc(doc(db,checkBase+'outside-absent'), {
+      ...outsideCheck,state:'absent_confirmed',
+    }))
+    await assertSucceeds(setDoc(doc(db,checkBase+'outside-present'), {
+      ...outsideCheck,state:'present_confirmed',
+    }))
     await assertFails(setDoc(doc(db,base+'eligibility-bad-count'), {...payload,expectedPeopleCount:3}))
     await assertFails(setDoc(doc(db,base+'eligibility-bad-type'), {...payload,eventTypeId:'invalid / event'}))
   })
