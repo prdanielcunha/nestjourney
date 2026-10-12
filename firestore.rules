@@ -2071,6 +2071,53 @@ service cloud.firestore {
         // Family ties require explicit admin confirmation; there is no surname-based inference.
         // Manual logical identity reconciliation. No people or historic facts are rewritten.
         // Only real church administrators can create or reverse identity aliases.
+        // Voluntary travel/pause facts are separate from actual presence checks.
+        // No phone, health, religious inference, free-form narrative or automated absence.
+        match /personAvailabilityEvents/{availabilityId} {
+          allow read: if canManageFamilyRegistry(orgId);
+          allow create: if tenantCreate(orgId) && canManageFamilyRegistry(orgId)
+            && request.resource.data.keys().hasOnly([
+              'organizationId','congregationId','personId','action','kind',
+              'startsOn','endsOn','sourceEventId','recordedAt','recordedBy'
+            ])
+            && request.resource.data.get('personId','') is string
+            && request.resource.data.get('congregationId','') is string
+            && request.resource.data.get('action','') in ['reported','withdrawn']
+            && request.resource.data.get('kind','') in ['travel','requested_pause','other']
+            && request.resource.data.get('startsOn','') is string
+            && request.resource.data.get('endsOn','') is string
+            && request.resource.data.get('startsOn','').matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+            && request.resource.data.get('endsOn','').matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+            && request.resource.data.get('startsOn','') <= request.resource.data.get('endsOn','')
+            && request.resource.data.get('recordedAt',null) == request.time
+            && request.resource.data.get('recordedBy','') == request.auth.uid
+            && (
+              (
+                request.resource.data.get('action','') == 'reported'
+                && request.resource.data.get('sourceEventId','') == ''
+                && get(
+                  /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/people/$(request.resource.data.personId)
+                ).data.get('congregationId','') == request.resource.data.congregationId
+              )
+              || (
+                request.resource.data.get('action','') == 'withdrawn'
+                && request.resource.data.get('sourceEventId','') is string
+                && get(
+                  /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/personAvailabilityEvents/$(request.resource.data.sourceEventId)
+                ).data.get('action','') == 'reported'
+                && get(
+                  /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/personAvailabilityEvents/$(request.resource.data.sourceEventId)
+                ).data.get('personId','') == request.resource.data.personId
+                && get(
+                  /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/personAvailabilityEvents/$(request.resource.data.sourceEventId)
+                ).data.get('congregationId','') == request.resource.data.congregationId
+                && get(
+                  /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/personAvailabilityEvents/$(request.resource.data.sourceEventId)
+                ).data.get('kind','') == request.resource.data.kind
+              )
+            );
+          allow update, delete: if false;
+        }
         match /personAliases/{duplicateId} {
           allow read: if canManageFamilyRegistry(orgId);
           allow create: if tenantCreate(orgId) && canManageFamilyRegistry(orgId)
