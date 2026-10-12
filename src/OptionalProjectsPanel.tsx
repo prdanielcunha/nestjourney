@@ -6,7 +6,7 @@ import {listJourneyCongregations,listJourneyPeople} from './journeyRepository'
 import {canImportJourneyMembers} from './memberBulkImportRepository'
 import {
   listJourneyOptionalProjects,createJourneyOptionalProject,changeJourneyProjectStatus,
-  enrollJourneyPersonInProject,listJourneyProjectEnrollments,
+  enrollJourneyPersonInProject,listJourneyProjectEnrollments,changeProjectEnrollmentStatus,
   type JourneyOptionalProject,type JourneyProjectEnrollment,
 } from './journeyOptionalProjects'
 import './OptionalProjectsPanel.css'
@@ -39,7 +39,9 @@ export function OptionalProjectsPanel({access,locale}:{
      chosen:'Selected program',status:'Status',version:'Version',enroll:'Enroll an existing person',pick:'Select person',
      add:'Enroll person',members:'Enrolled people',cancel:'Cancel',saved:'Change saved with version history.',
      error:'Could not complete this action. Review authorization and active unit.',privacy:'An enrollment is a relationship, not attendance or consent.',
-     confirm:'Are you sure? This changes the program lifecycle.',draft:'Draft',active:'Active',archived:'Archived'}
+     confirm:'Are you sure? This changes the program lifecycle.',draft:'Draft',active:'Active',archived:'Archived',
+     pause:'Record requested pause',leave:'Record confirmed voluntary departure',return:'Rejoin program',
+     request:'Confirm the person directly requested this change. Never infer it from attendance.',enrolled:'Enrolled',paused:'Paused',completed:'Left / completed'}
     :locale==='es'?
     {title:'Programas opcionales',intro:'Una iglesia comienza sin programas obligatorios. Cree, active y vincule personas existentes sin duplicarlas.',
      new:'Nuevo programa',name:'Nombre del programa',description:'Propósito (opcional)',unit:'Sedes donde participa el programa',
@@ -47,14 +49,18 @@ export function OptionalProjectsPanel({access,locale}:{
      chosen:'Programa seleccionado',status:'Estado',version:'Versión',enroll:'Incluir una persona existente',pick:'Seleccionar persona',
      add:'Incluir persona',members:'Personas incluidas',cancel:'Cancelar',saved:'Cambio guardado con historial de versión.',
      error:'No se pudo completar. Revise permisos y sede.',privacy:'Un vínculo no presume asistencia ni consentimiento.',
-     confirm:'¿Confirma el cambio de estado del programa?',draft:'Borrador',active:'Activo',archived:'Archivado'}
+     confirm:'¿Confirma el cambio de estado del programa?',draft:'Borrador',active:'Activo',archived:'Archivado',
+     pause:'Registrar pausa solicitada',leave:'Registrar salida voluntaria confirmada',return:'Volver al programa',
+     request:'Confirme que la persona solicitó este cambio directamente. Nunca se deduce de la asistencia.',enrolled:'Inscrito',paused:'En pausa',completed:'Salió / completó'}
     :{title:'Projetos opcionais',intro:'Uma igreja começa sem projetos obrigatórios. Crie, ative quando estiver pronto e vincule pessoas existentes sem duplicar cadastros.',
      new:'Novo projeto',name:'Nome do projeto',description:'Propósito (opcional)',unit:'Unidades participantes',
      create:'Criar rascunho',activate:'Ativar projeto',archive:'Arquivar projeto',empty:'Nenhum projeto opcional registrado.',
      chosen:'Projeto selecionado',status:'Situação',version:'Versão',enroll:'Vincular pessoa já cadastrada',pick:'Selecionar pessoa',
      add:'Vincular pessoa',members:'Pessoas vinculadas',cancel:'Cancelar',saved:'Alteração registrada com histórico de versões.',
      error:'Não foi possível concluir. Confira permissões e unidade.',privacy:'Inscrição em projeto não é presença nem consentimento.',
-     confirm:'Confirma a mudança de situação deste projeto?',draft:'Rascunho',active:'Ativo',archived:'Arquivado'}
+     confirm:'Confirma a mudança de situação deste projeto?',draft:'Rascunho',active:'Ativo',archived:'Arquivado',
+     pause:'Registrar pausa solicitada',leave:'Registrar saída voluntária confirmada',return:'Retornar ao projeto',
+     request:'Confirme que a própria pessoa solicitou a mudança. Nunca deduza saída ou pausa pela ausência.',enrolled:'Inscrito(a)',paused:'Em pausa',completed:'Saiu / concluiu'}
 
   const refresh=useCallback(async()=>{
     const [nextUnits,nextProjects]=await Promise.all([listJourneyCongregations(access),listJourneyOptionalProjects(access)])
@@ -125,6 +131,22 @@ export function OptionalProjectsPanel({access,locale}:{
           <button className="optional-projects-primary" disabled={busy||!selectedPerson} onClick={()=>{const person=people.find(p=>p.id===selectedPerson);if(person)void operate(()=>enrollJourneyPersonInProject({access,project,person}))}}>{copy.add}</button>
         </div>:null}
         <p className="optional-projects-count">{copy.members}: {enrollments.length}</p>
+        {enrollments.length?<div className="optional-project-members">{enrollments.filter(item=>item.congregationId===selectedUnit).map(item=>{
+          const person=people.find(p=>p.id===item.personId)
+          const status=item.status==='active'?copy.enrolled:item.status==='paused'?copy.paused:copy.completed
+          const change=(next:'active'|'paused'|'completed',reason:'rejoined'|'paused_by_request'|'left_voluntarily')=>{
+            if(!window.confirm(copy.request))return
+            void operate(()=>changeProjectEnrollmentStatus({access,enrollment:item,nextStatus:next,reason}))
+          }
+          return <article key={item.id}><div><strong>{person?.preferredName||person?.name||item.personId}</strong><small>{status}</small></div>
+            {project.status==='active'?<div>
+              {item.status==='active'?<>
+                <button type="button" disabled={busy} onClick={()=>change('paused','paused_by_request')}>{copy.pause}</button>
+                <button type="button" disabled={busy} onClick={()=>change('completed','left_voluntarily')}>{copy.leave}</button>
+              </>:<button type="button" disabled={busy} onClick={()=>change('active','rejoined')}>{copy.return}</button>}
+            </div>:null}
+          </article>
+        })}</div>:null}
       </article>:null}
     </>}
     <p className="optional-projects-muted"><ShieldCheck size={15}/>{copy.privacy}</p>
