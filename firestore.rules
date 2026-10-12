@@ -530,12 +530,17 @@ service cloud.firestore {
         && getAfter(auditPath).data.get('action', '') == 'person.profile_updated'
         && getAfter(auditPath).data.get('targetRef', '') == 'person:' + personId;
     }
+    function validPresenceSeriesReference(orgId) {
+      let seriesId = request.resource.data.get('eventSeriesId','');
+      let series = get(
+        /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/eventSeries/$(seriesId)
+      ).data;
+      return series.get('status','') == 'active'
+        && series.get('congregationId','') == request.resource.data.get('congregationId','')
+        && series.get('eventTypeId','') == request.resource.data.get('eventTypeId','general');
+    }
     function validPresenceSessionCreate(orgId) {
       let eligible = request.resource.data.get('eligiblePersonIds', null);
-      let seriesId = request.resource.data.get('eventSeriesId','');
-      let seriesData = seriesId != '' ? get(
-        /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/eventSeries/$(seriesId)
-      ).data : {};
       return tenantCreate(orgId)
         && request.resource.data.get('congregationId', '') is string
         && request.resource.data.get('createdBy', '') == request.auth.uid
@@ -548,14 +553,6 @@ service cloud.firestore {
         && request.resource.data.get('minimumCoveragePercent', -1) <= 100
         && request.resource.data.get('eventTypeId', 'general') is string
         && request.resource.data.get('eventTypeId', 'general').matches('^[a-z][a-z0-9_-]{0,39}$')
-        && (
-          seriesId == ''
-          || (
-            seriesData.get('status','') == 'active'
-            && seriesData.get('congregationId','') == request.resource.data.congregationId
-            && seriesData.get('eventTypeId','') == request.resource.data.eventTypeId
-          )
-        )
         && (
           eligible == null
           || (
@@ -2281,8 +2278,7 @@ service cloud.firestore {
         }
         // Weekly scheduling is a manual template, never an automatic attendance fact.
         match /eventSeries/{seriesId} {
-          allow read: if canManagePresence(orgId)
-            && canAccessCongregation(orgId,resource.data.get('congregationId',''));
+          allow read: if canManagePresence(orgId);
           allow create: if tenantCreate(orgId) && canManageFamilyRegistry(orgId)
             && request.resource.data.keys().hasOnly([
               'organizationId','congregationId','title','eventTypeId','weekday',
@@ -2317,7 +2313,11 @@ service cloud.firestore {
             && canAccessCongregation(orgId, resource.data.get('congregationId', ''));
           allow create: if canManagePresence(orgId)
             && canAccessCongregation(orgId, request.resource.data.get('congregationId', ''))
-            && validPresenceSessionCreate(orgId);
+            && validPresenceSessionCreate(orgId)
+            && (
+              request.resource.data.get('eventSeriesId','') == ''
+              || validPresenceSeriesReference(orgId)
+            );
           allow update: if canManagePresence(orgId)
             && resource.data.get('status', '') == 'open'
             && tenantUnchanged(orgId)
