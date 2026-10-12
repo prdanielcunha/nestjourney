@@ -65,8 +65,9 @@ function toIso(value: unknown): string {
 
 export async function loadJourneyFamilies(access: JourneyAccessContext, congregationId: string) {
   assertScope(access, congregationId)
-  if (!db) throw new Error('firebase_not_configured')
-  const root = (part: string) => collection(db, journeyCollectionPath(access.organizationId, part))
+  const firestore = db
+  if (!firestore) throw new Error('firebase_not_configured')
+  const root = (part: string) => collection(firestore, journeyCollectionPath(access.organizationId, part))
   const [familyDocs, eventDocs] = await Promise.all([
     getDocs(query(root('families'), where('congregationId', '==', congregationId))),
     getDocs(query(root('familyEvents'), where('congregationId', '==', congregationId))),
