@@ -23,6 +23,7 @@ import {
 } from './playbookEngine'
 import { getInitialLocale, localeLabels, persistLocale, type AppLocale } from './i18n'
 import { AccessDeniedState } from './AccessDeniedState'
+import { OptionalProjectsPanel } from './OptionalProjectsPanel'
 import './JourneySectionPages.css'
 import './PlaybookStudioPage.css'
 
@@ -195,6 +196,7 @@ export default function PlaybookStudioPage(){
       <div className="playbook-header-actions"><a className="journey-primary-button" href="/more"><ArrowLeft size={16}/>{t.back}</a><select value={locale} onChange={e=>{const next=e.target.value as AppLocale;setLocale(next);persistLocale(next)}}>{(Object.keys(localeLabels) as AppLocale[]).map(id=><option key={id} value={id}>{localeLabels[id]}</option>)}</select></div>
     </header>
     {error?<div className="settings-error playbook-error"><span>{error}</span><button type="button" onClick={()=>void bootstrap()} disabled={busy}>{t.retry}</button></div>:null}{message?<div className="settings-success"><Check size={15}/>{message}</div>:null}
+    <OptionalProjectsPanel access={access} locale={locale}/>
 
     <section className="journey-section-note"><ShieldCheck size={18}/><p>{t.safe}</p></section>
 
