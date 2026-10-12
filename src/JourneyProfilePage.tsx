@@ -35,6 +35,7 @@ import { FamilyPanel } from './FamilyPanel'
 import { VerifiedFrequencyPanel } from './VerifiedFrequencyPanel'
 import { MemberImportPanel } from './MemberImportPanel'
 import { PersonAdminPanel } from './PersonAdminPanel'
+import { CrossUnitVisitsPanel } from './CrossUnitVisitsPanel'
 import { loadJourneyRolloutFlags, DEFAULT_JOURNEY_ROLLOUT_FLAGS, type JourneyRolloutFlags } from './journeyReleaseFlags'
 import './JourneyProfilePage.css'
 
@@ -315,6 +316,7 @@ export default function JourneyProfilePage() {
           </div>
           {rollout.personProfileEdit && access && selected ? <PersonAdminPanel key={selected.id+':'+(selected.profileRevision??0)} access={access} person={selected} locale={locale} onSaved={()=>refreshScope(access,congregationId)}/> : null}
           {rollout.familyLinks && access && selected ? <FamilyPanel access={access} person={selected} people={people} locale={locale}/> : null}
+          {rollout.crossUnitPresence && access && selected ? <CrossUnitVisitsPanel key={selected.id} access={access} person={selected} units={congregations} locale={locale}/> : null}
           {rollout.verifiedFrequency && access && selected ? <VerifiedFrequencyPanel key={selected.id} access={access} person={selected} locale={locale}/> : null}
         </>}
       </section>
