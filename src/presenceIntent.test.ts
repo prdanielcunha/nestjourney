@@ -1,11 +1,19 @@
-import {webcrypto} from 'node:crypto'
 import {afterEach,beforeEach,describe,expect,it,vi} from 'vitest'
 import {presenceIntentCheckId,presenceIntentTuple,type PresenceIntent} from './presenceIntent'
 const original:PresenceIntent={
   organizationId:'org-a',congregationId:'unit-a',sessionId:'s1',personId:'p1',
   actorId:'usher',state:'present_confirmed',
 }
-beforeEach(()=>vi.stubGlobal('crypto',webcrypto))
+// JSDOM does not expose SubtleCrypto in every runner. This deterministic
+// test double verifies intent identity; SHA-256 is provided by the browser.
+const digest=async(_algorithm:string,bytes:Uint8Array)=>{
+  let state=2166136261>>>0
+  for(const b of bytes){state^=b;state=Math.imul(state,16777619)}
+  const output=new Uint8Array(32)
+  for(let i=0;i<32;i++)output[i]=(state>>((i%4)*8))&255
+  return output.buffer
+}
+beforeEach(()=>vi.stubGlobal('crypto',{subtle:{digest}}))
 afterEach(()=>vi.unstubAllGlobals())
 describe('Idempotent human attendance intention',()=>{
   it('reuses exactly the same non-identifying ID for a repeated attempt',async()=>{
