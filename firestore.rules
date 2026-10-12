@@ -2054,6 +2054,7 @@ service cloud.firestore {
         match /people/{personId} {
           allow read: if canAccessCongregation(orgId, resource.data.get('congregationId', ''));
           allow create: if tenantCreate(orgId)
+            && (membershipIsActive(orgId) || isOwner(orgId))
             && request.resource.data.get('deletedAt', null) == null
             && canAccessCongregation(orgId, request.resource.data.get('congregationId', ''))
             && (
@@ -2078,7 +2079,7 @@ service cloud.firestore {
             )
             && validPersonContactCreate()
             && personBondEmptyOnCreate();
-          allow update: if tenantUnchanged(orgId) && congregationUnchanged()
+          allow update: if tenantUnchanged(orgId) && (membershipIsActive(orgId) || isOwner(orgId)) && congregationUnchanged()
             && canAccessCongregation(orgId, resource.data.get('congregationId', ''))
             && personBondUnchanged()
             && (
