@@ -2218,7 +2218,8 @@ service cloud.firestore {
             && request.resource.data.get('status','') != resource.data.get('status','')
             && request.resource.data.get('statusUpdatedAt',null) == request.time
             && request.resource.data.get('statusUpdatedBy','') == request.auth.uid
-            && request.resource.data.get('lastEventId','') == enrollmentId + '_v' + request.resource.data.revision
+            && request.resource.data.get('lastEventId','') is string
+            && request.resource.data.get('lastEventId','').size() >= 3
             && enrollmentTransitionAllowed(
               resource.data.get('status',''), request.resource.data.get('status',''),
               getAfter(
@@ -2242,7 +2243,8 @@ service cloud.firestore {
             ])
             && request.resource.data.get('enrollmentId','') is string
             && request.resource.data.get('enrollmentId','').size() > 0
-            && eventId == request.resource.data.enrollmentId + '_v' + request.resource.data.revision
+            && request.resource.data.get('revision',0) is int
+            && request.resource.data.get('revision',0) >= 1
             && get(
               /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/projectEnrollments/$(request.resource.data.enrollmentId)
             ).data.get('projectId','') == request.resource.data.projectId
@@ -2284,8 +2286,6 @@ service cloud.firestore {
           allow read: if canManagePresence(orgId)
             && canAccessCongregation(orgId,resource.data.get('congregationId',''));
           allow create: if tenantCreate(orgId) && canManageFamilyRegistry(orgId)
-            && canManagePresence(orgId)
-            && canAccessCongregation(orgId,request.resource.data.get('congregationId',''))
             && request.resource.data.keys().hasOnly([
               'organizationId','congregationId','title','eventTypeId','weekday',
               'localTime','timeZone','status','createdAt','createdBy','archivedAt','archivedBy'
@@ -2305,7 +2305,6 @@ service cloud.firestore {
             && request.resource.data.get('archivedAt','x') == null
             && request.resource.data.get('archivedBy','x') == '';
           allow update: if tenantUnchanged(orgId) && canManageFamilyRegistry(orgId)
-            && canAccessCongregation(orgId,resource.data.get('congregationId',''))
             && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
               'status','archivedAt','archivedBy'
             ])
