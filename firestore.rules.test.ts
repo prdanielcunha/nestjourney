@@ -1766,3 +1766,21 @@ describe('Bulk team interest import rules', () => {
     ))
   })
 })
+
+
+describe('Canonical member registration authority', () => {
+  it('does not allow a reception operator to declare someone a member', async () => {
+    await seedMembership('reception-a', 'org-a', 'presence_host', ['unit-a'], { canManagePeople: true })
+    const path = 'organizations/org-a/products/raiz_e_mesa/people/person-new-member'
+    const data = {
+      organizationId: 'org-a', congregationId: 'unit-a', name: 'Sample Member',
+      communityStatus: 'member', consent: false, phone: '', preferredContactChannel: '',
+      visits: 0, createdBy: 'reception-a', createdAt: serverTimestamp(),
+    }
+    await assertFails(setDoc(doc(environment.authenticatedContext('reception-a').firestore(), path), data))
+    await seedMembership('admin-a', 'org-a', 'admin', ['unit-a'])
+    await assertSucceeds(setDoc(doc(environment.authenticatedContext('admin-a').firestore(), path), {
+      ...data, createdBy: 'admin-a',
+    }))
+  })
+})
