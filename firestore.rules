@@ -668,6 +668,29 @@ service cloud.firestore {
         && getAfter(versionPath).data.get('recordedBy','') == request.auth.uid
         && getAfter(versionPath).data.get('recordedAt',null) == request.time;
     }
+    function validJourneyReleaseFlags(orgId) {
+      let flags = request.resource.data.get('flags', {});
+      return tenantCreate(orgId)
+        && request.resource.data.keys().hasOnly([
+          'organizationId','flags','updatedAt','updatedBy'
+        ])
+        && flags is map
+        && flags.keys().hasAll([
+          'memberBulkImport','personProfileEdit','familyLinks',
+          'verifiedFrequency','optionalProjects'
+        ])
+        && flags.keys().hasOnly([
+          'memberBulkImport','personProfileEdit','familyLinks',
+          'verifiedFrequency','optionalProjects'
+        ])
+        && flags.get('memberBulkImport',null) is bool
+        && flags.get('personProfileEdit',null) is bool
+        && flags.get('familyLinks',null) is bool
+        && flags.get('verifiedFrequency',null) is bool
+        && flags.get('optionalProjects',null) is bool
+        && request.resource.data.get('updatedAt',null) == request.time
+        && request.resource.data.get('updatedBy','') == request.auth.uid;
+    }
     function canManageJourneySettings(orgId) {
       return isSystemAdmin() || role(orgId, ['owner', 'admin', 'pastor']);
     }
@@ -1940,16 +1963,20 @@ service cloud.firestore {
 
         match /settings/{settingsId} {
           allow read: if hasMembership(orgId);
-          allow create: if canManageJourneySettings(orgId)
-            && (
-              (settingsId == 'moduleLabels' && validModuleLabels(orgId))
-              || (settingsId == 'playbook' && validPlaybookSettings(orgId))
+          allow create: if (
+              (settingsId == 'releaseFlags' && canManageFamilyRegistry(orgId) && validJourneyReleaseFlags(orgId))
+              || (canManageJourneySettings(orgId) && (
+                (settingsId == 'moduleLabels' && validModuleLabels(orgId))
+                || (settingsId == 'playbook' && validPlaybookSettings(orgId))
+              ))
             );
-          allow update: if canManageJourneySettings(orgId)
-            && resource.data.get('organizationId', '') == orgId
+          allow update: if resource.data.get('organizationId', '') == orgId
             && (
-              (settingsId == 'moduleLabels' && validModuleLabels(orgId))
-              || (settingsId == 'playbook' && validPlaybookSettings(orgId))
+              (settingsId == 'releaseFlags' && canManageFamilyRegistry(orgId) && validJourneyReleaseFlags(orgId))
+              || (canManageJourneySettings(orgId) && (
+                (settingsId == 'moduleLabels' && validModuleLabels(orgId))
+                || (settingsId == 'playbook' && validPlaybookSettings(orgId))
+              ))
             );
           allow delete: if false;
         }
