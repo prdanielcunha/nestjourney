@@ -31,6 +31,8 @@ import { emptyGuidance } from './emptyGuidance'
 import { AccessDeniedState } from './AccessDeniedState'
 import { JourneyAreaFocus } from './JourneyAreaFocus'
 import { CrossUnitPresencePanel } from './CrossUnitPresencePanel'
+import { EventSeriesPanel } from './EventSeriesPanel'
+import type { JourneyEventSeries } from './journeyEventSeries'
 import { loadJourneyRolloutFlags, DEFAULT_JOURNEY_ROLLOUT_FLAGS, type JourneyRolloutFlags } from './journeyReleaseFlags'
 import './PresenceAssistPage.css'
 
@@ -119,6 +121,7 @@ export default function PresenceAssistPage() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [showSession, setShowSession] = useState(false)
+  const [seriesPreset, setSeriesPreset] = useState<JourneyEventSeries|null>(null)
   const [showVisitor, setShowVisitor] = useState(false)
   const [routedAbsenceIds, setRoutedAbsenceIds] = useState<Set<string>>(new Set())
 
@@ -385,6 +388,7 @@ export default function PresenceAssistPage() {
       {coverage ? <><div className="coverage-wrap"><span className="coverage-number">{coverage.percent}%</span><div className="coverage-track" aria-label={`${t.coverage}: ${coverage.percent}%`}><span style={{ width: `${coverage.percent}%` }} /></div><div className="coverage-meta">{coverage.verified} {t.verified}<br />{coverage.unverified} {t.unverified}</div></div><p className="coverage-note">{coverage.meetsMinimum ? t.qualityReady : t.qualityNotReady}</p>{displaySession.status === 'closed' ? <p className="coverage-note">{coverage.meetsMinimum ? `${t.absenceEvidence}: ${confirmedAbsences.length}` : t.absenceBlocked}</p> : null}</> : null}
     </section> : <div className="presence-panel"><GuidedEmptyState icon={UserCheck} title={noSessionGuide.title} body={noSessionGuide.body} primary={{label:noSessionGuide.primary,onClick:()=>setShowSession(true)}} secondary={{label:noSessionGuide.secondary||t.back,href:'/my-today'}}/></div>}
 
+    {rollout.eventSeries && access && congregationId ? <EventSeriesPanel key={access.organizationId+':'+congregationId} access={access} congregationId={congregationId} locale={locale} canLaunch={displaySession?.status!=='open'} onLaunch={series=>{setSeriesPreset(series);setShowSession(true)}}/> : null}
     {rollout.crossUnitPresence && displaySession?.status==='open' && access ? <CrossUnitPresencePanel access={access} congregationId={congregationId} units={congregations} session={displaySession} checks={checks} locale={locale} onChanged={()=>refreshScope(access.organizationId,congregationId)}/> : null}
 
     <div className="presence-list-head" id="presence-people"><h2>{t.people} · {visiblePeople.length}</h2><span className="presence-badge"><ShieldCheck size={14} /> {t.sourceRule}</span></div>
@@ -422,12 +426,13 @@ export default function PresenceAssistPage() {
     <p className="presence-rule">{t.sourceRule}<br />{t.correctionRule}</p>
   </div>
 
-  {showSession ? <SessionModal close={() => setShowSession(false)} create={async (eventName, expected, eventTypeId, eligiblePersonIds) => {
+  {showSession ? <SessionModal preset={seriesPreset} close={() => {setShowSession(false);setSeriesPreset(null)}} create={async (eventName, expected, eventTypeId, eligiblePersonIds, eventSeriesId) => {
     if (!access) return
     setBusy(true); setError('')
     try {
-      await createPresenceSession({ organizationId: access.organizationId, congregationId, actorId: access.userId, eventName, expectedPeopleCount: expected, minimumCoveragePercent: 90, eventTypeId, eligiblePersonIds })
+      await createPresenceSession({ organizationId: access.organizationId, congregationId, actorId: access.userId, eventName, expectedPeopleCount: expected, minimumCoveragePercent: 90, eventTypeId, eligiblePersonIds, eventSeriesId })
       setShowSession(false)
+      setSeriesPreset(null)
       await refreshScope(access.organizationId, congregationId)
     } catch (cause) { console.error(cause); setError(t.error) }
     finally { setBusy(false) }
@@ -459,12 +464,12 @@ export default function PresenceAssistPage() {
   </main>
 }
 
-function SessionModal({ close, create, eligiblePeople, locale }: { close: () => void; create: (name: string, expected: number, eventTypeId: string, eligiblePersonIds: string[]) => Promise<void>; eligiblePeople: PresencePerson[]; locale: AppLocale }) {
+function SessionModal({ close, create, eligiblePeople, locale, preset }: { close: () => void; create: (name: string, expected: number, eventTypeId: string, eligiblePersonIds: string[], eventSeriesId?: string) => Promise<void>; eligiblePeople: PresencePerson[]; locale: AppLocale; preset:JourneyEventSeries|null }) {
   const t = presenceAssistCopy[locale]
-  const [name, setName] = useState(`${t.todayEvent} · ${new Date().toLocaleDateString(locale)}`)
-  const [eventTypeId, setEventTypeId] = useState('general')
+  const [name, setName] = useState(`${preset?.title||t.todayEvent} · ${new Date().toLocaleDateString(locale)}`)
+  const [eventTypeId, setEventTypeId] = useState(preset?.eventTypeId||'general')
   const [eligibleSearch, setEligibleSearch] = useState('')
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set(eligiblePeople.map(person=>person.id)))
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set(preset?.eventTypeId==='youth'||preset?.eventTypeId==='special'?[]:eligiblePeople.map(person=>person.id)))
   const requiresSelection = eventTypeId === 'youth' || eventTypeId === 'special'
   const expected = selectedIds.size
   const visibleEligiblePeople = eligiblePeople.filter(person=>person.name.toLocaleLowerCase(locale).includes(eligibleSearch.trim().toLocaleLowerCase(locale)))
@@ -513,7 +518,7 @@ function SessionModal({ close, create, eligiblePeople, locale }: { close: () => 
           <span>{copy.event}</span>
           <input value={name} onChange={(event) => setName(event.target.value)} autoFocus />
         </label>
-        <label className="presence-field"><span>{copy.eventType}</span><select value={eventTypeId} onChange={event => chooseEventType(event.target.value)}><option value="general">{locale==='en'?'Regular gathering':locale==='es'?'Encuentro habitual':'Encontro habitual'}</option><option value="sunday">{locale==='en'?'Sunday service':locale==='es'?'Culto dominical':'Culto de domingo'}</option><option value="midweek">{locale==='en'?'Midweek service':locale==='es'?'Culto semanal':'Culto da semana'}</option><option value="youth">{locale==='en'?'Youth gathering':locale==='es'?'Encuentro juvenil':'Encontro de jovens'}</option><option value="special">{locale==='en'?'Special event':locale==='es'?'Evento especial':'Evento especial'}</option></select></label>
+        <label className="presence-field"><span>{copy.eventType}</span><select value={eventTypeId} disabled={Boolean(preset)} onChange={event => chooseEventType(event.target.value)}><option value="general">{locale==='en'?'Regular gathering':locale==='es'?'Encuentro habitual':'Encontro habitual'}</option><option value="sunday">{locale==='en'?'Sunday service':locale==='es'?'Culto dominical':'Culto de domingo'}</option><option value="midweek">{locale==='en'?'Midweek service':locale==='es'?'Culto semanal':'Culto da semana'}</option><option value="youth">{locale==='en'?'Youth gathering':locale==='es'?'Encuentro juvenil':'Encontro de jovens'}</option><option value="special">{locale==='en'?'Special event':locale==='es'?'Evento especial':'Evento especial'}</option></select></label>
         <div className="presence-field presence-readonly-field">
           <span>{copy.people}</span>
           <strong>{expected}</strong>
@@ -527,7 +532,7 @@ function SessionModal({ close, create, eligiblePeople, locale }: { close: () => 
       </div>:null}
       <div className="presence-modal-actions">
         <button className="presence-button" onClick={close}>{t.cancel}</button>
-        <button className="presence-button primary" disabled={!name.trim() || (requiresSelection && expected === 0)} onClick={() => void create(name, expected, eventTypeId, [...selectedIds])}>{copy.start}</button>
+        <button className="presence-button primary" disabled={!name.trim() || (requiresSelection && expected === 0)} onClick={() => void create(name, expected, eventTypeId, [...selectedIds], preset?.id)}>{copy.start}</button>
       </div>
     </section>
   </div>
