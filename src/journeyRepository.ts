@@ -261,6 +261,7 @@ export interface PresencePerson {
 export interface JourneyPersonRecord extends PresencePerson {
   communityStatus?: 'member' | 'regular' | 'visitor' | 'former_member' | 'not_informed'
   preferredName?: string
+  profileRevision?: number
   firstVisit?: string
   stage?: string
   groupId?: string
@@ -1192,6 +1193,7 @@ export async function listJourneyPeople(organizationId: string, congregationId: 
       firstVisit: asString(data.firstVisit) || undefined,
       preferredName: asString(data.preferredName) || undefined,
       communityStatus: (asString(data.communityStatus) || undefined) as JourneyPersonRecord['communityStatus'],
+      profileRevision: typeof data.profileRevision === 'number' ? data.profileRevision : 0,
       stage: asString(data.stage) || undefined,
       groupId: asString(data.groupId) || undefined,
       createdAt: data.createdAt ? toIso(data.createdAt) : undefined,
