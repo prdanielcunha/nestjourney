@@ -1816,6 +1816,12 @@ describe('Universal family registry tenant/privacy contract', () => {
     await assertSucceeds(batch.commit())
     await assertFails(getDoc(doc(receptionist, familyPath)))
     await assertSucceeds(getDoc(doc(admin, familyPath)))
+    await environment.withSecurityRulesDisabled(async context => {
+      await setDoc(doc(context.firestore(), 'users/global-support'), { systemRole: 'ceo' })
+    })
+    const globalSupport = environment.authenticatedContext('global-support').firestore()
+    await assertFails(getDoc(doc(globalSupport, familyPath)))
+    await assertFails(getDoc(doc(globalSupport, eventPath)))
     await assertFails(updateDoc(doc(admin, eventPath), { guardianFlag: true }))
     await assertFails(deleteDoc(doc(admin, eventPath)))
     await assertFails(setDoc(doc(admin, 'organizations/org-a/products/raiz_e_mesa/familyEvents/guardian-spoof'), {
