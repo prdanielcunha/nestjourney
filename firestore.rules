@@ -510,10 +510,6 @@ service cloud.firestore {
     function validAdministrativePersonProfileUpdate(orgId, personId) {
       let auditId = request.resource.data.get('profileAuditId', '');
       let auditPath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/audit/$(auditId);
-      let audit = getAfter(auditPath).data;
-      let oldStatus = resource.data.get('communityStatus', 'not_informed');
-      let newStatus = request.resource.data.get('communityStatus', 'not_informed');
-      let nextRevision = request.resource.data.get('profileRevision', -1);
       return canManageFamilyRegistry(orgId)
         && auditId is string
         && auditId.size() > 0
@@ -523,22 +519,16 @@ service cloud.firestore {
         ])
         && request.resource.data.get('preferredName', '') is string
         && request.resource.data.get('preferredName', '').size() <= 120
-        && newStatus in ['member','regular','visitor','former_member','not_informed']
-        && nextRevision is int
-        && nextRevision == resource.data.get('profileRevision', 0) + 1
+        && request.resource.data.get('communityStatus', '') in [
+          'member','regular','visitor','former_member','not_informed'
+        ]
+        && request.resource.data.get('profileRevision', -1)
+          == resource.data.get('profileRevision', 0) + 1
         && request.resource.data.get('profileUpdatedAt', null) == request.time
         && request.resource.data.get('profileUpdatedBy', '') == request.auth.uid
         && existsAfter(auditPath)
-        && audit.get('organizationId', '') == orgId
-        && audit.get('congregationId', '') == resource.data.get('congregationId', '')
-        && audit.get('actorId', '') == request.auth.uid
-        && audit.get('action', '') == 'person.profile_updated'
-        && audit.get('targetRef', '') == 'person:' + personId
-        && audit.get('createdAt', null) == request.time
-        && audit.get('oldStatus', '') == oldStatus
-        && audit.get('newStatus', '') == newStatus
-        && audit.get('preferredNameChanged', null)
-          == (request.resource.data.get('preferredName', '') != resource.data.get('preferredName', ''));
+        && getAfter(auditPath).data.get('action', '') == 'person.profile_updated'
+        && getAfter(auditPath).data.get('targetRef', '') == 'person:' + personId;
     }
     function validPresenceSessionCreate(orgId) {
       let eligible = request.resource.data.get('eligiblePersonIds', null);
@@ -2024,7 +2014,13 @@ service cloud.firestore {
           allow update: if tenantUnchanged(orgId) && congregationUnchanged()
             && canAccessCongregation(orgId, resource.data.get('congregationId', ''))
             && personBondUnchanged()
-            && (validAdministrativePersonProfileUpdate(orgId, personId) || validPrivacyPersonUpdate(orgId, personId));
+            && (
+              (
+                request.resource.data.diff(resource.data).affectedKeys().hasAny(['profileAuditId'])
+                && validAdministrativePersonProfileUpdate(orgId, personId)
+              )
+              || validPrivacyPersonUpdate(orgId, personId)
+            );
           allow delete: if false;
         }
         // Universal family registry. Church persons remain canonical and are never duplicated.
