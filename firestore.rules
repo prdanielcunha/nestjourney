@@ -107,6 +107,16 @@ service cloud.firestore {
         || role(orgId, ['owner', 'admin', 'pastor', 'care'])
         || hasPermission(orgId, 'canManageCare');
     }
+    function canReadChurchPastoralNotes(orgId) {
+      return hasProductAccess(orgId)
+        && (
+          isOwner(orgId)
+          || (
+            membershipIsActive(orgId)
+            && memberRole(orgId) in ['owner', 'pastor']
+          )
+        );
+    }
     function canManagePastoral(orgId) {
       return isSystemAdmin()
         || role(orgId, ['owner', 'pastor'])
@@ -2680,9 +2690,9 @@ service cloud.firestore {
         }
 
         match /pastoral/{pastoralId} {
-          allow read: if role(orgId, ['owner', 'pastor']);
-          allow create: if tenantCreate(orgId) && role(orgId, ['owner', 'pastor']);
-          allow update: if tenantUnchanged(orgId) && role(orgId, ['owner', 'pastor']);
+          allow read: if canReadChurchPastoralNotes(orgId);
+          allow create: if tenantCreate(orgId) && canReadChurchPastoralNotes(orgId);
+          allow update: if tenantUnchanged(orgId) && canReadChurchPastoralNotes(orgId);
           allow delete: if false;
         }
         match /audit/{auditId} {
