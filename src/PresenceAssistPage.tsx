@@ -467,7 +467,7 @@ export default function PresenceAssistPage() {
 function SessionModal({ close, create, eligiblePeople, locale, preset }: { close: () => void; create: (name: string, expected: number, eventTypeId: string, eligiblePersonIds: string[], eventSeriesId?: string) => Promise<void>; eligiblePeople: PresencePerson[]; locale: AppLocale; preset:JourneyEventSeries|null }) {
   const t = presenceAssistCopy[locale]
   const [name, setName] = useState(`${preset?.title||t.todayEvent} · ${new Date().toLocaleDateString(locale)}`)
-  const [eventTypeId, setEventTypeId] = useState(preset?.eventTypeId||'general')
+  const [eventTypeId, setEventTypeId] = useState<string>(preset?.eventTypeId||'general')
   const [eligibleSearch, setEligibleSearch] = useState('')
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set(preset?.eventTypeId==='youth'||preset?.eventTypeId==='special'?[]:eligiblePeople.map(person=>person.id)))
   const requiresSelection = eventTypeId === 'youth' || eventTypeId === 'special'
