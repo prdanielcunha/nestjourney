@@ -2115,9 +2115,20 @@ describe('Person attends another campus using the same canonical person ID',()=>
     await assertFails(setDoc(doc(operator,root+'presenceChecks/cross-volunteer-check'),{
       ...source,actorId:'cross-volunteer',
     }))
-    await assertSucceeds(setDoc(doc(admin,root+'presenceChecks/cross-admin-check'),{
+    const realVisit=writeBatch(admin)
+    realVisit.set(doc(admin,root+'presenceChecks/cross-admin-check'),{
       ...source,actorId:'cross-admin',
-    }))
+    })
+    realVisit.set(doc(admin,root+'facts/presence-cross-admin-check'),{
+      eventId:'presence-cross-admin-check',eventType:'PRESENCE_CONFIRMED',
+      occurredAt:serverTimestamp(),recordedAt:serverTimestamp(),
+      organizationId:'org-a',actorId:'cross-admin',
+      subjectRef:'person:person-home',sourceApp:'nestjourney',
+      scope:'congregation:unit-b',evidenceRef:'presenceCheck:cross-admin-check',
+      sensitivity:'confidential',version:1,
+      payload:{checkId:'cross-admin-check',sessionId:'cross-session',state:'present_confirmed',source:'human_check'},
+    })
+    await assertSucceeds(realVisit.commit())
     await assertFails(setDoc(doc(admin,root+'presenceChecks/cross-absence'),{
       ...source,state:'absent_confirmed',actorId:'cross-admin',
     }))
