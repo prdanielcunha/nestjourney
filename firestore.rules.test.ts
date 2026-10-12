@@ -1841,3 +1841,24 @@ describe('Universal family registry tenant/privacy contract', () => {
     }))
   })
 })
+
+describe('Versioned presence eligibility contract', () => {
+  it('freezes the eligible roster and rejects inconsistent or mutable denominators', async () => {
+    await seedMembership('presence-scope', 'org-a', 'coordinator')
+    const db = environment.authenticatedContext('presence-scope').firestore()
+    const base = 'organizations/org-a/products/raiz_e_mesa/presenceSessions/'
+    const payload = {
+      organizationId:'org-a', congregationId:'unit-a', eventRef:'event:eligibility-1',
+      eventName:'Domingo', eventTypeId:'sunday',
+      openedAt:serverTimestamp(), closedAt:null, status:'open',
+      expectedPeopleCount:2, minimumCoveragePercent:90, createdBy:'presence-scope',
+      eligiblePersonIds:['person-1','person-2'], eligibilityVersion:1,
+      eligibilitySource:'operator_confirmed_unit_roster',
+    }
+    const sessionDoc=doc(db,base+'eligibility-one')
+    await assertSucceeds(setDoc(sessionDoc,payload))
+    await assertFails(updateDoc(sessionDoc,{eligiblePersonIds:['person-1']}))
+    await assertFails(setDoc(doc(db,base+'eligibility-bad-count'), {...payload,expectedPeopleCount:3}))
+    await assertFails(setDoc(doc(db,base+'eligibility-bad-type'), {...payload,eventTypeId:'invalid / event'}))
+  })
+})
