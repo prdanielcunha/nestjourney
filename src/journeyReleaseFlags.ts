@@ -5,12 +5,12 @@ import type {JourneyAccessContext} from './journeyRepository'
 import {canImportJourneyMembers} from './memberBulkImportRepository'
 
 /** Rollout flags are UX deployment gates, NOT a replacement for Firestore authorization. */
-export const ROLLOUT_KEYS=['memberBulkImport','personProfileEdit','familyLinks','verifiedFrequency','optionalProjects','crossUnitPresence','eventSeries','personAliases'] as const
+export const ROLLOUT_KEYS=['memberBulkImport','personProfileEdit','familyLinks','verifiedFrequency','optionalProjects','crossUnitPresence','eventSeries','personAliases','personAvailability'] as const
 export type JourneyRolloutKey=typeof ROLLOUT_KEYS[number]
 export type JourneyRolloutFlags=Record<JourneyRolloutKey,boolean>
 export const DEFAULT_JOURNEY_ROLLOUT_FLAGS:JourneyRolloutFlags={
   memberBulkImport:false,personProfileEdit:false,familyLinks:false,
-  verifiedFrequency:false,optionalProjects:false,crossUnitPresence:false,eventSeries:false,personAliases:false,
+  verifiedFrequency:false,optionalProjects:false,crossUnitPresence:false,eventSeries:false,personAliases:false,personAvailability:false,
 }
 export function normalizeJourneyRolloutFlags(value:unknown):JourneyRolloutFlags{
   const obj=value&&typeof value==='object'&&!Array.isArray(value)?value as Record<string,unknown>:{}
