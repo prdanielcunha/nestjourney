@@ -553,6 +553,11 @@ service cloud.firestore {
         && request.resource.data.get('state', '') in ['present_confirmed', 'absent_confirmed', 'unverified']
         && sessionData.get('congregationId', '') == congregationId
         && sessionData.get('status', '') == 'open'
+        && (
+          request.resource.data.get('state', '') != 'absent_confirmed'
+          || sessionData.get('eligiblePersonIds', null) == null
+          || personId in sessionData.get('eligiblePersonIds', [])
+        )
         && personData.get('congregationId', '') == congregationId
         && (
           (
