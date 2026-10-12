@@ -35,6 +35,7 @@ import { FamilyPanel } from './FamilyPanel'
 import { VerifiedFrequencyPanel } from './VerifiedFrequencyPanel'
 import { MemberImportPanel } from './MemberImportPanel'
 import { PersonAdminPanel } from './PersonAdminPanel'
+import { loadJourneyRolloutFlags, DEFAULT_JOURNEY_ROLLOUT_FLAGS, type JourneyRolloutFlags } from './journeyReleaseFlags'
 import './JourneyProfilePage.css'
 
 function initials(name: string) {
@@ -51,6 +52,7 @@ export default function JourneyProfilePage() {
   const [locale, setLocale] = useState<AppLocale>(getInitialLocale)
   const t = journeyProfileCopy[locale]
   const [access, setAccess] = useState<JourneyAccessContext | null>(null)
+  const [rollout,setRollout]=useState<JourneyRolloutFlags>(DEFAULT_JOURNEY_ROLLOUT_FLAGS)
   const [congregations, setCongregations] = useState<JourneyCongregation[]>([])
   const [congregationId, setCongregationId] = useState('')
   const [people, setPeople] = useState<JourneyPersonRecord[]>([])
@@ -69,6 +71,14 @@ export default function JourneyProfilePage() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
+  useEffect(()=>{
+    if(!access){setRollout(DEFAULT_JOURNEY_ROLLOUT_FLAGS);return}
+    let active=true
+    void loadJourneyRolloutFlags(access)
+      .then(value=>{if(active)setRollout(value)})
+      .catch(()=>{if(active)setRollout(DEFAULT_JOURNEY_ROLLOUT_FLAGS)})
+    return()=>{active=false}
+  },[access])
   const canView = Boolean(access && canViewJourneyPeople(access))
   const canRegisterMember = Boolean(access && (access.isSystemAdmin || access.isOwner || ['owner','admin','pastor'].includes(access.organizationRole)))
   async function registerMember() {
@@ -245,7 +255,7 @@ export default function JourneyProfilePage() {
       </form>
     </section> : null}
 
-    {access && congregationId && canRegisterMember?<MemberImportPanel key={access.organizationId+':'+congregationId} access={access} congregationId={congregationId} people={people} locale={locale} onCompleted={()=>refreshScope(access,congregationId)}/>:null}
+    {rollout.memberBulkImport && access && congregationId && canRegisterMember?<MemberImportPanel key={access.organizationId+':'+congregationId} access={access} congregationId={congregationId} people={people} locale={locale} onCompleted={()=>refreshScope(access,congregationId)}/>:null}
 
     <section className="journey-area-toolbar">
       {congregations.length>1?<label><span>{t.congregation}</span><select value={congregationId} onChange={(event) => void selectCongregation(event.target.value)} disabled={busy}>{congregations.map((item) => <option value={item.id} key={item.id}>{item.name}{item.city ? ` · ${item.city}` : ''}</option>)}</select></label>:null}
@@ -303,9 +313,9 @@ export default function JourneyProfilePage() {
               {!canReadDiscipleship ? <p className="journey-muted">{t.restrictedDiscipleship}</p> : snapshot.discipleship ? <div className="journey-discipleship"><div><span>{t.status}</span><strong>{snapshot.discipleship.status === 'completed' ? t.completed : snapshot.discipleship.status === 'paused' ? t.paused : t.active}</strong></div><div><span>{t.meeting}</span><strong>{snapshot.discipleship.meeting}/{activePlaybook?.discipleshipMeetingCount??7}</strong></div><div><span>{t.discipler}</span><strong>{snapshot.discipleship.disciplerName || snapshot.discipleship.disciplerId}</strong></div></div> : <p className="journey-muted">{t.noDiscipleship}</p>}
             </article>
           </div>
-          {access && selected ? <PersonAdminPanel key={selected.id+':'+(selected.profileRevision??0)} access={access} person={selected} locale={locale} onSaved={()=>refreshScope(access,congregationId)}/> : null}
-          {access && selected ? <FamilyPanel access={access} person={selected} people={people} locale={locale}/> : null}
-          {access && selected ? <VerifiedFrequencyPanel key={selected.id} access={access} person={selected} locale={locale}/> : null}
+          {rollout.personProfileEdit && access && selected ? <PersonAdminPanel key={selected.id+':'+(selected.profileRevision??0)} access={access} person={selected} locale={locale} onSaved={()=>refreshScope(access,congregationId)}/> : null}
+          {rollout.familyLinks && access && selected ? <FamilyPanel access={access} person={selected} people={people} locale={locale}/> : null}
+          {rollout.verifiedFrequency && access && selected ? <VerifiedFrequencyPanel key={selected.id} access={access} person={selected} locale={locale}/> : null}
         </>}
       </section>
     </section>
