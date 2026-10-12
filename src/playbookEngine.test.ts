@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   createRaizEMesaPlaybook,
+  createNeutralJourneyPlaybook,
   implementationKeysForPhases,
   normalizeJourneyPlaybook,
   playbookCanStartImplementation,
@@ -84,5 +85,19 @@ describe('Journey playbook engine', () => {
     const keys = implementationKeysForPhases([{ id: 'A B', title: 'A', objective: '', items: ['1','2'], targetWeek: 1, responsibleRoles: ['coordinator'] }])
     expect(keys).toEqual(['phase.a-b.item.1','phase.a-b.item.2'])
     expect(() => normalizeJourneyPlaybook({ organizationId: '../other' })).toThrow('invalid_organization_id')
+  })
+})
+
+
+describe('universal NestJourney without ministry project', () => {
+  it('offers a neutral, fully local core rather than implicitly enabling Raiz e Mesa', () => {
+    const core = createNeutralJourneyPlaybook('org-new')
+    expect(core.id).toBe('nestjourney-universal')
+    expect(core.organizationId).toBe('org-new')
+    expect(core.areaLabels.groups).toBe('Grupos')
+    expect(core.areaLabels.table).toBe('Encontros')
+    expect(core.stages.some(stage => /Raiz|Mesa Aberta|Casa de Paz/i.test(stage.label))).toBe(false)
+    expect(core.implementationKeys.length).toBeGreaterThan(0)
+    expect(createRaizEMesaPlaybook('org-existing').id).toBe('raiz_e_mesa_2026')
   })
 })
