@@ -2323,3 +2323,24 @@ describe('Confidential pastoral notes are not a SaaS CEO privilege',()=>{
     }))
   })
 })
+
+describe('Global SaaS operators do not get church person write permissions',()=>{
+  it('refuses manual member creation without real organization membership',async()=>{
+    await seedMembership('church-admin','org-a','admin')
+    await environment.withSecurityRulesDisabled(async ctx=>{
+      await setDoc(doc(ctx.firestore(),'users/saas-ceo'),{systemRole:'ceo'})
+    })
+    const root='organizations/org-a/products/raiz_e_mesa/people/'
+    const member={
+      organizationId:'org-a',congregationId:'unit-a',name:'Manually confirmed member',
+      communityStatus:'member',visits:0,stage:'new',phone:'',
+      preferredContactChannel:'',consent:false,
+      createdBy:'saas-ceo',createdAt:serverTimestamp(),
+      dataSource:'manual_member_registration',
+    }
+    await assertFails(setDoc(doc(environment.authenticatedContext('saas-ceo').firestore(),root+'ceo-only'),member))
+    await assertSucceeds(setDoc(doc(environment.authenticatedContext('church-admin').firestore(),root+'authorized-admin'),{
+      ...member,createdBy:'church-admin',
+    }))
+  })
+})
