@@ -59,6 +59,7 @@ export interface PresenceCheck {
   actorId: string
   recordedAt: string
   correctedFromCheckId?: string
+  correctionReason?: string
 }
 
 export interface PresenceCoverage {
@@ -213,7 +214,7 @@ export function createFactEvent(input: Omit<CanonicalFactEvent, 'sourceApp' | 'v
 }
 
 export function presenceCheckToFact(check: PresenceCheck): CanonicalFactEvent | null {
-  if (check.state === 'unverified') return null
+  if (check.state === 'unverified' && !check.correctedFromCheckId) return null
 
   const eventType: CanonicalEventType = check.correctedFromCheckId
     ? 'PRESENCE_CORRECTED'
@@ -234,7 +235,7 @@ export function presenceCheckToFact(check: PresenceCheck): CanonicalFactEvent | 
       sessionId: check.sessionId,
       state: check.state,
       source: check.source,
-      ...(check.correctedFromCheckId ? { correctedFromCheckId: check.correctedFromCheckId } : {}),
+      ...(check.correctedFromCheckId ? { correctedFromCheckId: check.correctedFromCheckId, ...(check.correctionReason ? { correctionReason: check.correctionReason } : {}) } : {}),
     },
   })
 }

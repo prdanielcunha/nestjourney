@@ -545,12 +545,15 @@ service cloud.firestore {
           (
             source == 'human_check'
             && correctedFromCheckId == ''
+            && request.resource.data.get('state', '') != 'unverified'
           )
           ||
           (
             source == 'retroactive_human_correction'
             && correctedFromCheckId != ''
-            && request.resource.data.get('state', '') != 'unverified'
+            && request.resource.data.get('correctionReason', '') is string
+            && request.resource.data.get('correctionReason', '').size() > 0
+            && request.resource.data.get('correctionReason', '').size() <= 240
             && correctionData.get('congregationId', '') == congregationId
             && correctionData.get('sessionId', '') == sessionId
             && correctionData.get('personId', '') == personId
@@ -1727,7 +1730,6 @@ service cloud.firestore {
         && payload.get('sessionId', '') == checkData.get('sessionId', '')
         && payload.get('state', '') == checkData.get('state', '')
         && payload.get('source', '') == checkData.get('source', '')
-        && checkData.get('state', '') != 'unverified'
         && (
           (
             eventType == 'PRESENCE_CONFIRMED'

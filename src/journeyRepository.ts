@@ -2354,6 +2354,7 @@ export async function listPresenceChecks(organizationId: string, congregationId:
       actorId: asString(data.actorId),
       recordedAt: toIso(data.recordedAt),
       correctedFromCheckId: asString(data.correctedFromCheckId) || undefined,
+      correctionReason: asString(data.correctionReason) || undefined,
     }
   })
 }
@@ -2578,7 +2579,10 @@ export async function recordPresenceCheck(input: {
   actorId: string
   state: PresenceVerificationState
   correctedFromCheckId?: string
+  correctionReason?: string
 }) {
+  if (input.state === 'unverified' && !input.correctedFromCheckId) throw new Error('unverified_requires_previous_check')
+  if (input.correctedFromCheckId && (!input.correctionReason?.trim() || input.correctionReason.trim().length > 240)) throw new Error('correction_reason_required')
   const firestore = requireDb()
   const checkRef = doc(collection(firestore, journeyCollectionPath(input.organizationId, 'presenceChecks')))
   const batch = writeBatch(firestore)
@@ -2594,10 +2598,10 @@ export async function recordPresenceCheck(input: {
     source,
     actorId: input.actorId,
     recordedAt: serverTimestamp(),
-    ...(isCorrection ? { correctedFromCheckId: input.correctedFromCheckId } : {}),
+    ...(isCorrection ? { correctedFromCheckId: input.correctedFromCheckId, correctionReason: input.correctionReason!.trim() } : {}),
   })
 
-  if (input.state !== 'unverified') {
+  if (input.state !== 'unverified' || isCorrection) {
     const factRef = doc(firestore, `${journeyCollectionPath(input.organizationId, 'facts')}/presence-${checkRef.id}`)
     batch.set(factRef, {
       eventId: factRef.id,
@@ -2617,7 +2621,7 @@ export async function recordPresenceCheck(input: {
         sessionId: input.sessionId,
         state: input.state,
         source,
-        ...(isCorrection ? { correctedFromCheckId: input.correctedFromCheckId } : {}),
+        ...(isCorrection ? { correctedFromCheckId: input.correctedFromCheckId, correctionReason: input.correctionReason!.trim() } : {}),
       },
     })
   }
