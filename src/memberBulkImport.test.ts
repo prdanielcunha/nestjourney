@@ -4,7 +4,7 @@ describe('member import requires explicit human review',()=>{
   it('reads PT/EN/ES header and safe two-column CSV without inferring contact consent',()=>{
     const rows=previewMemberImport('Nome;Nome preferido\n"Maria da Silva";"Maria"\nJoão Pereira;João',[])
     expect(rows.map(r=>r.status)).toEqual(['ready','ready'])
-    expect(prepareApprovedMemberImport(rows,[2])).toEqual([{name:'João Pereira',preferredName:'João'}])
+    expect(prepareApprovedMemberImport(rows,[3])).toEqual([{name:'João Pereira',preferredName:'João'}])
   })
   it('retains exact row numbers for paste without header and flags one-word names',()=>{
     const rows=previewMemberImport('Ana Maria\n\nLuis',[])
