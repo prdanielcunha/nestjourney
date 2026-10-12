@@ -2344,3 +2344,19 @@ describe('Global SaaS operators do not get church person write permissions',()=>
     }))
   })
 })
+
+describe('Pastoral handoffs do not leak to global SaaS support',()=>{
+  it('requires a tenant pastoral assignment rather than a global CEO role',async()=>{
+    await seedMembership('local-pastor','org-a','pastor')
+    await environment.withSecurityRulesDisabled(async ctx=>{
+      const db=ctx.firestore()
+      await setDoc(doc(db,'users/global-pastoral'),{systemRole:'ceo'})
+      await setDoc(doc(db,'organizations/org-a/products/raiz_e_mesa/pastoralHandoffs/private-handoff'),{
+        organizationId:'org-a',congregationId:'unit-a',status:'open',
+      })
+    })
+    const path='organizations/org-a/products/raiz_e_mesa/pastoralHandoffs/private-handoff'
+    await assertFails(getDoc(doc(environment.authenticatedContext('global-pastoral').firestore(),path)))
+    await assertSucceeds(getDoc(doc(environment.authenticatedContext('local-pastor').firestore(),path)))
+  })
+})
