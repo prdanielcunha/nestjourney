@@ -652,6 +652,18 @@ service cloud.firestore {
         && request.resource.data.get('bondAssignedBy', '') == resource.data.get('bondAssignedBy', '');
     }
     // SaaS support privileges alone never grant family relationship access.
+    function validAvailabilityWithdrawal(orgId) {
+      let report = get(
+        /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/personAvailabilityEvents/$(request.resource.data.sourceEventId)
+      ).data;
+      return report.get('organizationId','') == orgId
+        && report.get('action','') == 'reported'
+        && report.get('personId','') == request.resource.data.get('personId','')
+        && report.get('congregationId','') == request.resource.data.get('congregationId','')
+        && report.get('kind','') == request.resource.data.get('kind','')
+        && report.get('startsOn','') == request.resource.data.get('startsOn','')
+        && report.get('endsOn','') == request.resource.data.get('endsOn','');
+    }
     function linkedPersonAliasEvent(orgId, duplicateId, action) {
       let eventId = request.resource.data.get('lastEventId','');
       let eventData = getAfter(
@@ -2103,18 +2115,7 @@ service cloud.firestore {
               || (
                 request.resource.data.get('action','') == 'withdrawn'
                 && request.resource.data.get('sourceEventId','') is string
-                && get(
-                  /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/personAvailabilityEvents/$(request.resource.data.sourceEventId)
-                ).data.get('action','') == 'reported'
-                && get(
-                  /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/personAvailabilityEvents/$(request.resource.data.sourceEventId)
-                ).data.get('personId','') == request.resource.data.personId
-                && get(
-                  /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/personAvailabilityEvents/$(request.resource.data.sourceEventId)
-                ).data.get('congregationId','') == request.resource.data.congregationId
-                && get(
-                  /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/personAvailabilityEvents/$(request.resource.data.sourceEventId)
-                ).data.get('kind','') == request.resource.data.kind
+                && validAvailabilityWithdrawal(orgId)
               )
             );
           allow update, delete: if false;
