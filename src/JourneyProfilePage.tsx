@@ -34,6 +34,7 @@ import { JourneyAreaFocus } from './JourneyAreaFocus'
 import { FamilyPanel } from './FamilyPanel'
 import { VerifiedFrequencyPanel } from './VerifiedFrequencyPanel'
 import { MemberImportPanel } from './MemberImportPanel'
+import { PersonAdminPanel } from './PersonAdminPanel'
 import './JourneyProfilePage.css'
 
 function initials(name: string) {
@@ -302,6 +303,7 @@ export default function JourneyProfilePage() {
               {!canReadDiscipleship ? <p className="journey-muted">{t.restrictedDiscipleship}</p> : snapshot.discipleship ? <div className="journey-discipleship"><div><span>{t.status}</span><strong>{snapshot.discipleship.status === 'completed' ? t.completed : snapshot.discipleship.status === 'paused' ? t.paused : t.active}</strong></div><div><span>{t.meeting}</span><strong>{snapshot.discipleship.meeting}/{activePlaybook?.discipleshipMeetingCount??7}</strong></div><div><span>{t.discipler}</span><strong>{snapshot.discipleship.disciplerName || snapshot.discipleship.disciplerId}</strong></div></div> : <p className="journey-muted">{t.noDiscipleship}</p>}
             </article>
           </div>
+          {access && selected ? <PersonAdminPanel key={selected.id+':'+(selected.profileRevision??0)} access={access} person={selected} locale={locale} onSaved={()=>refreshScope(access,congregationId)}/> : null}
           {access && selected ? <FamilyPanel access={access} person={selected} people={people} locale={locale}/> : null}
           {access && selected ? <VerifiedFrequencyPanel key={selected.id} access={access} person={selected} locale={locale}/> : null}
         </>}
