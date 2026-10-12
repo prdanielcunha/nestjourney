@@ -407,11 +407,11 @@ export default function PresenceAssistPage() {
     <p className="presence-rule">{t.sourceRule}<br />{t.correctionRule}</p>
   </div>
 
-  {showSession ? <SessionModal close={() => setShowSession(false)} create={async (eventName, expected) => {
+  {showSession ? <SessionModal close={() => setShowSession(false)} create={async (eventName, expected, eventTypeId) => {
     if (!access) return
     setBusy(true); setError('')
     try {
-      await createPresenceSession({ organizationId: access.organizationId, congregationId, actorId: access.userId, eventName, expectedPeopleCount: expected, minimumCoveragePercent: 90 })
+      await createPresenceSession({ organizationId: access.organizationId, congregationId, actorId: access.userId, eventName, expectedPeopleCount: expected, minimumCoveragePercent: 90, eventTypeId, eligiblePersonIds: people.map(person => person.id) })
       setShowSession(false)
       await refreshScope(access.organizationId, congregationId)
     } catch (cause) { console.error(cause); setError(t.error) }
@@ -444,9 +444,10 @@ export default function PresenceAssistPage() {
   </main>
 }
 
-function SessionModal({ close, create, defaultExpected, locale }: { close: () => void; create: (name: string, expected: number) => Promise<void>; defaultExpected: number; locale: AppLocale }) {
+function SessionModal({ close, create, defaultExpected, locale }: { close: () => void; create: (name: string, expected: number, eventTypeId: string) => Promise<void>; defaultExpected: number; locale: AppLocale }) {
   const t = presenceAssistCopy[locale]
   const [name, setName] = useState(`${t.todayEvent} · ${new Date().toLocaleDateString(locale)}`)
+  const [eventTypeId, setEventTypeId] = useState('general')
   const expected = Math.max(0, defaultExpected)
   const copy = locale === 'en'
     ? {
@@ -454,7 +455,8 @@ function SessionModal({ close, create, defaultExpected, locale }: { close: () =>
         subtitle: 'Confirm the service and start marking who is present.',
         event: 'Service or gathering',
         people: 'People to check',
-        peopleHint: 'This list is prepared automatically from the people in this campus.',
+        peopleHint: 'Eligible people are frozen when the session opens. Visitors added later cannot inflate its coverage.',
+        eventType: 'Gathering type',
         start: 'Start recording attendance',
       }
     : locale === 'es'
@@ -463,7 +465,8 @@ function SessionModal({ close, create, defaultExpected, locale }: { close: () =>
           subtitle: 'Confirma el culto y comienza a marcar quién está presente.',
           event: 'Culto o encuentro',
           people: 'Personas para revisar',
-          peopleHint: 'Esta lista se prepara automáticamente con las personas de esta sede.',
+          peopleHint: 'Las personas elegibles se fijan al abrir la sesión. Los visitantes nuevos no inflan su cobertura.',
+          eventType: 'Tipo de encuentro',
           start: 'Comenzar a registrar asistencia',
         }
       : {
@@ -471,7 +474,8 @@ function SessionModal({ close, create, defaultExpected, locale }: { close: () =>
           subtitle: 'Confirme o culto e comece a marcar quem está presente.',
           event: 'Culto ou encontro',
           people: 'Pessoas para conferir',
-          peopleHint: 'Essa lista é preparada automaticamente com as pessoas desta unidade.',
+          peopleHint: 'A lista elegível é congelada ao abrir a sessão. Visitantes incluídos depois não aumentam a cobertura.',
+          eventType: 'Tipo de culto ou encontro',
           start: 'Começar a registrar presença',
         }
 
@@ -486,6 +490,7 @@ function SessionModal({ close, create, defaultExpected, locale }: { close: () =>
           <span>{copy.event}</span>
           <input value={name} onChange={(event) => setName(event.target.value)} autoFocus />
         </label>
+        <label className="presence-field"><span>{copy.eventType}</span><select value={eventTypeId} onChange={event => setEventTypeId(event.target.value)}><option value="general">{locale==='en'?'Regular gathering':locale==='es'?'Encuentro habitual':'Encontro habitual'}</option><option value="sunday">{locale==='en'?'Sunday service':locale==='es'?'Culto dominical':'Culto de domingo'}</option><option value="midweek">{locale==='en'?'Midweek service':locale==='es'?'Culto semanal':'Culto da semana'}</option><option value="youth">{locale==='en'?'Youth gathering':locale==='es'?'Encuentro juvenil':'Encontro de jovens'}</option><option value="special">{locale==='en'?'Special event':locale==='es'?'Evento especial':'Evento especial'}</option></select></label>
         <div className="presence-field presence-readonly-field">
           <span>{copy.people}</span>
           <strong>{expected}</strong>
@@ -494,7 +499,7 @@ function SessionModal({ close, create, defaultExpected, locale }: { close: () =>
       </div>
       <div className="presence-modal-actions">
         <button className="presence-button" onClick={close}>{t.cancel}</button>
-        <button className="presence-button primary" disabled={!name.trim()} onClick={() => void create(name, expected)}>{copy.start}</button>
+        <button className="presence-button primary" disabled={!name.trim()} onClick={() => void create(name, expected, eventTypeId)}>{copy.start}</button>
       </div>
     </section>
   </div>
