@@ -380,6 +380,7 @@ export default function PresenceAssistPage() {
         const current = latest.get(person.id)
         const present = current?.state === 'present_confirmed'
         const absent = current?.state === 'absent_confirmed'
+        const eligible = !displaySession?.eligiblePersonIds || displaySession.eligiblePersonIds.includes(person.id)
         const absenceUsable = Boolean(displaySession?.status === 'closed' && confirmedAbsences.includes(person.id))
         const contactAllowed = Boolean(person.consent && person.phone)
         const routedToCare = routedAbsenceIds.has(person.id)
@@ -395,9 +396,10 @@ export default function PresenceAssistPage() {
             <div><strong>{routedToCare ? absenceCare.routed : contactAllowed ? absenceCare.route : absenceCare.noContact}</strong><p>{contactAllowed ? absenceCare.routeHint : absenceCare.noContactHint}</p></div>
             {contactAllowed && !routedToCare ? <button className="presence-bond-button" disabled={busy} onClick={() => void routeAbsenceToCare(person)}>{absenceCare.route}</button> : null}
           </div> : null}
+          {!eligible?<p className="presence-eligibility-note">{locale==='en'?'Outside this event’s eligible roster: only a verified presence may be recorded.':locale==='es'?'Fuera de la lista elegible: solo se puede confirmar presencia.':'Fora do público elegível deste evento: somente presença real pode ser confirmada.'}</p>:null}
           <div className="presence-person-actions">
             <button className={`presence-button ${present ? 'success' : 'primary'}`} disabled={busy || present || displaySession?.status !== 'open'} onClick={() => void markPresenceState(person, 'present_confirmed')}>{present ? <><Check size={17} /> {t.present}</> : t.markPresent}</button>
-            <button className={`presence-button ${absent ? 'absence' : ''}`} disabled={busy || absent || displaySession?.status !== 'open'} onClick={() => void markPresenceState(person, 'absent_confirmed')}>{absent ? <><X size={17} /> {t.absent}</> : t.markAbsent}</button>
+            <button className={`presence-button ${absent ? 'absence' : ''}`} disabled={busy || absent || !eligible || displaySession?.status !== 'open'} onClick={() => void markPresenceState(person, 'absent_confirmed')}>{absent ? <><X size={17} /> {t.absent}</> : t.markAbsent}</button>
             <button className="presence-button" disabled={busy || !current || current.state === 'unverified' || displaySession?.status !== 'open'} onClick={() => void markPresenceState(person, 'unverified')} aria-label={locale === 'en' ? `Undo check for ${person.name}` : locale === 'es' ? `Deshacer verificación de ${person.name}` : `Desfazer conferência de ${person.name}`}>{t.notVerified}</button>
           </div>
         </article>
