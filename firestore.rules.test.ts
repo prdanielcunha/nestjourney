@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { assertFails, assertSucceeds, initializeTestEnvironment, type RulesTestEnvironment } from '@firebase/rules-unit-testing'
 import { Timestamp, deleteDoc, doc, getDoc, serverTimestamp, setDoc, updateDoc, writeBatch } from 'firebase/firestore'
-import { afterAll, beforeAll, beforeEach, describe, it } from 'vitest'
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 
 let environment: RulesTestEnvironment
 beforeAll(async () => {
@@ -2021,7 +2021,7 @@ describe('Tenant-controlled feature rollout',()=>{
     const root='organizations/org-a/products/raiz_e_mesa/settings/releaseFlags'
     const payload={organizationId:'org-a',flags:{
       memberBulkImport:true,personProfileEdit:false,familyLinks:false,
-      verifiedFrequency:false,optionalProjects:false,
+      verifiedFrequency:false,optionalProjects:false,crossUnitPresence:false,
     },updatedAt:serverTimestamp(),updatedBy:'rollout-admin'}
     await assertFails(setDoc(doc(environment.authenticatedContext('rollout-reception').firestore(),root),{
       ...payload,updatedBy:'rollout-reception',
@@ -2088,5 +2088,45 @@ describe('Project participation voluntary exit and reversible corrections',()=>{
     await assertSucceeds(resume.commit())
     await assertSucceeds(getDoc(doc(firestore,recordPath)))
     await assertSucceeds(getDoc(doc(firestore,eventPath)))
+  })
+})
+
+describe('Person attends another campus using the same canonical person ID',()=>{
+  it('allows home-campus visitor presence for a church administrator, never inferred absence',async()=>{
+    await seedMembership('cross-admin','org-a','admin',['unit-b'])
+    await seedMembership('cross-volunteer','org-a','presence_host',['unit-b'],{canManagePresence:true})
+    const root='organizations/org-a/products/raiz_e_mesa/'
+    await environment.withSecurityRulesDisabled(async ctx=>{
+      await setDoc(doc(ctx.firestore(),root+'people/person-home'),{
+        organizationId:'org-a',congregationId:'unit-a',name:'Existing member',
+      })
+      await setDoc(doc(ctx.firestore(),root+'presenceSessions/cross-session'),{
+        organizationId:'org-a',congregationId:'unit-b',eventName:'Sunday service',status:'open',
+        expectedPeopleCount:0,minimumCoveragePercent:90,
+      })
+    })
+    const admin=environment.authenticatedContext('cross-admin').firestore()
+    const operator=environment.authenticatedContext('cross-volunteer').firestore()
+    const source={
+      organizationId:'org-a',congregationId:'unit-b',sessionId:'cross-session',
+      personId:'person-home',state:'present_confirmed',source:'human_check',
+      recordedAt:serverTimestamp(),
+    }
+    await assertFails(setDoc(doc(operator,root+'presenceChecks/cross-volunteer-check'),{
+      ...source,actorId:'cross-volunteer',
+    }))
+    await assertSucceeds(setDoc(doc(admin,root+'presenceChecks/cross-admin-check'),{
+      ...source,actorId:'cross-admin',
+    }))
+    await assertFails(setDoc(doc(admin,root+'presenceChecks/cross-absence'),{
+      ...source,state:'absent_confirmed',actorId:'cross-admin',
+    }))
+    await assertSucceeds(setDoc(doc(admin,root+'presenceChecks/cross-undo'),{
+      ...source,state:'unverified',source:'retroactive_human_correction',
+      correctedFromCheckId:'cross-admin-check',correctionReason:'Correção confirmada',
+      actorId:'cross-admin',
+    }))
+    const home=await getDoc(doc(admin,root+'people/person-home'))
+    expect(home.data()?.congregationId).toBe('unit-a')
   })
 })
