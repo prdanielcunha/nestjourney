@@ -2021,7 +2021,7 @@ describe('Tenant-controlled feature rollout',()=>{
     const root='organizations/org-a/products/raiz_e_mesa/settings/releaseFlags'
     const payload={organizationId:'org-a',flags:{
       memberBulkImport:true,personProfileEdit:false,familyLinks:false,
-      verifiedFrequency:false,optionalProjects:false,crossUnitPresence:false,
+      verifiedFrequency:false,optionalProjects:false,crossUnitPresence:false,eventSeries:false,
     },updatedAt:serverTimestamp(),updatedBy:'rollout-admin'}
     await assertFails(setDoc(doc(environment.authenticatedContext('rollout-reception').firestore(),root),{
       ...payload,updatedBy:'rollout-reception',
@@ -2139,5 +2139,39 @@ describe('Person attends another campus using the same canonical person ID',()=>
     }))
     const home=await getDoc(doc(admin,root+'people/person-home'))
     expect(home.data()?.congregationId).toBe('unit-a')
+  })
+})
+
+describe('Weekly event series and human-opened sessions',()=>{
+  it('does not automatically mark presence and forbids forged or archived series references',async()=>{
+    await seedMembership('series-admin','org-a','admin')
+    await seedMembership('series-volunteer','org-a','presence_host',['unit-a'],{canManagePresence:true})
+    const root='organizations/org-a/products/raiz_e_mesa/'
+    const db=environment.authenticatedContext('series-admin').firestore()
+    const volunteer=environment.authenticatedContext('series-volunteer').firestore()
+    const series={
+      organizationId:'org-a',congregationId:'unit-a',
+      title:'Quarta-feira',eventTypeId:'midweek',
+      weekday:3,localTime:'20:00',timeZone:'America/Sao_Paulo',
+      status:'active',createdAt:serverTimestamp(),createdBy:'series-admin',
+      archivedAt:null,archivedBy:'',
+    }
+    await assertFails(setDoc(doc(volunteer,root+'eventSeries/forbidden'),{...series,createdBy:'series-volunteer'}))
+    await assertSucceeds(setDoc(doc(db,root+'eventSeries/series-one'),series))
+    await assertSucceeds(getDoc(doc(volunteer,root+'eventSeries/series-one')))
+    const validSession={
+      organizationId:'org-a',congregationId:'unit-a',eventRef:'event:manual-session',
+      eventName:'Quarta-feira',eventSeriesId:'series-one',eventTypeId:'midweek',
+      openedAt:serverTimestamp(),status:'open',closedAt:null,
+      expectedPeopleCount:0,minimumCoveragePercent:90,createdBy:'series-admin',
+    }
+    await assertFails(setDoc(doc(db,root+'presenceSessions/wrong-type'),{...validSession,eventTypeId:'youth'}))
+    await assertFails(setDoc(doc(db,root+'presenceSessions/wrong-series'),{...validSession,eventSeriesId:'forged'}))
+    await assertSucceeds(setDoc(doc(db,root+'presenceSessions/manual-session'),validSession))
+    await assertSucceeds(updateDoc(doc(db,root+'eventSeries/series-one'),{
+      status:'archived',archivedAt:serverTimestamp(),archivedBy:'series-admin',
+    }))
+    await assertFails(setDoc(doc(db,root+'presenceSessions/archived-series'),validSession))
+    await assertFails(deleteDoc(doc(db,root+'eventSeries/series-one')))
   })
 })
