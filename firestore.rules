@@ -1914,6 +1914,65 @@ service cloud.firestore {
             && validPrivacyPersonUpdate(orgId, personId);
           allow delete: if false;
         }
+        // Universal family registry. Church persons remain canonical and are never duplicated.
+        // Family ties require explicit admin confirmation; there is no surname-based inference.
+        match /families/{familyId} {
+          allow read: if isOrgAdmin(orgId);
+          allow create: if tenantCreate(orgId)
+            && isOrgAdmin(orgId)
+            && request.resource.data.keys().hasOnly([
+              'organizationId', 'congregationId', 'label', 'createdAt', 'createdBy'
+            ])
+            && request.resource.data.get('congregationId', '') is string
+            && request.resource.data.get('congregationId', '').size() > 0
+            && request.resource.data.get('label', '') is string
+            && request.resource.data.get('label', '').size() >= 2
+            && request.resource.data.get('label', '').size() <= 80
+            && request.resource.data.get('createdBy', '') == request.auth.uid
+            && request.resource.data.get('createdAt', null) == request.time;
+          allow update, delete: if false;
+        }
+        match /familyEvents/{eventId} {
+          allow read: if isOrgAdmin(orgId);
+          allow create: if tenantCreate(orgId)
+            && isOrgAdmin(orgId)
+            && request.resource.data.keys().hasOnly([
+              'organizationId', 'congregationId', 'familyId', 'personId', 'action',
+              'relationshipType', 'guardianFlag', 'recordedAt', 'recordedBy', 'reason'
+            ])
+            && request.resource.data.get('congregationId', '') is string
+            && request.resource.data.get('congregationId', '').size() > 0
+            && request.resource.data.get('familyId', '') is string
+            && request.resource.data.get('familyId', '').size() > 0
+            && request.resource.data.get('personId', '') is string
+            && request.resource.data.get('personId', '').size() > 0
+            && request.resource.data.get('action', '') in ['link', 'unlink']
+            && request.resource.data.get('relationshipType', '') in [
+              'parent', 'child', 'spouse', 'sibling', 'relative', 'guardian', 'other'
+            ]
+            && request.resource.data.get('guardianFlag', false) is bool
+            && (
+              request.resource.data.get('guardianFlag', false) == false
+              || request.resource.data.get('relationshipType', '') in ['parent', 'guardian']
+            )
+            && (
+              request.resource.data.get('action', '') == 'link'
+              || (
+                request.resource.data.get('reason', '') is string
+                && request.resource.data.get('reason', '').size() >= 3
+                && request.resource.data.get('reason', '').size() <= 200
+              )
+            )
+            && request.resource.data.get('recordedBy', '') == request.auth.uid
+            && request.resource.data.get('recordedAt', null) == request.time
+            && getAfter(
+              /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/families/$(request.resource.data.familyId)
+            ).data.get('congregationId', '') == request.resource.data.congregationId
+            && get(
+              /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/people/$(request.resource.data.personId)
+            ).data.get('congregationId', '') == request.resource.data.congregationId;
+          allow update, delete: if false;
+        }
         match /teamInterests/{interestId} {
           allow read: if canOperateFieldProgram(orgId, resource.data.get('congregationId', ''));
           allow create: if validTeamInterestCreate(orgId);
