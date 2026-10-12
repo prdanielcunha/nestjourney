@@ -39,7 +39,7 @@ export async function listPersonAvailabilityEvents(access:JourneyAccessContext,p
   if(!db)throw new Error('firebase_not_configured')
   const snap=await getDocs(query(collection(db,journeyCollectionPath(access.organizationId,'personAvailabilityEvents')),
     where('personId','==',person.id)))
-  return snap.docs.map(d=>{
+  return snap.docs.map((d):PersonAvailabilityEvent=>{
     const v=d.data()
     return{id:d.id,organizationId:access.organizationId,congregationId:String(v.congregationId||''),
       personId:person.id,action:v.action==='withdrawn'?'withdrawn':'reported',
