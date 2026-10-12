@@ -437,11 +437,11 @@ export default function PresenceAssistPage() {
     <p className="presence-rule">{t.sourceRule}<br />{t.correctionRule}</p>
   </div>
 
-  {showSession ? <SessionModal preset={seriesPreset} close={() => {setShowSession(false);setSeriesPreset(null)}} create={async (eventName, expected, eventTypeId, eligiblePersonIds, eventSeriesId) => {
+  {showSession ? <SessionModal preset={seriesPreset} close={() => {setShowSession(false);setSeriesPreset(null)}} create={async (eventName, expected, eventTypeId, eligiblePersonIds, eventSeriesId, requestId) => {
     if (!access || !online) return
     setBusy(true); setError('')
     try {
-      await createPresenceSession({ organizationId: access.organizationId, congregationId, actorId: access.userId, eventName, expectedPeopleCount: expected, minimumCoveragePercent: 90, eventTypeId, eligiblePersonIds, eventSeriesId })
+      await createPresenceSession({ organizationId: access.organizationId, congregationId, actorId: access.userId, eventName, expectedPeopleCount: expected, minimumCoveragePercent: 90, eventTypeId, eligiblePersonIds, eventSeriesId, requestId })
       setShowSession(false)
       setSeriesPreset(null)
       await refreshScope(access.organizationId, congregationId)
@@ -475,8 +475,11 @@ export default function PresenceAssistPage() {
   </main>
 }
 
-function SessionModal({ close, create, eligiblePeople, locale, preset, online }: { close: () => void; create: (name: string, expected: number, eventTypeId: string, eligiblePersonIds: string[], eventSeriesId?: string) => Promise<void>; eligiblePeople: PresencePerson[]; locale: AppLocale; preset:JourneyEventSeries|null; online:boolean }) {
+function SessionModal({ close, create, eligiblePeople, locale, preset, online }: { close: () => void; create: (name: string, expected: number, eventTypeId: string, eligiblePersonIds: string[], eventSeriesId?: string,requestId?:string) => Promise<void>; eligiblePeople: PresencePerson[]; locale: AppLocale; preset:JourneyEventSeries|null; online:boolean }) {
   const t = presenceAssistCopy[locale]
+  const [requestId] = useState(()=>crypto.randomUUID())
+  const savingGuard=useRef(false)
+  const [saving,setSaving]=useState(false)
   const [name, setName] = useState(`${preset?.title||t.todayEvent} · ${new Date().toLocaleDateString(locale)}`)
   const [eventTypeId, setEventTypeId] = useState<string>(preset?.eventTypeId||'general')
   const [eligibleSearch, setEligibleSearch] = useState('')
@@ -487,6 +490,12 @@ function SessionModal({ close, create, eligiblePeople, locale, preset, online }:
   const chooseEventType=(next:string)=>{
     setEventTypeId(next)
     setSelectedIds(new Set(next==='youth'||next==='special'?[]:eligiblePeople.map(person=>person.id)))
+  }
+  const submit=async()=>{
+    if(savingGuard.current||!online)return
+    savingGuard.current=true;setSaving(true)
+    try {await create(name,expected,eventTypeId,[...selectedIds],preset?.id,requestId)}
+    finally {savingGuard.current=false;setSaving(false)}
   }
   const copy = locale === 'en'
     ? {
@@ -518,11 +527,11 @@ function SessionModal({ close, create, eligiblePeople, locale, preset, online }:
           start: 'Começar a registrar presença',
         }
 
-  return <div className="presence-modal-backdrop" onMouseDown={close}>
+  return <div className="presence-modal-backdrop" onMouseDown={()=>{if(!saving)close()}}>
     <section className="presence-panel presence-modal" role="dialog" aria-modal="true" aria-labelledby="presence-session-title" onMouseDown={(event) => event.stopPropagation()}>
       <div className="presence-modal-header">
         <div><h2 id="presence-session-title">{copy.title}</h2><p>{copy.subtitle}</p></div>
-        <button className="presence-modal-close" type="button" onClick={close} aria-label={t.cancel}><X size={20} /></button>
+        <button className="presence-modal-close" type="button" disabled={saving} onClick={close} aria-label={t.cancel}><X size={20} /></button>
       </div>
       <div className="presence-modal-grid">
         <label className="presence-field">
@@ -542,8 +551,8 @@ function SessionModal({ close, create, eligiblePeople, locale, preset, online }:
         <p>{locale==='en'?'Do not mark other people as absent in a special-event roster.':locale==='es'?'No marque como ausentes a personas fuera de este público.':'Não marque como ausentes pessoas fora do público deste evento.'}</p>
       </div>:null}
       <div className="presence-modal-actions">
-        <button className="presence-button" onClick={close}>{t.cancel}</button>
-        <button className="presence-button primary" disabled={!online || !name.trim() || (requiresSelection && expected === 0)} onClick={() => void create(name, expected, eventTypeId, [...selectedIds], preset?.id)}>{copy.start}</button>
+        <button className="presence-button" disabled={saving} onClick={close}>{t.cancel}</button>
+        <button className="presence-button primary" disabled={saving || !online || !name.trim() || (requiresSelection && expected === 0)} onClick={()=>void submit()}>{copy.start}</button>
       </div>
     </section>
   </div>
