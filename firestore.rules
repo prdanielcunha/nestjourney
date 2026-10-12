@@ -532,6 +532,10 @@ service cloud.firestore {
     }
     function validPresenceSessionCreate(orgId) {
       let eligible = request.resource.data.get('eligiblePersonIds', null);
+      let seriesId = request.resource.data.get('eventSeriesId','');
+      let seriesData = seriesId != '' ? get(
+        /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/eventSeries/$(seriesId)
+      ).data : {};
       return tenantCreate(orgId)
         && request.resource.data.get('congregationId', '') is string
         && request.resource.data.get('createdBy', '') == request.auth.uid
@@ -545,17 +549,11 @@ service cloud.firestore {
         && request.resource.data.get('eventTypeId', 'general') is string
         && request.resource.data.get('eventTypeId', 'general').matches('^[a-z][a-z0-9_-]{0,39}$')
         && (
-          request.resource.data.get('eventSeriesId','') == ''
+          seriesId == ''
           || (
-            get(
-              /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/eventSeries/$(request.resource.data.eventSeriesId)
-            ).data.get('status','') == 'active'
-            && get(
-              /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/eventSeries/$(request.resource.data.eventSeriesId)
-            ).data.get('congregationId','') == request.resource.data.congregationId
-            && get(
-              /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/eventSeries/$(request.resource.data.eventSeriesId)
-            ).data.get('eventTypeId','') == request.resource.data.eventTypeId
+            seriesData.get('status','') == 'active'
+            && seriesData.get('congregationId','') == request.resource.data.congregationId
+            && seriesData.get('eventTypeId','') == request.resource.data.eventTypeId
           )
         )
         && (
