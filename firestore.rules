@@ -118,11 +118,16 @@ service cloud.firestore {
         );
     }
     function canManagePastoral(orgId) {
-      return isSystemAdmin()
-        || role(orgId, ['owner', 'pastor'])
-        || (
-          membershipIsActive(orgId)
-          && membership(orgId).get('permissions', {}).get('canManagePastoral', false) == true
+      return hasProductAccess(orgId)
+        && (
+          isOwner(orgId)
+          || (
+            membershipIsActive(orgId)
+            && (
+              memberRole(orgId) in ['owner', 'pastor']
+              || membership(orgId).get('permissions', {}).get('canManagePastoral', false) == true
+            )
+          )
         );
     }
     function canManageGroups(orgId) {
