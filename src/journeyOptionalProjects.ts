@@ -11,7 +11,7 @@ export interface JourneyOptionalProject {
 }
 export interface JourneyProjectEnrollment{
   id:string;projectId:string;personId:string;congregationId:string;
-  status:'active'|'paused'|'completed';projectVersion:number
+  status:'active'|'paused'|'completed';projectVersion:number;revision?:number
 }
 function assertAdmin(access:JourneyAccessContext){
   if(!canImportJourneyMembers(access))throw new Error('projects_admin_forbidden')
@@ -97,7 +97,7 @@ export async function listJourneyProjectEnrollments(access:JourneyAccessContext,
   return result.docs.map(d=>{
     const v=d.data()
     return {id:d.id,projectId,personId:String(v.personId||''),congregationId:String(v.congregationId||''),
-      status:v.status==='paused'?'paused':v.status==='completed'?'completed':'active',projectVersion:Number(v.projectVersion||1)}
+      status:v.status==='paused'?'paused':v.status==='completed'?'completed':'active',projectVersion:Number(v.projectVersion||1),revision:Number(v.revision||0)}
   })
 }
 export async function enrollJourneyPersonInProject(input:{
@@ -122,6 +122,51 @@ export async function enrollJourneyPersonInProject(input:{
       organizationId:access.organizationId,projectId:project.id,
       personId:person.id,congregationId:person.congregationId,
       projectVersion:project.version,status:'active',enrolledAt:serverTimestamp(),enrolledBy:access.userId,
+    })
+  })
+}
+
+/** Explicit project departure / pause / return: append-only reason-coded event,
+ * with the canonical person and previous enrollment kept intact. */
+export type ProjectEnrollmentStatus='active'|'paused'|'completed'
+export type ProjectEnrollmentReason='left_voluntarily'|'completed'|'paused_by_request'|'rejoined'|'corrected_record'
+export function allowedProjectEnrollmentTransition(from:ProjectEnrollmentStatus,to:ProjectEnrollmentStatus,reason:ProjectEnrollmentReason):boolean{
+  if(from===to)return false
+  if(from==='active'&&to==='paused')return reason==='paused_by_request'||reason==='corrected_record'
+  if(from==='active'&&to==='completed')return reason==='left_voluntarily'||reason==='completed'||reason==='corrected_record'
+  if(from==='paused'&&to==='completed')return reason==='left_voluntarily'||reason==='completed'||reason==='corrected_record'
+  if((from==='paused'||from==='completed')&&to==='active')return reason==='rejoined'||reason==='corrected_record'
+  return false
+}
+export async function changeProjectEnrollmentStatus(input:{
+  access:JourneyAccessContext
+  enrollment:JourneyProjectEnrollment
+  nextStatus:ProjectEnrollmentStatus
+  reason:ProjectEnrollmentReason
+}):Promise<void>{
+  const firestore=assertAdmin(input.access)
+  const {access,enrollment,nextStatus,reason}=input
+  if(!allowedProjectEnrollmentTransition(enrollment.status,nextStatus,reason))throw new Error('project_enrollment_transition_invalid')
+  const ref=doc(firestore,journeyCollectionPath(access.organizationId,'projectEnrollments')+'/'+enrollment.id)
+  await runTransaction(firestore,async tx=>{
+    const snap=await tx.get(ref)
+    if(!snap.exists() || snap.data().organizationId!==access.organizationId ||
+       snap.data().status!==enrollment.status ||
+       (snap.data().revision??0)!==(enrollment.revision??0) ||
+       snap.data().personId!==enrollment.personId || snap.data().projectId!==enrollment.projectId)
+      throw new Error('project_enrollment_stale_refresh')
+    const revision=(snap.data().revision??0)+1
+    const eventRef=doc(firestore,journeyCollectionPath(access.organizationId,'projectEnrollmentEvents')+'/'+enrollment.id+'_v'+revision)
+    tx.update(ref,{
+      status:nextStatus,revision,lastEventId:eventRef.id,
+      statusUpdatedAt:serverTimestamp(),statusUpdatedBy:access.userId,
+    })
+    tx.set(eventRef,{
+      organizationId:access.organizationId,projectId:enrollment.projectId,
+      enrollmentId:enrollment.id,personId:enrollment.personId,
+      congregationId:enrollment.congregationId,revision,
+      fromStatus:enrollment.status,toStatus:nextStatus,reason,
+      recordedAt:serverTimestamp(),recordedBy:access.userId,
     })
   })
 }
