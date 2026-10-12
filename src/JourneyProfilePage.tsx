@@ -33,6 +33,7 @@ import { JourneyPath, inferJourneyStep } from './JourneyPath'
 import { JourneyAreaFocus } from './JourneyAreaFocus'
 import { FamilyPanel } from './FamilyPanel'
 import { VerifiedFrequencyPanel } from './VerifiedFrequencyPanel'
+import { MemberImportPanel } from './MemberImportPanel'
 import './JourneyProfilePage.css'
 
 function initials(name: string) {
@@ -242,6 +243,8 @@ export default function JourneyProfilePage() {
         </div>
       </form>
     </section> : null}
+
+    {access && congregationId && canRegisterMember?<MemberImportPanel key={access.organizationId+':'+congregationId} access={access} congregationId={congregationId} people={people} locale={locale} onCompleted={()=>refreshScope(access,congregationId)}/>:null}
 
     <section className="journey-area-toolbar">
       {congregations.length>1?<label><span>{t.congregation}</span><select value={congregationId} onChange={(event) => void selectCongregation(event.target.value)} disabled={busy}>{congregations.map((item) => <option value={item.id} key={item.id}>{item.name}{item.city ? ` · ${item.city}` : ''}</option>)}</select></label>:null}
