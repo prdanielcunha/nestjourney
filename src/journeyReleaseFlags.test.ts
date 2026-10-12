@@ -3,12 +3,12 @@ import {DEFAULT_JOURNEY_ROLLOUT_FLAGS,normalizeJourneyRolloutFlags,ROLLOUT_KEYS}
 describe('Tenant feature flags are opt-in rather than implicit ministry activation',()=>{
   it('disables all new modules by default',()=>{
     expect(Object.values(DEFAULT_JOURNEY_ROLLOUT_FLAGS).every(value=>value===false)).toBe(true)
-    expect(ROLLOUT_KEYS).toHaveLength(5)
+    expect(ROLLOUT_KEYS).toHaveLength(6)
   })
   it('reads only strict booleans and ignores injected fields',()=>{
     expect(normalizeJourneyRolloutFlags({memberBulkImport:true,familyLinks:'true',bad:true})).toEqual({
       memberBulkImport:true,personProfileEdit:false,familyLinks:false,
-      verifiedFrequency:false,optionalProjects:false,
+      verifiedFrequency:false,optionalProjects:false,crossUnitPresence:false,
     })
   })
 })
