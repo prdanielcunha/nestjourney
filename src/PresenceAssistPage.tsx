@@ -407,16 +407,16 @@ export default function PresenceAssistPage() {
     <p className="presence-rule">{t.sourceRule}<br />{t.correctionRule}</p>
   </div>
 
-  {showSession ? <SessionModal close={() => setShowSession(false)} create={async (eventName, expected, eventTypeId) => {
+  {showSession ? <SessionModal close={() => setShowSession(false)} create={async (eventName, expected, eventTypeId, eligiblePersonIds) => {
     if (!access) return
     setBusy(true); setError('')
     try {
-      await createPresenceSession({ organizationId: access.organizationId, congregationId, actorId: access.userId, eventName, expectedPeopleCount: expected, minimumCoveragePercent: 90, eventTypeId, eligiblePersonIds: people.map(person => person.id) })
+      await createPresenceSession({ organizationId: access.organizationId, congregationId, actorId: access.userId, eventName, expectedPeopleCount: expected, minimumCoveragePercent: 90, eventTypeId, eligiblePersonIds })
       setShowSession(false)
       await refreshScope(access.organizationId, congregationId)
     } catch (cause) { console.error(cause); setError(t.error) }
     finally { setBusy(false) }
-  }} defaultExpected={people.length} locale={locale} /> : null}
+  }} eligiblePeople={people} locale={locale} /> : null}
 
   {showVisitor ? <VisitorModal close={() => setShowVisitor(false)} save={async (name, phone, consent, preferredContactChannel, claimBond) => {
     if (!access || !displaySession) return
@@ -444,11 +444,19 @@ export default function PresenceAssistPage() {
   </main>
 }
 
-function SessionModal({ close, create, defaultExpected, locale }: { close: () => void; create: (name: string, expected: number, eventTypeId: string) => Promise<void>; defaultExpected: number; locale: AppLocale }) {
+function SessionModal({ close, create, eligiblePeople, locale }: { close: () => void; create: (name: string, expected: number, eventTypeId: string, eligiblePersonIds: string[]) => Promise<void>; eligiblePeople: PresencePerson[]; locale: AppLocale }) {
   const t = presenceAssistCopy[locale]
   const [name, setName] = useState(`${t.todayEvent} · ${new Date().toLocaleDateString(locale)}`)
   const [eventTypeId, setEventTypeId] = useState('general')
-  const expected = Math.max(0, defaultExpected)
+  const [eligibleSearch, setEligibleSearch] = useState('')
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set(eligiblePeople.map(person=>person.id)))
+  const requiresSelection = eventTypeId === 'youth' || eventTypeId === 'special'
+  const expected = selectedIds.size
+  const visibleEligiblePeople = eligiblePeople.filter(person=>person.name.toLocaleLowerCase(locale).includes(eligibleSearch.trim().toLocaleLowerCase(locale)))
+  const chooseEventType=(next:string)=>{
+    setEventTypeId(next)
+    setSelectedIds(new Set(next==='youth'||next==='special'?[]:eligiblePeople.map(person=>person.id)))
+  }
   const copy = locale === 'en'
     ? {
         title: 'Record attendance',
@@ -490,16 +498,21 @@ function SessionModal({ close, create, defaultExpected, locale }: { close: () =>
           <span>{copy.event}</span>
           <input value={name} onChange={(event) => setName(event.target.value)} autoFocus />
         </label>
-        <label className="presence-field"><span>{copy.eventType}</span><select value={eventTypeId} onChange={event => setEventTypeId(event.target.value)}><option value="general">{locale==='en'?'Regular gathering':locale==='es'?'Encuentro habitual':'Encontro habitual'}</option><option value="sunday">{locale==='en'?'Sunday service':locale==='es'?'Culto dominical':'Culto de domingo'}</option><option value="midweek">{locale==='en'?'Midweek service':locale==='es'?'Culto semanal':'Culto da semana'}</option><option value="youth">{locale==='en'?'Youth gathering':locale==='es'?'Encuentro juvenil':'Encontro de jovens'}</option><option value="special">{locale==='en'?'Special event':locale==='es'?'Evento especial':'Evento especial'}</option></select></label>
+        <label className="presence-field"><span>{copy.eventType}</span><select value={eventTypeId} onChange={event => chooseEventType(event.target.value)}><option value="general">{locale==='en'?'Regular gathering':locale==='es'?'Encuentro habitual':'Encontro habitual'}</option><option value="sunday">{locale==='en'?'Sunday service':locale==='es'?'Culto dominical':'Culto de domingo'}</option><option value="midweek">{locale==='en'?'Midweek service':locale==='es'?'Culto semanal':'Culto da semana'}</option><option value="youth">{locale==='en'?'Youth gathering':locale==='es'?'Encuentro juvenil':'Encontro de jovens'}</option><option value="special">{locale==='en'?'Special event':locale==='es'?'Evento especial':'Evento especial'}</option></select></label>
         <div className="presence-field presence-readonly-field">
           <span>{copy.people}</span>
           <strong>{expected}</strong>
-          <small>{copy.peopleHint}</small>
+          <small>{requiresSelection?(locale==='en'?'Select only the people expected at this special event.':locale==='es'?'Seleccione únicamente las personas elegibles de este evento.':'Selecione somente as pessoas elegíveis para este evento especial.'):copy.peopleHint}</small>
         </div>
       </div>
+      {requiresSelection?<div className="presence-eligible-picker">
+        <label className="presence-field"><span>{locale==='en'?'Search eligible people':locale==='es'?'Buscar personas elegibles':'Buscar pessoas elegíveis'}</span><input value={eligibleSearch} onChange={event=>setEligibleSearch(event.target.value)} placeholder={locale==='en'?'Search names':locale==='es'?'Buscar nombres':'Buscar nomes'}/></label>
+        <div className="presence-eligible-options" role="group" aria-label={locale==='en'?'Eligible attendees':locale==='es'?'Personas elegibles':'Pessoas elegíveis'}>{visibleEligiblePeople.map(person=><label key={person.id}><input type="checkbox" checked={selectedIds.has(person.id)} onChange={event=>setSelectedIds(current=>{const next=new Set(current);if(event.target.checked)next.add(person.id);else next.delete(person.id);return next})}/><span>{person.name}</span></label>)}</div>
+        <p>{locale==='en'?'Do not mark other people as absent in a special-event roster.':locale==='es'?'No marque como ausentes a personas fuera de este público.':'Não marque como ausentes pessoas fora do público deste evento.'}</p>
+      </div>:null}
       <div className="presence-modal-actions">
         <button className="presence-button" onClick={close}>{t.cancel}</button>
-        <button className="presence-button primary" disabled={!name.trim()} onClick={() => void create(name, expected, eventTypeId)}>{copy.start}</button>
+        <button className="presence-button primary" disabled={!name.trim() || (requiresSelection && expected === 0)} onClick={() => void create(name, expected, eventTypeId, [...selectedIds])}>{copy.start}</button>
       </div>
     </section>
   </div>
