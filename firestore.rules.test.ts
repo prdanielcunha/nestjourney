@@ -2041,3 +2041,52 @@ describe('Tenant-controlled feature rollout',()=>{
     }))
   })
 })
+
+describe('Project participation voluntary exit and reversible corrections',()=>{
+  it('keeps the person and enrollment ID, requiring immutable transition evidence',async()=>{
+    await seedMembership('program-admin','org-a','admin')
+    const root='organizations/org-a/products/raiz_e_mesa/'
+    const enrollmentId='p-1__person-1'
+    const recordPath=root+'projectEnrollments/'+enrollmentId
+    const initial={organizationId:'org-a',congregationId:'unit-a',projectId:'p-1',
+      personId:'person-1',projectVersion:2,status:'active',enrolledBy:'program-admin',
+      enrolledAt:Timestamp.fromMillis(1)}
+    await environment.withSecurityRulesDisabled(async ctx=>{
+      await setDoc(doc(ctx.firestore(),recordPath),initial)
+    })
+    const firestore=environment.authenticatedContext('program-admin').firestore()
+    await assertFails(updateDoc(doc(firestore,recordPath),{
+      status:'completed',revision:1,lastEventId:enrollmentId+'_v1',
+      statusUpdatedAt:serverTimestamp(),statusUpdatedBy:'program-admin',
+    }))
+    const eventPath=root+'projectEnrollmentEvents/'+enrollmentId+'_v1'
+    const batch=writeBatch(firestore)
+    batch.update(doc(firestore,recordPath),{
+      status:'completed',revision:1,lastEventId:enrollmentId+'_v1',
+      statusUpdatedAt:serverTimestamp(),statusUpdatedBy:'program-admin',
+    })
+    batch.set(doc(firestore,eventPath),{
+      organizationId:'org-a',congregationId:'unit-a',projectId:'p-1',
+      personId:'person-1',enrollmentId,revision:1,
+      fromStatus:'active',toStatus:'completed',reason:'left_voluntarily',
+      recordedAt:serverTimestamp(),recordedBy:'program-admin',
+    })
+    await assertSucceeds(batch.commit())
+    await assertFails(updateDoc(doc(firestore,eventPath),{reason:'corrected_record'}))
+    await assertFails(deleteDoc(doc(firestore,recordPath)))
+    const resume=writeBatch(firestore)
+    resume.update(doc(firestore,recordPath),{
+      status:'active',revision:2,lastEventId:enrollmentId+'_v2',
+      statusUpdatedAt:serverTimestamp(),statusUpdatedBy:'program-admin',
+    })
+    resume.set(doc(firestore,root+'projectEnrollmentEvents/'+enrollmentId+'_v2'),{
+      organizationId:'org-a',congregationId:'unit-a',projectId:'p-1',
+      personId:'person-1',enrollmentId,revision:2,
+      fromStatus:'completed',toStatus:'active',reason:'rejoined',
+      recordedAt:serverTimestamp(),recordedBy:'program-admin',
+    })
+    await assertSucceeds(resume.commit())
+    await assertSucceeds(getDoc(doc(firestore,recordPath)))
+    await assertSucceeds(getDoc(doc(firestore,eventPath)))
+  })
+})
