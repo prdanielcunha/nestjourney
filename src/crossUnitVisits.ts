@@ -40,7 +40,7 @@ export async function loadCrossUnitVisits(input:{
     collection(db,journeyCollectionPath(input.access.organizationId,'presenceChecks')),
     where('personId','==',input.personId),orderBy('recordedAt','desc'),limit(101),
   ))
-  const checks=result.docs.slice(0,100).map(doc=>{
+  const checks:CrossUnitVisitFact[]=result.docs.slice(0,100).map(doc=>{
     const v=doc.data()
     return {sessionId:String(v.sessionId||''),congregationId:String(v.congregationId||''),
       recordedAt:iso(v.recordedAt),
