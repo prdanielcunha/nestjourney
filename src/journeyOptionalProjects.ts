@@ -1,4 +1,4 @@
-import {collection,doc,getDoc,getDocs,query,runTransaction,serverTimestamp,setDoc,where,writeBatch} from 'firebase/firestore'
+import {collection,doc,getDocs,query,runTransaction,serverTimestamp,where,writeBatch} from 'firebase/firestore'
 import {db} from './firebase'
 import {journeyCollectionPath} from './productIdentity'
 import type {JourneyAccessContext,JourneyPersonRecord} from './journeyRepository'
