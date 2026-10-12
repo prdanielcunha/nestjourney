@@ -193,7 +193,7 @@ export default function JourneyProfilePage() {
       href:'/care-integrity',
     }
     if(canReadDiscipleship&&snapshot.discipleship&&snapshot.discipleship.status!=='completed')return{
-      title:locale==='en'?'Root · meeting '+snapshot.discipleship.meeting+'/'+(activePlaybook?.discipleshipMeetingCount??7):locale==='es'?'Raíz · encuentro '+snapshot.discipleship.meeting+'/'+(activePlaybook?.discipleshipMeetingCount??7):'Raiz · encontro '+snapshot.discipleship.meeting+'/'+(activePlaybook?.discipleshipMeetingCount??7),
+      title:(activePlaybook?.areaLabels.discipleship|| (locale==='en'?'Mentoring':locale==='es'?'Acompañamiento':'Acompanhamento'))+' · '+(locale==='en'?'meeting ':locale==='es'?'encuentro ':'encontro ')+snapshot.discipleship.meeting+'/'+(activePlaybook?.discipleshipMeetingCount??7),
       body:locale==='en'?'The active discipleship relationship is this person’s current recorded next step.':locale==='es'?'La relación activa de discipulado es el próximo paso registrado para esta persona.':'O acompanhamento ativo no discipulado é o próximo passo registrado desta pessoa.',
       href:'/discipleship-runtime',
     }
@@ -270,7 +270,7 @@ export default function JourneyProfilePage() {
             actions={[{label:locale==='en'?'Open next step':locale==='es'?'Abrir próximo paso':'Abrir próximo passo',href:profileFocus.href,primary:true}]}
           />:null}
 
-          <JourneyPath
+          {activePlaybook?.id!=='nestjourney-universal'?<JourneyPath
             locale={locale}
             steps={activePlaybook?.stages.map(stage=>stage.label)}
             currentStep={inferJourneyStep({
@@ -278,7 +278,7 @@ export default function JourneyProfilePage() {
               hasGroup:snapshot.groups.length>0,
               hasDiscipleship:Boolean(snapshot.discipleship),
             })}
-          />
+          />:null}
 
           <div className="journey-card-grid">
             <article className="journey-panel journey-domain-card">
