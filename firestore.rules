@@ -581,7 +581,14 @@ service cloud.firestore {
           || sessionData.get('eligiblePersonIds', null) == null
           || personId in sessionData.get('eligiblePersonIds', [])
         )
-        && personData.get('congregationId', '') == congregationId
+        && (
+          personData.get('congregationId', '') == congregationId
+          || (
+            canManageFamilyRegistry(orgId)
+            && personData.get('organizationId', '') == orgId
+            && request.resource.data.get('state', '') in ['present_confirmed', 'unverified']
+          )
+        )
         && (
           (
             source == 'human_check'
@@ -677,17 +684,18 @@ service cloud.firestore {
         && flags is map
         && flags.keys().hasAll([
           'memberBulkImport','personProfileEdit','familyLinks',
-          'verifiedFrequency','optionalProjects'
+          'verifiedFrequency','optionalProjects','crossUnitPresence'
         ])
         && flags.keys().hasOnly([
           'memberBulkImport','personProfileEdit','familyLinks',
-          'verifiedFrequency','optionalProjects'
+          'verifiedFrequency','optionalProjects','crossUnitPresence'
         ])
         && flags.get('memberBulkImport',null) is bool
         && flags.get('personProfileEdit',null) is bool
         && flags.get('familyLinks',null) is bool
         && flags.get('verifiedFrequency',null) is bool
         && flags.get('optionalProjects',null) is bool
+        && flags.get('crossUnitPresence',null) is bool
         && request.resource.data.get('updatedAt',null) == request.time
         && request.resource.data.get('updatedBy','') == request.auth.uid;
     }
