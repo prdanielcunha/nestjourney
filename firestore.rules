@@ -508,6 +508,7 @@ service cloud.firestore {
     }
 
     function validPresenceSessionCreate(orgId) {
+      let eligible = request.resource.data.get('eligiblePersonIds', null);
       return tenantCreate(orgId)
         && request.resource.data.get('congregationId', '') is string
         && request.resource.data.get('createdBy', '') == request.auth.uid
@@ -517,7 +518,1757 @@ service cloud.firestore {
         && request.resource.data.get('expectedPeopleCount', -1) >= 0
         && request.resource.data.get('minimumCoveragePercent', -1) is number
         && request.resource.data.get('minimumCoveragePercent', -1) >= 0
-        && request.resource.data.get('minimumCoveragePercent', -1) <= 100;
+        && request.resource.data.get('minimumCoveragePercent', -1) <= 100
+        && request.resource.data.get('eventTypeId', 'general') is string
+        && request.resource.data.get('eventTypeId', 'general').matches('^[a-z][a-z0-9_-]{0,39}(orgId) {
+      let sessionId = request.resource.data.get('sessionId', '');
+      let congregationId = request.resource.data.get('congregationId', '');
+      let personId = request.resource.data.get('personId', '');
+      let source = request.resource.data.get('source', '');
+      let correctedFromCheckId = request.resource.data.get('correctedFromCheckId', '');
+      let sessionPath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/presenceSessions/$(sessionId);
+      let personPath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/people/$(personId);
+      let correctionPath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/presenceChecks/$(correctedFromCheckId);
+      let sessionData = get(sessionPath).data;
+      let personData = get(personPath).data;
+      let correctionData = correctedFromCheckId != '' ? get(correctionPath).data : {};
+      return tenantCreate(orgId)
+        && sessionId is string
+        && congregationId is string
+        && personId is string
+        && request.resource.data.get('actorId', '') == request.auth.uid
+        && request.resource.data.get('recordedAt', null) == request.time
+        && request.resource.data.get('state', '') in ['present_confirmed', 'absent_confirmed', 'unverified']
+        && sessionData.get('congregationId', '') == congregationId
+        && sessionData.get('status', '') == 'open'
+        && personData.get('congregationId', '') == congregationId
+        && (
+          (
+            source == 'human_check'
+            && correctedFromCheckId == ''
+            && request.resource.data.get('state', '') != 'unverified'
+          )
+          ||
+          (
+            source == 'retroactive_human_correction'
+            && correctedFromCheckId != ''
+            && request.resource.data.get('correctionReason', '') is string
+            && request.resource.data.get('correctionReason', '').size() > 0
+            && request.resource.data.get('correctionReason', '').size() <= 240
+            && correctionData.get('congregationId', '') == congregationId
+            && correctionData.get('sessionId', '') == sessionId
+            && correctionData.get('personId', '') == personId
+            && correctionData.get('state', '') != request.resource.data.get('state', '')
+          )
+        );
+    }
+    function validPersonContactCreate() {
+      let consent = request.resource.data.get('consent', false);
+      let phone = request.resource.data.get('phone', '');
+      let channel = request.resource.data.get('preferredContactChannel', '');
+      return consent is bool
+        && phone is string
+        && channel is string
+        && (
+          (
+            consent == false
+            && phone == ''
+            && channel == ''
+          )
+          ||
+          (
+            consent == true
+            && phone.size() >= 8
+            && phone.size() <= 32
+            && channel in ['whatsapp', 'phone']
+            && request.resource.data.get('consentGrantedAt', null) == request.time
+          )
+        );
+    }
+    function personBondEmptyOnCreate() {
+      return request.resource.data.get('bondHostRef', '') == ''
+        && request.resource.data.get('bondAssignedAt', null) == null
+        && request.resource.data.get('bondAssignedBy', '') == '';
+    }
+    function personBondUnchanged() {
+      return request.resource.data.get('bondHostRef', '') == resource.data.get('bondHostRef', '')
+        && request.resource.data.get('bondAssignedAt', null) == resource.data.get('bondAssignedAt', null)
+        && request.resource.data.get('bondAssignedBy', '') == resource.data.get('bondAssignedBy', '');
+    }
+    function canManageJourneySettings(orgId) {
+      return isSystemAdmin() || role(orgId, ['owner', 'admin', 'pastor']);
+    }
+
+    function validJourneyPlaybookCore(orgId) {
+      let labels = request.resource.data.get('areaLabels', {});
+      let groupPolicy = request.resource.data.get('groupCapacityPolicy', {});
+      let stages = request.resource.data.get('stages', []);
+      let indicators = request.resource.data.get('indicators', []);
+      let routingRules = request.resource.data.get('routingRules', []);
+      let implementationPhases = request.resource.data.get('implementationPhases', []);
+      let implementationKeys = request.resource.data.get('implementationKeys', []);
+      let stageIds = request.resource.data.get('stageIds', []);
+      let stageRoles = request.resource.data.get('stageRoles', {});
+      return request.resource.data.get('organizationId', '') == orgId
+        && request.resource.data.get('schemaVersion', 0) == 1
+        && request.resource.data.get('name', '') is string
+        && request.resource.data.get('name', '').size() > 0
+        && request.resource.data.get('name', '').size() <= 80
+        && request.resource.data.get('description', '') is string
+        && request.resource.data.get('description', '').size() <= 280
+        && request.resource.data.get('status', '') in ['draft', 'active', 'archived']
+        && request.resource.data.get('carePromiseHours', 0) is number
+        && request.resource.data.get('carePromiseHours', 0) >= 1
+        && request.resource.data.get('carePromiseHours', 0) <= 168
+        && request.resource.data.get('discipleshipMeetingCount', 0) is number
+        && request.resource.data.get('discipleshipMeetingCount', 0) >= 1
+        && request.resource.data.get('discipleshipMeetingCount', 0) <= 24
+        && groupPolicy is map
+        && groupPolicy.keys().hasOnly(['minimum', 'idealMin', 'idealMax', 'maximum'])
+        && groupPolicy.get('minimum', 0) is number
+        && groupPolicy.get('idealMin', 0) is number
+        && groupPolicy.get('idealMax', 0) is number
+        && groupPolicy.get('maximum', 0) is number
+        && groupPolicy.get('minimum', 0) >= 2
+        && groupPolicy.get('maximum', 0) <= 30
+        && groupPolicy.get('minimum', 0) <= groupPolicy.get('idealMin', 0)
+        && groupPolicy.get('idealMin', 0) <= groupPolicy.get('idealMax', 0)
+        && groupPolicy.get('idealMax', 0) <= groupPolicy.get('maximum', 0)
+        && labels is map
+        && labels.keys().hasOnly(['presence', 'table', 'care', 'groups', 'discipleship'])
+        && labels.get('presence', '') is string && labels.get('presence', '').size() <= 48
+        && labels.get('table', '') is string && labels.get('table', '').size() <= 48
+        && labels.get('care', '') is string && labels.get('care', '').size() <= 48
+        && labels.get('groups', '') is string && labels.get('groups', '').size() <= 48
+        && labels.get('discipleship', '') is string && labels.get('discipleship', '').size() <= 48
+        && stages is list && stages.size() > 0 && stages.size() <= 20
+        && indicators is list && indicators.size() <= 20
+        && routingRules is list && routingRules.size() <= 20
+        && implementationPhases is list && implementationPhases.size() > 0 && implementationPhases.size() <= 16
+        && implementationKeys is list && implementationKeys.size() > 0 && implementationKeys.size() <= 120
+        && stageIds is list && stageIds.size() > 0 && stageIds.size() <= 20
+        && stageRoles is map
+        && request.resource.data.get('updatedAt', null) == request.time
+        && request.resource.data.get('updatedBy', '') == request.auth.uid;
+    }
+    function validJourneyPlaybookCreate(orgId) {
+      return validJourneyPlaybookCore(orgId)
+        && request.resource.data.get('createdAt', null) == request.time
+        && request.resource.data.get('createdBy', '') == request.auth.uid
+        && request.resource.data.keys().hasOnly([
+          'organizationId', 'schemaVersion', 'name', 'description', 'status',
+          'carePromiseHours', 'discipleshipMeetingCount', 'groupCapacityPolicy', 'areaLabels', 'stages',
+          'stageIds', 'stageRoles', 'indicators', 'routingRules', 'implementationPhases', 'implementationKeys',
+          'createdAt', 'createdBy', 'updatedAt', 'updatedBy'
+        ]);
+    }
+    function validJourneyPlaybookUpdate(orgId) {
+      return validJourneyPlaybookCore(orgId)
+        && resource.data.get('organizationId', '') == orgId
+        && request.resource.data.get('createdAt', null) == resource.data.get('createdAt', null)
+        && request.resource.data.get('createdBy', '') == resource.data.get('createdBy', '')
+        && request.resource.data.keys().hasOnly([
+          'organizationId', 'schemaVersion', 'name', 'description', 'status',
+          'carePromiseHours', 'discipleshipMeetingCount', 'groupCapacityPolicy', 'areaLabels', 'stages',
+          'stageIds', 'stageRoles', 'indicators', 'routingRules', 'implementationPhases', 'implementationKeys',
+          'createdAt', 'createdBy', 'updatedAt', 'updatedBy'
+        ]);
+    }
+    function validPlaybookSettings(orgId) {
+      let playbookId = request.resource.data.get('activePlaybookId', '');
+      let playbookPath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/playbooks/$(playbookId);
+      return request.resource.data.get('organizationId', '') == orgId
+        && playbookId is string
+        && playbookId.size() > 0
+        && playbookId.size() <= 80
+        && existsAfter(playbookPath)
+        && getAfter(playbookPath).data.get('organizationId', '') == orgId
+        && getAfter(playbookPath).data.get('status', '') == 'active'
+        && request.resource.data.get('updatedAt', null) == request.time
+        && request.resource.data.get('updatedBy', '') == request.auth.uid
+        && request.resource.data.keys().hasOnly(['organizationId', 'activePlaybookId', 'updatedAt', 'updatedBy']);
+    }
+
+    function validModuleLabels(orgId) {
+      let labels = request.resource.data.get('labels', {});
+      return request.resource.data.get('organizationId', '') == orgId
+        && labels is map
+        && labels.keys().hasOnly(['presence', 'table', 'care', 'groups', 'discipleship'])
+        && labels.get('presence', '') is string && labels.get('presence', '').size() <= 48
+        && labels.get('table', '') is string && labels.get('table', '').size() <= 48
+        && labels.get('care', '') is string && labels.get('care', '').size() <= 48
+        && labels.get('groups', '') is string && labels.get('groups', '').size() <= 48
+        && labels.get('discipleship', '') is string && labels.get('discipleship', '').size() <= 48
+        && request.resource.data.get('updatedAt', null) == request.time
+        && request.resource.data.get('updatedBy', '') == request.auth.uid
+        && request.resource.data.keys().hasOnly(['organizationId', 'labels', 'updatedAt', 'updatedBy']);
+    }
+
+    function validMesaParticipationCreate(orgId, recordId) {
+      let sessionId = request.resource.data.get('sessionId', '');
+      let congregationId = request.resource.data.get('congregationId', '');
+      let personId = request.resource.data.get('personId', '');
+      let sessionPath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/presenceSessions/$(sessionId);
+      let personPath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/people/$(personId);
+      return tenantCreate(orgId)
+        && recordId == sessionId + '__' + personId
+        && congregationId is string
+        && sessionId is string
+        && personId is string
+        && request.resource.data.get('status', '') in ['invited', 'joined']
+        && request.resource.data.get('bondHostRef', '') is string
+        && request.resource.data.get('bondHostRef', '').size() > 0
+        && request.resource.data.get('updatedAt', null) == request.time
+        && request.resource.data.get('updatedBy', '') == request.auth.uid
+        && request.resource.data.keys().hasOnly([
+          'organizationId', 'congregationId', 'sessionId', 'personId',
+          'status', 'bondHostRef', 'updatedAt', 'updatedBy'
+        ])
+        && exists(sessionPath)
+        && get(sessionPath).data.get('congregationId', '') == congregationId
+        && exists(personPath)
+        && get(personPath).data.get('congregationId', '') == congregationId;
+    }
+    function validMesaParticipationUpdate(orgId) {
+      return tenantUnchanged(orgId)
+        && congregationUnchanged()
+        && request.resource.data.get('sessionId', '') == resource.data.get('sessionId', '')
+        && request.resource.data.get('personId', '') == resource.data.get('personId', '')
+        && request.resource.data.get('status', '') in ['invited', 'joined']
+        && request.resource.data.get('bondHostRef', '') == resource.data.get('bondHostRef', '')
+        && request.resource.data.get('updatedAt', null) == request.time
+        && request.resource.data.get('updatedBy', '') == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'status', 'updatedAt', 'updatedBy'
+        ]);
+    }
+
+    function validMesaPreparationCreate(orgId, preparationId) {
+      let congregationId = request.resource.data.get('congregationId', '');
+      let sessionId = request.resource.data.get('sessionId', '');
+      let sessionPath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/presenceSessions/$(sessionId);
+      let items = request.resource.data.get('items', {});
+      let owners = request.resource.data.get('owners', {});
+      let allReady = items.get('environment', false)
+        && items.get('hosts', false)
+        && items.get('hospitality', false)
+        && items.get('supplies', false);
+      return request.resource.data.keys().hasOnly([
+          'organizationId', 'congregationId', 'sessionId', 'status',
+          'items', 'owners', 'updatedAt', 'updatedBy'
+        ])
+        && tenantCreate(orgId)
+        && preparationId == sessionId
+        && congregationId is string && congregationId.size() > 0
+        && sessionId is string && sessionId.size() > 0
+        && items is map
+        && owners is map
+        && items.keys().hasOnly(['environment', 'hosts', 'hospitality', 'supplies'])
+        && owners.keys().hasOnly(['environment', 'hosts', 'hospitality', 'supplies'])
+        && items.get('environment', false) is bool
+        && items.get('hosts', false) is bool
+        && items.get('hospitality', false) is bool
+        && items.get('supplies', false) is bool
+        && owners.get('environment', '') == (items.get('environment', false) ? request.auth.uid : '')
+        && owners.get('hosts', '') == (items.get('hosts', false) ? request.auth.uid : '')
+        && owners.get('hospitality', '') == (items.get('hospitality', false) ? request.auth.uid : '')
+        && owners.get('supplies', '') == (items.get('supplies', false) ? request.auth.uid : '')
+        && request.resource.data.get('status', '') == (allReady ? 'ready' : 'preparing')
+        && request.resource.data.get('updatedAt', null) == request.time
+        && request.resource.data.get('updatedBy', '') == request.auth.uid
+        && canManageMesa(orgId)
+        && exists(sessionPath)
+        && get(sessionPath).data.get('congregationId', '') == congregationId
+        && get(sessionPath).data.get('status', '') == 'open';
+    }
+
+    function validMesaPreparationUpdate(orgId) {
+      let congregationId = resource.data.get('congregationId', '');
+      let sessionId = resource.data.get('sessionId', '');
+      let sessionPath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/presenceSessions/$(sessionId);
+      let items = request.resource.data.get('items', {});
+      let owners = request.resource.data.get('owners', {});
+      let oldItems = resource.data.get('items', {});
+      let oldOwners = resource.data.get('owners', {});
+      let allReady = items.get('environment', false)
+        && items.get('hosts', false)
+        && items.get('hospitality', false)
+        && items.get('supplies', false);
+      return tenantUnchanged(orgId)
+        && congregationUnchanged()
+        && request.resource.data.get('sessionId', '') == sessionId
+        && request.resource.data.keys().hasOnly([
+          'organizationId', 'congregationId', 'sessionId', 'status',
+          'items', 'owners', 'updatedAt', 'updatedBy'
+        ])
+        && items is map
+        && owners is map
+        && items.keys().hasOnly(['environment', 'hosts', 'hospitality', 'supplies'])
+        && owners.keys().hasOnly(['environment', 'hosts', 'hospitality', 'supplies'])
+        && items.get('environment', false) is bool
+        && items.get('hosts', false) is bool
+        && items.get('hospitality', false) is bool
+        && items.get('supplies', false) is bool
+        && owners.get('environment', '') == (
+          items.get('environment', false) == oldItems.get('environment', false)
+            ? oldOwners.get('environment', '')
+            : (items.get('environment', false) ? request.auth.uid : '')
+        )
+        && owners.get('hosts', '') == (
+          items.get('hosts', false) == oldItems.get('hosts', false)
+            ? oldOwners.get('hosts', '')
+            : (items.get('hosts', false) ? request.auth.uid : '')
+        )
+        && owners.get('hospitality', '') == (
+          items.get('hospitality', false) == oldItems.get('hospitality', false)
+            ? oldOwners.get('hospitality', '')
+            : (items.get('hospitality', false) ? request.auth.uid : '')
+        )
+        && owners.get('supplies', '') == (
+          items.get('supplies', false) == oldItems.get('supplies', false)
+            ? oldOwners.get('supplies', '')
+            : (items.get('supplies', false) ? request.auth.uid : '')
+        )
+        && request.resource.data.get('status', '') == (allReady ? 'ready' : 'preparing')
+        && request.resource.data.get('updatedAt', null) == request.time
+        && request.resource.data.get('updatedBy', '') == request.auth.uid
+        && canManageMesa(orgId)
+        && exists(sessionPath)
+        && get(sessionPath).data.get('congregationId', '') == congregationId
+        && get(sessionPath).data.get('status', '') == 'open';
+    }
+
+    function validFieldHopeSessionCreate(orgId) {
+      let congregationId = request.resource.data.get('congregationId', '');
+      return tenantCreate(orgId)
+        && canOperateFieldProgram(orgId, congregationId)
+        && congregationId is string && congregationId.size() > 0
+        && request.resource.data.get('themeId', '') is string
+        && request.resource.data.get('themeId', '').size() > 0
+        && request.resource.data.get('themeId', '').size() <= 64
+        && request.resource.data.get('title', '') is string
+        && request.resource.data.get('title', '').size() > 0
+        && request.resource.data.get('title', '').size() <= 120
+        && request.resource.data.get('scripture', '') is string
+        && request.resource.data.get('scripture', '').size() <= 80
+        && request.resource.data.get('scheduledFor', null) is timestamp
+        && request.resource.data.get('status', '') == 'planned'
+        && request.resource.data.get('createdAt', null) == request.time
+        && request.resource.data.get('createdBy', '') == request.auth.uid
+        && request.resource.data.get('completedAt', null) == null
+        && request.resource.data.get('completedBy', '') == ''
+        && request.resource.data.keys().hasOnly([
+          'organizationId','congregationId','themeId','title','scripture','scheduledFor',
+          'status','createdAt','createdBy','completedAt','completedBy'
+        ]);
+    }
+
+    function validFieldHopeSessionUpdate(orgId) {
+      return tenantUnchanged(orgId)
+        && congregationUnchanged()
+        && canOperateFieldProgram(orgId, resource.data.get('congregationId', ''))
+        && resource.data.get('status', '') == 'planned'
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','completedAt','completedBy'])
+        && request.resource.data.get('status', '') == 'completed'
+        && request.resource.data.get('completedAt', null) == request.time
+        && request.resource.data.get('completedBy', '') == request.auth.uid;
+    }
+
+    function validFieldHopeParticipationCreate(orgId, recordId) {
+      let congregationId = request.resource.data.get('congregationId', '');
+      let sessionId = request.resource.data.get('sessionId', '');
+      let personId = request.resource.data.get('personId', '');
+      let sessionPath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/fieldHopeSessions/$(sessionId);
+      let personPath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/people/$(personId);
+      return tenantCreate(orgId)
+        && canOperateFieldProgram(orgId, congregationId)
+        && recordId == sessionId + '__' + personId
+        && request.resource.data.get('status', '') in ['invited','present']
+        && request.resource.data.get('personName', '') is string
+        && request.resource.data.get('personName', '').size() <= 120
+        && request.resource.data.get('updatedAt', null) == request.time
+        && request.resource.data.get('updatedBy', '') == request.auth.uid
+        && request.resource.data.keys().hasOnly([
+          'organizationId','congregationId','sessionId','personId','personName',
+          'status','updatedAt','updatedBy'
+        ])
+        && get(sessionPath).data.get('congregationId', '') == congregationId
+        && get(personPath).data.get('congregationId', '') == congregationId;
+    }
+
+    function validFieldHopeParticipationUpdate(orgId) {
+      return tenantUnchanged(orgId)
+        && congregationUnchanged()
+        && canOperateFieldProgram(orgId, resource.data.get('congregationId', ''))
+        && request.resource.data.get('sessionId', '') == resource.data.get('sessionId', '')
+        && request.resource.data.get('personId', '') == resource.data.get('personId', '')
+        && request.resource.data.get('personName', '') == resource.data.get('personName', '')
+        && resource.data.get('status', '') == 'invited'
+        && request.resource.data.get('status', '') == 'present'
+        && request.resource.data.get('updatedAt', null) == request.time
+        && request.resource.data.get('updatedBy', '') == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','updatedAt','updatedBy']);
+    }
+
+    function validFieldFirstStepsCreate(orgId, recordId) {
+      let congregationId = request.resource.data.get('congregationId', '');
+      let personId = request.resource.data.get('personId', '');
+      let personPath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/people/$(personId);
+      return tenantCreate(orgId)
+        && recordId == personId
+        && canOperateFieldProgram(orgId, congregationId)
+        && get(personPath).data.get('congregationId', '') == congregationId
+        && request.resource.data.get('personName', '') is string
+        && request.resource.data.get('personName', '').size() <= 120
+        && request.resource.data.get('facilitatorId', '') == request.auth.uid
+        && request.resource.data.get('facilitatorName', '') is string
+        && request.resource.data.get('facilitatorName', '').size() <= 120
+        && request.resource.data.get('meeting', 0) == 1
+        && request.resource.data.get('targetMeetings', 0) == 6
+        && request.resource.data.get('status', '') == 'active'
+        && request.resource.data.get('startedAt', null) == request.time
+        && request.resource.data.get('createdAt', null) == request.time
+        && request.resource.data.get('createdBy', '') == request.auth.uid
+        && request.resource.data.get('lastCompletedMeeting', null) == null
+        && request.resource.data.get('lastCompletedAt', null) == null
+        && request.resource.data.get('updatedAt', null) == request.time
+        && request.resource.data.get('updatedBy', '') == request.auth.uid
+        && request.resource.data.keys().hasOnly([
+          'organizationId','congregationId','personId','personName','facilitatorId','facilitatorName',
+          'meeting','targetMeetings','status','startedAt','createdAt','createdBy',
+          'lastCompletedMeeting','lastCompletedAt','updatedAt','updatedBy'
+        ]);
+    }
+
+    function validFieldFirstStepsUpdate(orgId) {
+      let oldMeeting = resource.data.get('meeting', 1);
+      let newMeeting = request.resource.data.get('meeting', 1);
+      let oldStatus = resource.data.get('status', '');
+      let newStatus = request.resource.data.get('status', '');
+      let advance = oldStatus == 'active'
+        && request.resource.data.get('lastCompletedMeeting', 0) == oldMeeting
+        && request.resource.data.get('lastCompletedAt', null) == request.time
+        && (
+          (oldMeeting < 6 && newMeeting == oldMeeting + 1 && newStatus == 'active')
+          || (oldMeeting == 6 && newMeeting == 6 && newStatus == 'completed')
+        );
+      let pauseResume = newMeeting == oldMeeting
+        && request.resource.data.get('lastCompletedMeeting', null) == resource.data.get('lastCompletedMeeting', null)
+        && request.resource.data.get('lastCompletedAt', null) == resource.data.get('lastCompletedAt', null)
+        && (
+          (oldStatus == 'active' && newStatus == 'paused')
+          || (oldStatus == 'paused' && newStatus == 'active')
+        );
+      return tenantUnchanged(orgId)
+        && congregationUnchanged()
+        && canOperateFieldProgram(orgId, resource.data.get('congregationId', ''))
+        && request.resource.data.get('personId', '') == resource.data.get('personId', '')
+        && request.resource.data.get('personName', '') == resource.data.get('personName', '')
+        && request.resource.data.get('facilitatorId', '') == resource.data.get('facilitatorId', '')
+        && request.resource.data.get('facilitatorName', '') == resource.data.get('facilitatorName', '')
+        && request.resource.data.get('targetMeetings', 0) == 6
+        && newMeeting is number && newMeeting >= 1 && newMeeting <= 6
+        && newStatus in ['active','paused','completed']
+        && request.resource.data.get('updatedAt', null) == request.time
+        && request.resource.data.get('updatedBy', '') == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'meeting','status','lastCompletedMeeting','lastCompletedAt','updatedAt','updatedBy'
+        ])
+        && (advance || pauseResume);
+    }
+
+    function validAbsenceCareCreate(orgId, careRequestId, congregationId, personId) {
+      let sessionId = request.resource.data.get('sourcePresenceSessionId', '');
+      let checkId = request.resource.data.get('sourcePresenceCheckId', '');
+      let sessionPath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/presenceSessions/$(sessionId);
+      let checkPath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/presenceChecks/$(checkId);
+      let personPath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/people/$(personId);
+      let sessionData = get(sessionPath).data;
+      let checkData = get(checkPath).data;
+      let personData = get(personPath).data;
+      return careRequestId == 'absence-' + sessionId + '-' + personId
+        && request.resource.data.get('careType', '') == 'absence_check'
+        && request.resource.data.get('summary', '') == ''
+        && request.resource.data.get('promiseHours', 0) <= 48
+        && request.resource.data.get('dueAt', null) <= request.time + duration.value(48, 'h')
+        && sessionId is string && sessionId.size() > 0
+        && checkId is string && checkId.size() > 0
+        && sessionData.get('organizationId', '') == orgId
+        && sessionData.get('congregationId', '') == congregationId
+        && sessionData.get('status', '') == 'closed'
+        && sessionData.get('closedAt', null) is timestamp
+        && sessionData.get('absenceEvidenceEligible', false) == true
+        && sessionData.get('verifiedCountAtClose', -1) is number
+        && sessionData.get('verifiedCountAtClose', -1) >= 0
+        && checkData.get('organizationId', '') == orgId
+        && checkData.get('congregationId', '') == congregationId
+        && checkData.get('sessionId', '') == sessionId
+        && checkData.get('personId', '') == personId
+        && checkData.get('state', '') == 'absent_confirmed'
+        && checkData.get('recordedAt', null) is timestamp
+        && checkData.get('recordedAt', null) <= sessionData.get('closedAt', null)
+        && personData.get('organizationId', '') == orgId
+        && personData.get('congregationId', '') == congregationId
+        && personData.get('consent', false) == true
+        && personData.get('phone', '') is string
+        && personData.get('phone', '').size() >= 8
+        && personData.get('preferredContactChannel', '') in ['whatsapp', 'phone'];
+    }
+
+    function validCareRequestCreate(orgId, careRequestId) {
+      let congregationId = request.resource.data.get('congregationId', '');
+      let personId = request.resource.data.get('personId', '');
+      let source = request.resource.data.get('source', '');
+      let ownerRef = request.resource.data.get('ownerRef', '');
+      let summary = request.resource.data.get('summary', '');
+      return tenantCreate(orgId)
+        && congregationId is string
+        && personId is string
+        && request.resource.data.get('careType', '') in ['first_contact', 'prayer', 'pastoral_contact', 'group_interest', 'absence_check', 'operational_followup']
+        && source in ['manual', 'visitor_registration', 'presence_absence']
+        && request.resource.data.get('status', '') == 'open'
+        && request.resource.data.get('requestedAt', null) == request.time
+        && request.resource.data.get('requestedBy', '') == request.auth.uid
+        && request.resource.data.get('promiseHours', 0) is number
+        && request.resource.data.get('promiseHours', 0) >= 1
+        && request.resource.data.get('promiseHours', 0) <= 168
+        && request.resource.data.get('dueAt', null) is timestamp
+        && request.resource.data.get('dueAt', null) > request.time
+        && request.resource.data.get('dueAt', null) <= request.time + duration.value(168, 'h')
+        && ownerRef is string
+        && summary is string
+        && summary.size() <= 160
+        && (
+          (source == 'manual'
+            && request.resource.data.get('careType', '') != 'absence_check'
+            && request.resource.data.get('sourcePresenceSessionId', '') == ''
+            && request.resource.data.get('sourcePresenceCheckId', '') == ''
+            && ownerRef == request.auth.uid
+            && request.resource.data.get('assignedAt', null) == request.time
+            && request.resource.data.get('assignedBy', '') == request.auth.uid)
+          ||
+          (source == 'visitor_registration'
+            && request.resource.data.get('sourcePresenceSessionId', '') == ''
+            && request.resource.data.get('sourcePresenceCheckId', '') == ''
+            && ownerRef == ''
+            && request.resource.data.get('assignedAt', null) == null
+            && request.resource.data.get('assignedBy', '') == '')
+          ||
+          (source == 'presence_absence'
+            && ownerRef == ''
+            && request.resource.data.get('assignedAt', null) == null
+            && request.resource.data.get('assignedBy', '') == ''
+            && validAbsenceCareCreate(orgId, careRequestId, congregationId, personId))
+        );
+    }
+    function validAbsenceCareRouteCreate(orgId, routeId) {
+      let congregationId = request.resource.data.get('congregationId', '');
+      let sessionId = request.resource.data.get('sessionId', '');
+      let personId = request.resource.data.get('personId', '');
+      let careRequestId = request.resource.data.get('careRequestId', '');
+      let checkId = request.resource.data.get('sourcePresenceCheckId', '');
+      let carePath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/careRequests/$(careRequestId);
+      let careData = getAfter(carePath).data;
+      return request.resource.data.keys().hasOnly([
+          'organizationId', 'congregationId', 'sessionId', 'personId',
+          'careRequestId', 'sourcePresenceCheckId', 'routedAt', 'routedBy'
+        ])
+        && tenantCreate(orgId)
+        && routeId == 'absence-' + sessionId + '-' + personId
+        && careRequestId == routeId
+        && request.resource.data.get('routedAt', null) == request.time
+        && request.resource.data.get('routedBy', '') == request.auth.uid
+        && canCreateCareInScope(orgId, congregationId, 'presence_absence')
+        && careData.get('organizationId', '') == orgId
+        && careData.get('congregationId', '') == congregationId
+        && careData.get('personId', '') == personId
+        && careData.get('careType', '') == 'absence_check'
+        && careData.get('source', '') == 'presence_absence'
+        && careData.get('sourcePresenceSessionId', '') == sessionId
+        && careData.get('sourcePresenceCheckId', '') == checkId
+        && careData.get('requestedAt', null) == request.time
+        && careData.get('requestedBy', '') == request.auth.uid;
+    }
+
+    function validCareAssignment(orgId) {
+      let oldOwner = resource.data.get('ownerRef', '');
+      let newOwner = request.resource.data.get('ownerRef', '');
+      let selfClaim = oldOwner == '' && newOwner == request.auth.uid;
+      return resource.data.get('status', '') == 'open'
+        && request.resource.data.get('status', '') == 'open'
+        && tenantUnchanged(orgId)
+        && congregationUnchanged()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['ownerRef', 'assignedAt', 'assignedBy'])
+        && newOwner is string
+        && newOwner.size() > 0
+        && request.resource.data.get('assignedAt', null) == request.time
+        && request.resource.data.get('assignedBy', '') == request.auth.uid
+        && (
+          selfClaim
+            ? true
+            : (
+                oldOwner != newOwner
+                && (
+                  isSystemAdmin()
+                  || isOwner(orgId)
+                  || memberRole(orgId) in ['owner','admin','pastor','coordinator']
+                  || hasPermission(orgId, 'canCoordinateJourney')
+                )
+              )
+        );
+    }
+    function validRevokedCareResolve(orgId) {
+      let personId = resource.data.get('personId', '');
+      let personPath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/people/$(personId);
+      let personData = get(personPath).data;
+      return resource.data.get('status', '') == 'open'
+        && resource.data.get('careType', '') in ['first_contact', 'absence_check']
+        && tenantUnchanged(orgId)
+        && congregationUnchanged()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'status', 'resolvedAt', 'resolvedBy', 'resolutionCode', 'resolutionNote'
+        ])
+        && request.resource.data.get('status', '') == 'resolved'
+        && request.resource.data.get('resolvedAt', null) == request.time
+        && request.resource.data.get('resolvedBy', '') == request.auth.uid
+        && request.resource.data.get('resolutionCode', '') == 'consent_revoked'
+        && request.resource.data.get('resolutionNote', '') == ''
+        && personData.get('congregationId', '') == resource.data.get('congregationId', '')
+        && (
+          personData.get('consent', false) != true
+          || personData.get('phone', '').size() == 0
+        );
+    }
+
+    function validCareResolve(orgId) {
+      let note = request.resource.data.get('resolutionNote', '');
+      return resource.data.get('status', '') == 'open'
+        && (resource.data.get('ownerRef', '') == request.auth.uid || isOrgAdmin(orgId))
+        && tenantUnchanged(orgId)
+        && congregationUnchanged()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'resolvedAt', 'resolvedBy', 'resolutionCode', 'resolutionNote'])
+        && request.resource.data.get('status', '') == 'resolved'
+        && request.resource.data.get('resolvedAt', null) == request.time
+        && request.resource.data.get('resolvedBy', '') == request.auth.uid
+        && request.resource.data.get('resolutionCode', '') in ['contact_completed', 'pastoral_handoff', 'declined_contact', 'invalid_contact', 'closed_no_response', 'other_resolved']
+        && note is string
+        && note.size() <= 160;
+    }
+
+    function validFollowupCreate(orgId, followupId) {
+      let careRequestId = request.resource.data.get('careRequestId', '');
+      let personId = request.resource.data.get('personId', '');
+      let carePath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/careRequests/$(careRequestId);
+      let personPath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/people/$(personId);
+      let careData = get(carePath).data;
+      let personData = get(personPath).data;
+      return request.resource.data.keys().hasOnly([
+          'organizationId', 'congregationId', 'personId', 'careRequestId', 'kind',
+          'status', 'ownerRef', 'dueAt', 'createdAt', 'createdBy',
+          'completedAt', 'completedBy', 'outcomeCode', 'nextActionCode'
+        ])
+        && request.resource.data.get('organizationId', '') == orgId
+        && followupId == 'first-contact-' + careRequestId
+        && request.resource.data.get('kind', '') == 'first_contact'
+        && request.resource.data.get('status', '') == 'pending'
+        && request.resource.data.get('ownerRef', '') == request.auth.uid
+        && request.resource.data.get('createdAt', null) == request.time
+        && request.resource.data.get('createdBy', '') == request.auth.uid
+        && request.resource.data.get('completedAt', null) == null
+        && request.resource.data.get('completedBy', '') == ''
+        && request.resource.data.get('outcomeCode', '') == ''
+        && request.resource.data.get('nextActionCode', '') == ''
+        && canManageCare(orgId)
+        && careData.get('status', '') == 'open'
+        && careData.get('careType', '') == 'first_contact'
+        && careData.get('ownerRef', '') == request.auth.uid
+        && careData.get('personId', '') == personId
+        && careData.get('congregationId', '') == request.resource.data.get('congregationId', '')
+        && request.resource.data.get('dueAt', null) == careData.get('dueAt', null)
+        && personData.get('congregationId', '') == request.resource.data.get('congregationId', '')
+        && personData.get('consent', false) == true
+        && personData.get('phone', '') is string
+        && personData.get('phone', '').size() > 0;
+    }
+
+    function validFollowupOutcomePair(outcomeCode, nextActionCode) {
+      return
+        (outcomeCode == 'responded' && nextActionCode == 'none')
+        || (outcomeCode == 'prayer_requested' && nextActionCode == 'care_prayer')
+        || (outcomeCode == 'group_interest' && nextActionCode == 'group_entry')
+        || (outcomeCode == 'declined_contact' && nextActionCode == 'none')
+        || (outcomeCode == 'consent_revoked' && nextActionCode == 'none')
+        || (outcomeCode == 'invalid_contact' && nextActionCode == 'data_correction')
+        || (outcomeCode == 'no_response' && nextActionCode == 'manual_review');
+    }
+
+    function validFollowupCareResolution(outcomeCode, resolutionCode) {
+      return
+        (outcomeCode in ['responded', 'prayer_requested', 'group_interest'] && resolutionCode == 'contact_completed')
+        || (outcomeCode == 'declined_contact' && resolutionCode == 'declined_contact')
+        || (outcomeCode == 'consent_revoked' && resolutionCode == 'consent_revoked')
+        || (outcomeCode == 'invalid_contact' && resolutionCode == 'invalid_contact')
+        || (outcomeCode == 'no_response' && resolutionCode == 'closed_no_response');
+    }
+
+    function validFollowupComplete(orgId) {
+      let careRequestId = resource.data.get('careRequestId', '');
+      let carePath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/careRequests/$(careRequestId);
+      let careData = getAfter(carePath).data;
+      let outcomeCode = request.resource.data.get('outcomeCode', '');
+      let nextActionCode = request.resource.data.get('nextActionCode', '');
+      return resource.data.get('status', '') == 'pending'
+        && resource.data.get('ownerRef', '') == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'status', 'completedAt', 'completedBy', 'outcomeCode', 'nextActionCode'
+        ])
+        && request.resource.data.get('status', '') == 'completed'
+        && request.resource.data.get('completedAt', null) == request.time
+        && request.resource.data.get('completedBy', '') == request.auth.uid
+        && validFollowupOutcomePair(outcomeCode, nextActionCode)
+        && careData.get('status', '') == 'resolved'
+        && careData.get('resolvedAt', null) == request.time
+        && careData.get('resolvedBy', '') == request.auth.uid
+        && validFollowupCareResolution(outcomeCode, careData.get('resolutionCode', ''));
+    }
+
+    function validLegacyImplementationKey(key) {
+      return key is string
+        && key.matches('^(prep[.][1-7]|week[.]1[.](practice|teach[.][1-4])|week[.]2[.](practice|teach[.][1-5])|week[.]3[.](practice|teach[.][1-4])|week[.]4[.](practice|teach[.][1-5])|week[.]5[.](practice|teach[.][1-5])|week[.]6[.](practice|teach[.][1-4])|week[.]7[.](practice|teach[.][1-5]))$');
+    }
+    function implementationPlaybookAvailable(orgId, playbookId) {
+      let playbookPath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/playbooks/$(playbookId);
+      return (
+          exists(playbookPath)
+          && get(playbookPath).data.get('organizationId', '') == orgId
+          && get(playbookPath).data.get('status', '') == 'active'
+        )
+        || (
+          playbookId == 'raiz_e_mesa_2026'
+          && !exists(playbookPath)
+        );
+    }
+    function validImplementationCycleCreate(orgId) {
+      let playbookId = request.resource.data.get('playbookId', '');
+      return tenantCreate(orgId)
+        && request.resource.data.get('congregationId', '') is string
+        && playbookId is string
+        && playbookId.size() > 0
+        && playbookId.size() <= 80
+        && implementationPlaybookAvailable(orgId, playbookId)
+        && request.resource.data.get('status', '') == 'active'
+        && request.resource.data.get('startedAt', null) == request.time
+        && request.resource.data.get('createdAt', null) == request.time
+        && request.resource.data.get('createdBy', '') == request.auth.uid
+        && request.resource.data.keys().hasOnly([
+          'organizationId', 'congregationId', 'playbookId', 'status',
+          'startedAt', 'createdAt', 'createdBy'
+        ]);
+    }
+    function validImplementationStepCreate(orgId, cycleId, stepId) {
+      let cyclePath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/implementationCycles/$(cycleId);
+      let cycleData = get(cyclePath).data;
+      let playbookId = cycleData.get('playbookId', 'raiz_e_mesa_2026');
+      let playbookPath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/playbooks/$(playbookId);
+      let customKeyAllowed = exists(playbookPath)
+        && stepId in get(playbookPath).data.get('implementationKeys', []);
+      let legacyKeyAllowed = playbookId == 'raiz_e_mesa_2026'
+        && !exists(playbookPath)
+        && validLegacyImplementationKey(stepId);
+      return exists(cyclePath)
+        && request.resource.data.get('organizationId', '') == orgId
+        && request.resource.data.get('cycleId', '') == cycleId
+        && request.resource.data.get('playbookId', '') == playbookId
+        && request.resource.data.get('key', '') == stepId
+        && (customKeyAllowed || legacyKeyAllowed)
+        && request.resource.data.get('completedAt', null) == request.time
+        && request.resource.data.get('completedBy', '') == request.auth.uid
+        && request.resource.data.get('congregationId', '') == cycleData.get('congregationId', '')
+        && request.resource.data.keys().hasOnly([
+          'organizationId', 'congregationId', 'cycleId', 'playbookId',
+          'key', 'completedAt', 'completedBy'
+        ]);
+    }
+    function canOperateJourneyMilestone(orgId, congregationId, playbookId, stageId) {
+      let active = membershipIsActive(orgId);
+      let memberData = active ? membership(orgId) : {};
+      let roleName = active
+        ? memberData.get('journeyRole', memberData.get('organizationRole', memberData.get('role', 'member')))
+        : '';
+      let permissions = active ? memberData.get('permissions', {}) : {};
+      let privileged = isSystemAdmin() || isOwner(orgId);
+      let playbookPath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/playbooks/$(playbookId);
+      let playbookData = exists(playbookPath) ? get(playbookPath).data : {};
+      let roles = playbookData.get('stageRoles', {}).get(stageId, []);
+      let inScope = privileged || (
+        active && (
+          roleName in ['owner', 'admin', 'pastor', 'data_admin']
+          || congregationId in memberData.get('congregationIds', [])
+        )
+      );
+      let allowed = privileged || (
+        active && (
+          roleName in ['owner', 'admin', 'pastor', 'coordinator']
+          || permissions.get('canCoordinateJourney', false) == true
+          || roleName in roles
+          || (roleName == 'mesa' && 'mesa_team' in roles)
+          || (roleName == 'care' && 'caregiver' in roles)
+        )
+      );
+      return hasProductAccess(orgId)
+        && exists(playbookPath)
+        && playbookData.get('status', '') == 'active'
+        && stageId in playbookData.get('stageIds', [])
+        && inScope
+        && allowed;
+    }
+    function validJourneyMilestoneCreate(orgId, milestoneId) {
+      let congregationId = request.resource.data.get('congregationId', '');
+      let personId = request.resource.data.get('personId', '');
+      let playbookId = request.resource.data.get('playbookId', '');
+      let stageId = request.resource.data.get('stageId', '');
+      let personPath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/people/$(personId);
+      return tenantCreate(orgId)
+        && milestoneId == personId + '__' + stageId
+        && congregationId is string && congregationId.size() > 0
+        && personId is string && personId.size() > 0
+        && playbookId is string && playbookId.size() > 0
+        && stageId is string && stageId.size() > 0
+        && canOperateJourneyMilestone(orgId, congregationId, playbookId, stageId)
+        && exists(personPath)
+        && get(personPath).data.get('congregationId', '') == congregationId
+        && request.resource.data.get('personName', '') is string
+        && request.resource.data.get('stageLabel', '') is string
+        && request.resource.data.get('stageLabel', '').size() > 0
+        && request.resource.data.get('stageLabel', '').size() <= 64
+        && request.resource.data.get('status', '') == 'active'
+        && request.resource.data.get('startedAt', null) == request.time
+        && request.resource.data.get('startedBy', '') == request.auth.uid
+        && request.resource.data.get('completedAt', null) == null
+        && request.resource.data.get('completedBy', '') == ''
+        && request.resource.data.get('updatedAt', null) == request.time
+        && request.resource.data.get('updatedBy', '') == request.auth.uid
+        && request.resource.data.keys().hasOnly([
+          'organizationId', 'congregationId', 'personId', 'personName',
+          'playbookId', 'stageId', 'stageLabel', 'status',
+          'startedAt', 'startedBy', 'completedAt', 'completedBy',
+          'updatedAt', 'updatedBy'
+        ]);
+    }
+    function validJourneyMilestoneUpdate(orgId) {
+      let playbookId = resource.data.get('playbookId', '');
+      let stageId = resource.data.get('stageId', '');
+      return tenantUnchanged(orgId)
+        && congregationUnchanged()
+        && resource.data.get('status', '') == 'active'
+        && request.resource.data.get('personId', '') == resource.data.get('personId', '')
+        && request.resource.data.get('personName', '') == resource.data.get('personName', '')
+        && request.resource.data.get('playbookId', '') == playbookId
+        && request.resource.data.get('stageId', '') == stageId
+        && request.resource.data.get('stageLabel', '') == resource.data.get('stageLabel', '')
+        && request.resource.data.get('startedAt', null) == resource.data.get('startedAt', null)
+        && request.resource.data.get('startedBy', '') == resource.data.get('startedBy', '')
+        && canOperateJourneyMilestone(orgId, resource.data.get('congregationId', ''), playbookId, stageId)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'status', 'completedAt', 'completedBy', 'updatedAt', 'updatedBy'
+        ])
+        && request.resource.data.get('status', '') == 'completed'
+        && request.resource.data.get('completedAt', null) == request.time
+        && request.resource.data.get('completedBy', '') == request.auth.uid
+        && request.resource.data.get('updatedAt', null) == request.time
+        && request.resource.data.get('updatedBy', '') == request.auth.uid;
+    }
+
+    function validGroupState() {
+      let capacity = request.resource.data.get('capacity', 0);
+      let participants = request.resource.data.get('participants', 0);
+      return capacity is number
+        && participants is number
+        && capacity >= 1
+        && capacity <= 30
+        && participants >= 0
+        && participants <= capacity;
+    }
+    function validGroupEntryRequestCreate(orgId) {
+      let groupId = request.resource.data.get('groupId', '');
+      let personId = request.resource.data.get('personId', '');
+      let groupPath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/groups/$(groupId);
+      let personPath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/people/$(personId);
+      return request.resource.data.keys().hasOnly([
+          'organizationId', 'congregationId', 'groupId', 'personId', 'personName',
+          'status', 'requestedAt', 'requestedBy', 'resolvedAt', 'resolvedBy'
+        ])
+        && request.resource.data.get('organizationId', '') == orgId
+        && groupId is string
+        && groupId.size() > 0
+        && personId is string
+        && personId.size() > 0
+        && request.resource.data.get('personName', '') is string
+        && request.resource.data.get('personName', '').size() > 0
+        && request.resource.data.get('status', '') == 'pending'
+        && request.resource.data.get('requestedAt', null) == request.time
+        && request.resource.data.get('requestedBy', '') == request.auth.uid
+        && request.resource.data.get('resolvedAt', null) == null
+        && request.resource.data.get('resolvedBy', '') == ''
+        && canCreateGroupEntryRequest(orgId, groupId)
+        && exists(groupPath)
+        && exists(personPath)
+        && get(groupPath).data.get('congregationId', '') == request.resource.data.get('congregationId', '')
+        && get(personPath).data.get('congregationId', '') == request.resource.data.get('congregationId', '');
+    }
+
+    function validGroupEntryRequestUpdate(orgId) {
+      let groupId = resource.data.get('groupId', '');
+      let personId = resource.data.get('personId', '');
+      let membershipPath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/groupMemberships/$(groupId + '__' + personId);
+      let nextStatus = request.resource.data.get('status', '');
+      return request.resource.data.keys().hasOnly([
+          'organizationId', 'congregationId', 'groupId', 'personId', 'personName',
+          'status', 'requestedAt', 'requestedBy', 'resolvedAt', 'resolvedBy'
+        ])
+        && resource.data.get('organizationId', '') == orgId
+        && request.resource.data.get('organizationId', '') == orgId
+        && request.resource.data.get('organizationId', '') == resource.data.get('organizationId', '')
+        && request.resource.data.get('congregationId', '') == resource.data.get('congregationId', '')
+        && request.resource.data.get('groupId', '') == groupId
+        && request.resource.data.get('personId', '') == personId
+        && request.resource.data.get('personName', '') == resource.data.get('personName', '')
+        && request.resource.data.get('requestedAt', null) == resource.data.get('requestedAt', null)
+        && request.resource.data.get('requestedBy', '') == resource.data.get('requestedBy', '')
+        && resource.data.get('status', '') == 'pending'
+        && nextStatus in ['accepted', 'declined']
+        && request.resource.data.get('resolvedAt', null) == request.time
+        && request.resource.data.get('resolvedBy', '') == request.auth.uid
+        && canManageGroupRoster(orgId, groupId)
+        && (
+          nextStatus == 'declined'
+          || (
+            existsAfter(membershipPath)
+            && getAfter(membershipPath).data.get('status', '') == 'active'
+            && getAfter(membershipPath).data.get('groupId', '') == groupId
+            && getAfter(membershipPath).data.get('personId', '') == personId
+            && getAfter(membershipPath).data.get('congregationId', '') == resource.data.get('congregationId', '')
+          )
+        );
+    }
+
+    function validGroupMembershipCreate(orgId, membershipId) {
+      let groupId = request.resource.data.get('groupId', '');
+      let personId = request.resource.data.get('personId', '');
+      let groupPath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/groups/$(groupId);
+      let personPath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/people/$(personId);
+      return request.resource.data.keys().hasOnly([
+          'organizationId', 'congregationId', 'groupId', 'personId', 'personName',
+          'status', 'joinedAt', 'joinedBy', 'leftAt', 'leftBy'
+        ])
+        && request.resource.data.get('organizationId', '') == orgId
+        && groupId is string
+        && groupId.size() > 0
+        && personId is string
+        && personId.size() > 0
+        && membershipId == groupId + '__' + personId
+        && request.resource.data.get('status', '') == 'active'
+        && request.resource.data.get('joinedAt', null) == request.time
+        && request.resource.data.get('joinedBy', '') == request.auth.uid
+        && request.resource.data.get('leftAt', null) == null
+        && request.resource.data.get('leftBy', '') == ''
+        && canManageGroupRoster(orgId, groupId)
+        && exists(groupPath)
+        && exists(personPath)
+        && get(groupPath).data.get('congregationId', '') == request.resource.data.get('congregationId', '')
+        && get(personPath).data.get('congregationId', '') == request.resource.data.get('congregationId', '');
+    }
+    function validGroupMembershipUpdate(orgId) {
+      let groupId = resource.data.get('groupId', '');
+      let nextStatus = request.resource.data.get('status', '');
+      let previousStatus = resource.data.get('status', '');
+      return request.resource.data.get('organizationId', '') == orgId
+        && request.resource.data.get('organizationId', '') == resource.data.get('organizationId', '')
+        && request.resource.data.get('congregationId', '') == resource.data.get('congregationId', '')
+        && request.resource.data.get('groupId', '') == groupId
+        && request.resource.data.get('personId', '') == resource.data.get('personId', '')
+        && request.resource.data.get('personName', '') == resource.data.get('personName', '')
+        && canManageGroupRoster(orgId, groupId)
+        && (
+          (
+            previousStatus == 'active'
+            && nextStatus == 'left'
+            && request.resource.data.get('joinedAt', null) == resource.data.get('joinedAt', null)
+            && request.resource.data.get('joinedBy', '') == resource.data.get('joinedBy', '')
+            && request.resource.data.get('leftAt', null) == request.time
+            && request.resource.data.get('leftBy', '') == request.auth.uid
+          )
+          ||
+          (
+            previousStatus == 'left'
+            && nextStatus == 'active'
+            && request.resource.data.get('joinedAt', null) == request.time
+            && request.resource.data.get('joinedBy', '') == request.auth.uid
+            && request.resource.data.get('leftAt', null) == null
+            && request.resource.data.get('leftBy', '') == ''
+          )
+        );
+    }
+
+    function validGroupMeetingCreate(orgId) {
+      let groupId = request.resource.data.get('groupId', '');
+      let congregationId = request.resource.data.get('congregationId', '');
+      let groupPath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/groups/$(groupId);
+      return request.resource.data.keys().hasOnly([
+          'organizationId', 'congregationId', 'groupId', 'status',
+          'startedAt', 'createdBy', 'endedAt', 'closedBy'
+        ])
+        && tenantCreate(orgId)
+        && groupId is string
+        && groupId.size() > 0
+        && congregationId is string
+        && congregationId.size() > 0
+        && request.resource.data.get('status', '') == 'open'
+        && request.resource.data.get('startedAt', null) == request.time
+        && request.resource.data.get('createdBy', '') == request.auth.uid
+        && request.resource.data.get('endedAt', null) == null
+        && request.resource.data.get('closedBy', '') == ''
+        && canManageGroupRoster(orgId, groupId)
+        && exists(groupPath)
+        && get(groupPath).data.get('congregationId', '') == congregationId;
+    }
+
+    function validGroupMeetingClose(orgId) {
+      let groupId = resource.data.get('groupId', '');
+      return tenantUnchanged(orgId)
+        && congregationUnchanged()
+        && request.resource.data.get('groupId', '') == groupId
+        && request.resource.data.get('startedAt', null) == resource.data.get('startedAt', null)
+        && request.resource.data.get('createdBy', '') == resource.data.get('createdBy', '')
+        && resource.data.get('status', '') == 'open'
+        && request.resource.data.get('status', '') == 'closed'
+        && request.resource.data.get('endedAt', null) == request.time
+        && request.resource.data.get('closedBy', '') == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'status', 'endedAt', 'closedBy'
+        ])
+        && canManageGroupRoster(orgId, groupId);
+    }
+
+    function validGroupAttendanceCreate(orgId, attendanceId) {
+      let groupId = request.resource.data.get('groupId', '');
+      let meetingId = request.resource.data.get('meetingId', '');
+      let personId = request.resource.data.get('personId', '');
+      let congregationId = request.resource.data.get('congregationId', '');
+      let meetingPath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/groupMeetings/$(meetingId);
+      let membershipPath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/groupMemberships/$(groupId + '__' + personId);
+      return request.resource.data.keys().hasOnly([
+          'organizationId', 'congregationId', 'groupId', 'meetingId',
+          'personId', 'status', 'recordedAt', 'recordedBy'
+        ])
+        && tenantCreate(orgId)
+        && attendanceId == meetingId + '__' + personId
+        && groupId is string && groupId.size() > 0
+        && meetingId is string && meetingId.size() > 0
+        && personId is string && personId.size() > 0
+        && congregationId is string && congregationId.size() > 0
+        && request.resource.data.get('status', '') == 'present_confirmed'
+        && request.resource.data.get('recordedAt', null) == request.time
+        && request.resource.data.get('recordedBy', '') == request.auth.uid
+        && canManageGroupRoster(orgId, groupId)
+        && exists(meetingPath)
+        && get(meetingPath).data.get('groupId', '') == groupId
+        && get(meetingPath).data.get('congregationId', '') == congregationId
+        && get(meetingPath).data.get('status', '') == 'open'
+        && exists(membershipPath)
+        && get(membershipPath).data.get('groupId', '') == groupId
+        && get(membershipPath).data.get('personId', '') == personId
+        && get(membershipPath).data.get('congregationId', '') == congregationId
+        && get(membershipPath).data.get('status', '') == 'active';
+    }
+
+    function validDiscipleshipCreate() {
+      let targetMeetings = request.resource.data.get('targetMeetings', 7);
+      return request.resource.data.get('personId', '') is string
+        && request.resource.data.get('personId', '').size() > 0
+        && request.resource.data.get('disciplerId', '') is string
+        && request.resource.data.get('disciplerId', '').size() > 0
+        && request.resource.data.get('meeting', 0) == 1
+        && targetMeetings is number
+        && targetMeetings >= 1
+        && targetMeetings <= 24
+        && request.resource.data.get('playbookId', '') is string
+        && request.resource.data.get('status', '') == 'active'
+        && request.resource.data.get('nextMeetingStatus', '') in ['to_be_agreed', 'scheduled', 'cancelled']
+        && (
+          request.resource.data.get('nextMeetingStatus', '') != 'scheduled'
+          || request.resource.data.get('nextMeetingAt', null) is timestamp
+        );
+    }
+    function validDiscipleshipUpdate() {
+      let meeting = request.resource.data.get('meeting', 0);
+      let previousMeeting = resource.data.get('meeting', 0);
+      let targetMeetings = resource.data.get('targetMeetings', 7);
+      let status = request.resource.data.get('status', '');
+      return request.resource.data.get('personId', '') == resource.data.get('personId', '')
+        && request.resource.data.get('targetMeetings', 7) == targetMeetings
+        && request.resource.data.get('playbookId', '') == resource.data.get('playbookId', '')
+        && targetMeetings is number
+        && targetMeetings >= 1
+        && targetMeetings <= 24
+        && meeting is number
+        && previousMeeting is number
+        && meeting >= previousMeeting
+        && meeting <= previousMeeting + 1
+        && meeting >= 1
+        && meeting <= targetMeetings
+        && status in ['active', 'paused', 'completed']
+        && request.resource.data.get('nextMeetingStatus', 'to_be_agreed') in ['to_be_agreed', 'scheduled', 'cancelled']
+        && (
+          request.resource.data.get('nextMeetingStatus', 'to_be_agreed') != 'scheduled'
+          || request.resource.data.get('nextMeetingAt', null) is timestamp
+        )
+        && (status != 'completed' || meeting == targetMeetings);
+    }
+    function validFollowupCanonicalFact(orgId, factId, eventType, payload) {
+      let followupId = payload.get('followupId', '');
+      let careRequestId = payload.get('careRequestId', '');
+      let personId = payload.get('personId', '');
+      let followupPath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/followups/$(followupId);
+      let followupData = getAfter(followupPath).data;
+      return followupData.get('personId', '') == personId
+        && followupData.get('careRequestId', '') == careRequestId
+        && request.resource.data.get('subjectRef', '') == 'person:' + personId
+        && request.resource.data.get('evidenceRef', '') == 'followup:' + followupId
+        && request.resource.data.get('scope', '') == 'congregation:' + followupData.get('congregationId', '')
+        && (
+          (
+            eventType == 'FOLLOWUP_CREATED'
+            && factId == 'followup-created-' + followupId
+            && followupData.get('status', '') == 'pending'
+            && followupData.get('createdAt', null) == request.time
+            && followupData.get('createdBy', '') == request.auth.uid
+          )
+          ||
+          (
+            eventType == 'FOLLOWUP_COMPLETED'
+            && factId == 'followup-completed-' + followupId
+            && followupData.get('status', '') == 'completed'
+            && followupData.get('completedAt', null) == request.time
+            && followupData.get('completedBy', '') == request.auth.uid
+            && followupData.get('outcomeCode', '') == payload.get('outcomeCode', '')
+            && followupData.get('nextActionCode', '') == payload.get('nextActionCode', '')
+          )
+        );
+    }
+
+    function validCareResolvedFactDocument(orgId, factId) {
+      let payload = request.resource.data.get('payload', {});
+      let careRequestId = payload.get('careRequestId', '');
+      let personId = payload.get('personId', '');
+      let carePath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/careRequests/$(careRequestId);
+      let careData = getAfter(carePath).data;
+      return request.resource.data.get('organizationId', '') == orgId
+        && request.resource.data.get('eventId', '') == factId
+        && request.resource.data.get('eventType', '') == 'CARE_RESOLVED'
+        && request.resource.data.get('actorId', '') == request.auth.uid
+        && request.resource.data.get('sourceApp', '') == 'nestjourney'
+        && request.resource.data.get('version', 0) == 1
+        && request.resource.data.get('recordedAt', null) == request.time
+        && request.resource.data.get('occurredAt', null) == request.time
+        && request.resource.data.get('sensitivity', '') == 'confidential'
+        && factId == 'care-resolved-' + careRequestId
+        && careData.get('status', '') == 'resolved'
+        && careData.get('resolvedAt', null) == request.time
+        && careData.get('resolvedBy', '') == request.auth.uid
+        && careData.get('personId', '') == personId
+        && careData.get('careType', '') == payload.get('careType', '')
+        && careData.get('resolutionCode', '') == payload.get('resolutionCode', '')
+        && request.resource.data.get('subjectRef', '') == 'person:' + personId
+        && request.resource.data.get('evidenceRef', '') == 'careRequest:' + careRequestId
+        && request.resource.data.get('scope', '') == 'congregation:' + careData.get('congregationId', '');
+    }
+
+    function validFollowupFactDocument(orgId, factId) {
+      let eventType = request.resource.data.get('eventType', '');
+      let payload = request.resource.data.get('payload', {});
+      return request.resource.data.get('organizationId', '') == orgId
+        && request.resource.data.get('eventId', '') == factId
+        && request.resource.data.get('actorId', '') == request.auth.uid
+        && request.resource.data.get('sourceApp', '') == 'nestjourney'
+        && request.resource.data.get('version', 0) == 1
+        && request.resource.data.get('recordedAt', null) == request.time
+        && request.resource.data.get('occurredAt', null) == request.time
+        && request.resource.data.get('subjectRef', '') is string
+        && request.resource.data.get('scope', '') is string
+        && request.resource.data.get('evidenceRef', '') is string
+        && request.resource.data.get('evidenceRef', '').size() > 0
+        && request.resource.data.get('sensitivity', '') == 'confidential'
+        && eventType in ['FOLLOWUP_CREATED', 'FOLLOWUP_COMPLETED']
+        && validFollowupCanonicalFact(orgId, factId, eventType, payload);
+    }
+
+    function validPresenceFactDocument(orgId, factId) {
+      let eventType = request.resource.data.get('eventType', '');
+      let payload = request.resource.data.get('payload', {});
+      let checkId = payload.get('checkId', '');
+      let checkPath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/presenceChecks/$(checkId);
+      let checkData = getAfter(checkPath).data;
+      let congregationId = checkData.get('congregationId', '');
+      let correctionId = checkData.get('correctedFromCheckId', '');
+      return request.resource.data.get('organizationId', '') == orgId
+        && request.resource.data.get('eventId', '') == factId
+        && request.resource.data.get('actorId', '') == request.auth.uid
+        && request.resource.data.get('sourceApp', '') == 'nestjourney'
+        && request.resource.data.get('version', 0) == 1
+        && request.resource.data.get('recordedAt', null) == request.time
+        && request.resource.data.get('occurredAt', null) == request.time
+        && request.resource.data.get('sensitivity', '') == 'confidential'
+        && eventType in ['PRESENCE_CONFIRMED', 'PRESENCE_CORRECTED']
+        && checkId is string
+        && checkId.size() > 0
+        && factId == 'presence-' + checkId
+        && checkData.get('actorId', '') == request.auth.uid
+        && checkData.get('recordedAt', null) == request.time
+        && request.resource.data.get('evidenceRef', '') == 'presenceCheck:' + checkId
+        && request.resource.data.get('subjectRef', '') == 'person:' + checkData.get('personId', '')
+        && request.resource.data.get('scope', '') == 'congregation:' + congregationId
+        && payload.get('sessionId', '') == checkData.get('sessionId', '')
+        && payload.get('state', '') == checkData.get('state', '')
+        && payload.get('source', '') == checkData.get('source', '')
+        && (
+          (
+            eventType == 'PRESENCE_CONFIRMED'
+            && checkData.get('source', '') == 'human_check'
+            && correctionId == ''
+            && payload.get('correctedFromCheckId', '') == ''
+          )
+          ||
+          (
+            eventType == 'PRESENCE_CORRECTED'
+            && checkData.get('source', '') == 'retroactive_human_correction'
+            && correctionId != ''
+            && payload.get('correctedFromCheckId', '') == correctionId
+          )
+        );
+    }
+
+    function validCanonicalFact(orgId, factId) {
+      let eventType = request.resource.data.get('eventType', '');
+      let payload = request.resource.data.get('payload', {});
+      let personId = payload.get('personId', '');
+      let sessionId = payload.get('sessionId', '');
+      let checkId = payload.get('checkId', '');
+      let careRequestId = payload.get('careRequestId', '');
+      let personPath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/people/$(personId);
+      let sessionPath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/presenceSessions/$(sessionId);
+      let checkPath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/presenceChecks/$(checkId);
+      let carePath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/careRequests/$(careRequestId);
+      return tenantCreate(orgId)
+        && request.resource.data.get('eventId', '') == factId
+        && request.resource.data.get('actorId', '') == request.auth.uid
+        && request.resource.data.get('sourceApp', '') == 'nestjourney'
+        && request.resource.data.get('version', 0) == 1
+        && request.resource.data.get('recordedAt', null) == request.time
+        && request.resource.data.get('occurredAt', null) == request.time
+        && request.resource.data.get('subjectRef', '') is string
+        && request.resource.data.get('scope', '') is string
+        && request.resource.data.get('evidenceRef', '') is string
+        && request.resource.data.get('evidenceRef', '').size() > 0
+        && request.resource.data.get('sensitivity', '') in ['public', 'internal', 'confidential', 'restricted']
+        && eventType in [
+          'VISITOR_REGISTERED', 'PRESENCE_SESSION_OPENED', 'PRESENCE_CONFIRMED', 'PRESENCE_CORRECTED',
+          'CARE_REQUESTED', 'CARE_ASSIGNED'
+        ]
+        && (
+          (eventType == 'VISITOR_REGISTERED'
+            && personId is string
+            && request.resource.data.get('subjectRef', '') == 'person:' + personId
+            && request.resource.data.get('evidenceRef', '') == 'person:' + personId
+            && existsAfter(personPath)
+            && request.resource.data.get('scope', '') == 'congregation:' + getAfter(personPath).data.get('congregationId', ''))
+          ||
+          (eventType == 'PRESENCE_SESSION_OPENED'
+            && sessionId is string
+            && request.resource.data.get('subjectRef', '') == 'presenceSession:' + sessionId
+            && request.resource.data.get('evidenceRef', '') == 'presenceSession:' + sessionId
+            && existsAfter(sessionPath)
+            && request.resource.data.get('scope', '') == 'congregation:' + getAfter(sessionPath).data.get('congregationId', ''))
+          ||
+          (eventType in ['PRESENCE_CONFIRMED', 'PRESENCE_CORRECTED']
+            && checkId is string
+            && checkId.size() > 0
+            && factId == 'presence-' + checkId
+            && request.resource.data.get('evidenceRef', '') == 'presenceCheck:' + checkId
+            && existsAfter(checkPath)
+            && getAfter(checkPath).data.get('state', '') != 'unverified'
+            && payload.get('sessionId', '') == getAfter(checkPath).data.get('sessionId', '')
+            && payload.get('state', '') == getAfter(checkPath).data.get('state', '')
+            && payload.get('source', '') == getAfter(checkPath).data.get('source', '')
+            && (
+              (eventType == 'PRESENCE_CONFIRMED'
+                && getAfter(checkPath).data.get('source', '') == 'human_check'
+                && getAfter(checkPath).data.get('correctedFromCheckId', '') == ''
+                && payload.get('correctedFromCheckId', '') == '')
+              ||
+              (eventType == 'PRESENCE_CORRECTED'
+                && getAfter(checkPath).data.get('source', '') == 'retroactive_human_correction'
+                && getAfter(checkPath).data.get('correctedFromCheckId', '') != ''
+                && payload.get('correctedFromCheckId', '') == getAfter(checkPath).data.get('correctedFromCheckId', ''))
+            )
+            && request.resource.data.get('subjectRef', '') == 'person:' + getAfter(checkPath).data.get('personId', '')
+            && request.resource.data.get('scope', '') == 'congregation:' + getAfter(checkPath).data.get('congregationId', ''))
+          ||
+          (eventType == 'CARE_REQUESTED'
+            && careRequestId is string
+            && careRequestId.size() > 0
+            && factId == 'care-requested-' + careRequestId
+            && existsAfter(carePath)
+            && getAfter(carePath).data.get('requestedAt', null) == request.time
+            && getAfter(carePath).data.get('requestedBy', '') == request.auth.uid
+            && getAfter(carePath).data.get('personId', '') == personId
+            && getAfter(carePath).data.get('careType', '') == payload.get('careType', '')
+            && getAfter(carePath).data.get('source', '') == payload.get('source', '')
+            && (
+              payload.get('source', '') != 'presence_absence'
+              || (
+                payload.get('sessionId', '') == getAfter(carePath).data.get('sourcePresenceSessionId', '')
+                && payload.get('checkId', '') == getAfter(carePath).data.get('sourcePresenceCheckId', '')
+              )
+            )
+            && request.resource.data.get('subjectRef', '') == 'person:' + personId
+            && request.resource.data.get('evidenceRef', '') == 'careRequest:' + careRequestId
+            && request.resource.data.get('scope', '') == 'congregation:' + getAfter(carePath).data.get('congregationId', ''))
+          ||
+          (eventType == 'CARE_ASSIGNED'
+            && careRequestId is string
+            && careRequestId.size() > 0
+            && factId == 'care-assigned-' + careRequestId
+            && existsAfter(carePath)
+            && getAfter(carePath).data.get('ownerRef', '') == request.auth.uid
+            && getAfter(carePath).data.get('assignedAt', null) == request.time
+            && getAfter(carePath).data.get('assignedBy', '') == request.auth.uid
+            && getAfter(carePath).data.get('personId', '') == personId
+            && getAfter(carePath).data.get('careType', '') == payload.get('careType', '')
+            && payload.get('ownerRef', '') == request.auth.uid
+            && request.resource.data.get('subjectRef', '') == 'person:' + personId
+            && request.resource.data.get('evidenceRef', '') == 'careRequest:' + careRequestId
+            && request.resource.data.get('scope', '') == 'congregation:' + getAfter(carePath).data.get('congregationId', ''))
+
+        );
+    }
+
+    match /organizations/{orgId} {
+      allow read: if hasMembership(orgId);
+      allow create, update, delete: if false;
+
+      match /members/{uid} {
+        allow read: if signedIn() && (request.auth.uid == uid || isOrgAdmin(orgId));
+        allow write: if false;
+      }
+      match /products/raiz_e_mesa {
+        allow read: if hasMembership(orgId);
+        allow write: if false;
+
+        match /settings/{settingsId} {
+          allow read: if hasMembership(orgId);
+          allow create: if canManageJourneySettings(orgId)
+            && (
+              (settingsId == 'moduleLabels' && validModuleLabels(orgId))
+              || (settingsId == 'playbook' && validPlaybookSettings(orgId))
+            );
+          allow update: if canManageJourneySettings(orgId)
+            && resource.data.get('organizationId', '') == orgId
+            && (
+              (settingsId == 'moduleLabels' && validModuleLabels(orgId))
+              || (settingsId == 'playbook' && validPlaybookSettings(orgId))
+            );
+          allow delete: if false;
+        }
+        match /playbooks/{playbookId} {
+          allow read: if hasMembership(orgId);
+          allow create: if canManageJourneySettings(orgId)
+            && validJourneyPlaybookCreate(orgId);
+          allow update: if canManageJourneySettings(orgId)
+            && validJourneyPlaybookUpdate(orgId);
+          allow delete: if false;
+        }
+        match /congregations/{congregationId} {
+          allow read: if canAccessCongregation(orgId, congregationId);
+          allow create: if isOrgAdmin(orgId) && tenantCreate(orgId);
+          allow update: if isOrgAdmin(orgId) && tenantUnchanged(orgId);
+          allow delete: if false;
+        }
+        match /people/{personId} {
+          allow read: if canAccessCongregation(orgId, resource.data.get('congregationId', ''));
+          allow create: if tenantCreate(orgId)
+            && request.resource.data.get('deletedAt', null) == null
+            && canAccessCongregation(orgId, request.resource.data.get('congregationId', ''))
+            && (
+              request.resource.data.get('communityStatus', '') == 'member'
+                ? isOrgAdmin(orgId)
+                : (
+                  request.resource.data.get('communityStatus', '') in ['', 'visitor', 'not_informed']
+                  && canManagePeople(orgId)
+                )
+            )
+            && validPersonContactCreate()
+            && personBondEmptyOnCreate();
+          allow update: if tenantUnchanged(orgId) && congregationUnchanged()
+            && canAccessCongregation(orgId, resource.data.get('congregationId', ''))
+            && personBondUnchanged()
+            && validPrivacyPersonUpdate(orgId, personId);
+          allow delete: if false;
+        }
+        // Universal family registry. Church persons remain canonical and are never duplicated.
+        // Family ties require explicit admin confirmation; there is no surname-based inference.
+        match /families/{familyId} {
+          allow read: if isOrgAdmin(orgId);
+          allow create: if tenantCreate(orgId)
+            && isOrgAdmin(orgId)
+            && request.resource.data.keys().hasOnly([
+              'organizationId', 'congregationId', 'label', 'createdAt', 'createdBy'
+            ])
+            && request.resource.data.get('congregationId', '') is string
+            && request.resource.data.get('congregationId', '').size() > 0
+            && request.resource.data.get('label', '') is string
+            && request.resource.data.get('label', '').size() >= 2
+            && request.resource.data.get('label', '').size() <= 80
+            && request.resource.data.get('createdBy', '') == request.auth.uid
+            && request.resource.data.get('createdAt', null) == request.time;
+          allow update, delete: if false;
+        }
+        match /familyEvents/{eventId} {
+          allow read: if isOrgAdmin(orgId);
+          allow create: if tenantCreate(orgId)
+            && isOrgAdmin(orgId)
+            && request.resource.data.keys().hasOnly([
+              'organizationId', 'congregationId', 'familyId', 'personId', 'action',
+              'relationshipType', 'guardianFlag', 'recordedAt', 'recordedBy', 'reason'
+            ])
+            && request.resource.data.get('congregationId', '') is string
+            && request.resource.data.get('congregationId', '').size() > 0
+            && request.resource.data.get('familyId', '') is string
+            && request.resource.data.get('familyId', '').size() > 0
+            && request.resource.data.get('personId', '') is string
+            && request.resource.data.get('personId', '').size() > 0
+            && request.resource.data.get('action', '') in ['link', 'unlink']
+            && request.resource.data.get('relationshipType', '') in [
+              'parent', 'child', 'spouse', 'sibling', 'relative', 'guardian', 'other'
+            ]
+            && request.resource.data.get('guardianFlag', false) is bool
+            && (
+              request.resource.data.get('guardianFlag', false) == false
+              || request.resource.data.get('relationshipType', '') in ['parent', 'guardian']
+            )
+            && (
+              request.resource.data.get('action', '') == 'link'
+              || (
+                request.resource.data.get('reason', '') is string
+                && request.resource.data.get('reason', '').size() >= 3
+                && request.resource.data.get('reason', '').size() <= 200
+              )
+            )
+            && request.resource.data.get('recordedBy', '') == request.auth.uid
+            && request.resource.data.get('recordedAt', null) == request.time
+            && getAfter(
+              /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/families/$(request.resource.data.familyId)
+            ).data.get('congregationId', '') == request.resource.data.congregationId
+            && get(
+              /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/people/$(request.resource.data.personId)
+            ).data.get('congregationId', '') == request.resource.data.congregationId;
+          allow update, delete: if false;
+        }
+        match /teamInterests/{interestId} {
+          allow read: if canOperateFieldProgram(orgId, resource.data.get('congregationId', ''));
+          allow create: if validTeamInterestCreate(orgId);
+          allow update: if validTeamInterestUpdate(orgId);
+          allow delete: if false;
+        }
+        match /presenceSessions/{sessionId} {
+          allow read: if (canManagePresence(orgId) || canManageMesa(orgId))
+            && canAccessCongregation(orgId, resource.data.get('congregationId', ''));
+          allow create: if canManagePresence(orgId)
+            && canAccessCongregation(orgId, request.resource.data.get('congregationId', ''))
+            && validPresenceSessionCreate(orgId);
+          allow update: if canManagePresence(orgId)
+            && resource.data.get('status', '') == 'open'
+            && tenantUnchanged(orgId)
+            && congregationUnchanged()
+            && canAccessCongregation(orgId, resource.data.get('congregationId', ''))
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'status', 'closedAt', 'closedBy', 'verifiedCountAtClose', 'absenceEvidenceEligible'
+            ])
+            && request.resource.data.get('status', '') == 'closed'
+            && request.resource.data.get('closedAt', null) == request.time
+            && request.resource.data.get('closedBy', '') == request.auth.uid
+            && request.resource.data.get('verifiedCountAtClose', -1) is number
+            && request.resource.data.get('verifiedCountAtClose', -1) >= 0
+            && request.resource.data.get('verifiedCountAtClose', -1) <= resource.data.get('expectedPeopleCount', 0)
+            && request.resource.data.get('absenceEvidenceEligible', false) is bool
+            && request.resource.data.get('absenceEvidenceEligible', false) == (
+              resource.data.get('expectedPeopleCount', 0) > 0
+              && request.resource.data.get('verifiedCountAtClose', 0) * 100
+                >= resource.data.get('expectedPeopleCount', 0) * resource.data.get('minimumCoveragePercent', 90)
+            );
+          allow delete: if false;
+        }
+        match /presenceChecks/{checkId} {
+          allow read: if canManagePresence(orgId)
+            && canAccessCongregation(orgId, resource.data.get('congregationId', ''));
+          allow create: if canOperatePresenceInScope(
+              orgId,
+              request.resource.data.get('congregationId', '')
+            )
+            && validPresenceCheckCreate(orgId);
+          allow update, delete: if false;
+        }
+        match /mesaParticipations/{recordId} {
+          allow read: if canManageMesa(orgId)
+            && canAccessCongregation(orgId, resource.data.get('congregationId', ''));
+          allow create: if canManageMesa(orgId)
+            && canAccessCongregation(orgId, request.resource.data.get('congregationId', ''))
+            && validMesaParticipationCreate(orgId, recordId);
+          allow update: if canManageMesa(orgId)
+            && canAccessCongregation(orgId, resource.data.get('congregationId', ''))
+            && validMesaParticipationUpdate(orgId);
+          allow delete: if false;
+        }
+        match /mesaPreparations/{preparationId} {
+          allow read: if canManageMesa(orgId)
+            && canAccessCongregation(orgId, resource.data.get('congregationId', ''));
+          allow create: if validMesaPreparationCreate(orgId, preparationId);
+          allow update: if validMesaPreparationUpdate(orgId);
+          allow delete: if false;
+        }
+        match /fieldHopeSessions/{sessionId} {
+          allow read: if canOperateFieldProgram(orgId, resource.data.get('congregationId', ''));
+          allow create: if validFieldHopeSessionCreate(orgId);
+          allow update: if validFieldHopeSessionUpdate(orgId);
+          allow delete: if false;
+        }
+        match /fieldHopeParticipations/{recordId} {
+          allow read: if canOperateFieldProgram(orgId, resource.data.get('congregationId', ''));
+          allow create: if validFieldHopeParticipationCreate(orgId, recordId);
+          allow update: if validFieldHopeParticipationUpdate(orgId);
+          allow delete: if false;
+        }
+        match /fieldFirstSteps/{recordId} {
+          allow read: if canOperateFieldProgram(orgId, resource.data.get('congregationId', ''));
+          allow create: if validFieldFirstStepsCreate(orgId, recordId);
+          allow update: if validFieldFirstStepsUpdate(orgId);
+          allow delete: if false;
+        }
+        match /careRequests/{careRequestId} {
+          allow read: if canManageCare(orgId)
+            && canAccessCongregation(orgId, resource.data.get('congregationId', ''));
+          allow create: if canCreateCareInScope(
+              orgId,
+              request.resource.data.get('congregationId', ''),
+              request.resource.data.get('source', '')
+            )
+            && validCareRequestCreate(orgId, careRequestId);
+          allow update: if canManageCare(orgId)
+            && canAccessCongregation(orgId, resource.data.get('congregationId', ''))
+            && (
+              request.resource.data.get('status', '') == resource.data.get('status', '')
+                ? validCareAssignment(orgId)
+                : (
+                    request.resource.data.get('resolutionCode', '') == 'consent_revoked'
+                      ? validRevokedCareResolve(orgId)
+                      : validCareResolve(orgId)
+                  )
+            );
+          allow delete: if false;
+        }
+        match /absenceCareRoutes/{routeId} {
+          allow read: if canAccessCongregation(orgId, resource.data.get('congregationId', ''))
+            && (canManagePresence(orgId) || canManageCare(orgId));
+          allow create: if validAbsenceCareRouteCreate(orgId, routeId);
+          allow update, delete: if false;
+        }
+        match /followups/{followupId} {
+          allow read: if canManageCare(orgId)
+            && canAccessCongregation(orgId, resource.data.get('congregationId', ''))
+            && (isOrgAdmin(orgId) || resource.data.get('ownerRef', '') == request.auth.uid);
+          allow create: if validFollowupCreate(orgId, followupId);
+          allow update: if validFollowupComplete(orgId);
+          allow delete: if false;
+        }
+        match /facts/{factId} {
+          allow read: if isOrgAdmin(orgId);
+          allow create: if (
+              request.resource.data.get('eventType', '') in ['PRESENCE_CONFIRMED', 'PRESENCE_CORRECTED']
+              && validPresenceFactDocument(orgId, factId)
+            )
+            || (
+              request.resource.data.get('eventType', '') in ['FOLLOWUP_CREATED', 'FOLLOWUP_COMPLETED']
+              && validFollowupFactDocument(orgId, factId)
+            )
+            || (
+              request.resource.data.get('eventType', '') == 'CARE_RESOLVED'
+              && validCareResolvedFactDocument(orgId, factId)
+            )
+            || (
+              hasMembership(orgId)
+              && (
+                (request.resource.data.get('eventType', '') == 'VISITOR_REGISTERED' && canManagePeople(orgId))
+                || (request.resource.data.get('eventType', '') == 'PRESENCE_SESSION_OPENED' && canManagePresence(orgId))
+                || request.resource.data.get('eventType', '') in ['CARE_REQUESTED', 'CARE_ASSIGNED']
+              )
+              && validCanonicalFact(orgId, factId)
+            );
+          allow update, delete: if false;
+        }
+        match /implementationCycles/{cycleId} {
+          allow read: if canManageImplementation(orgId)
+            && canAccessCongregation(orgId, resource.data.get('congregationId', ''));
+          allow create: if canManageImplementation(orgId)
+            && canAccessCongregation(orgId, request.resource.data.get('congregationId', ''))
+            && validImplementationCycleCreate(orgId);
+          allow update, delete: if false;
+
+          match /steps/{stepId} {
+            allow read: if canManageImplementation(orgId)
+              && canAccessCongregation(
+                orgId,
+                get(/databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/implementationCycles/$(cycleId)).data.get('congregationId', '')
+              );
+            allow create: if canManageImplementation(orgId)
+              && canAccessCongregation(orgId, request.resource.data.get('congregationId', ''))
+              && validImplementationStepCreate(orgId, cycleId, stepId);
+            allow update, delete: if false;
+          }
+        }
+        match /groups/{groupId} {
+          allow read: if canAccessCongregation(orgId, resource.data.get('congregationId', ''));
+          allow create: if tenantCreate(orgId)
+            && canAccessCongregation(orgId, request.resource.data.get('congregationId', ''))
+            && canManageGroups(orgId)
+            && validGroupState();
+          allow update: if tenantUnchanged(orgId) && congregationUnchanged()
+            && canAccessCongregation(orgId, resource.data.get('congregationId', ''))
+            && canManageGroupRoster(orgId, groupId)
+            && validGroupState();
+          allow delete: if false;
+        }
+        match /groupEntryRequests/{requestId} {
+          allow read: if canManageGroupRoster(orgId, resource.data.get('groupId', ''));
+          allow create: if validGroupEntryRequestCreate(orgId);
+          allow update: if validGroupEntryRequestUpdate(orgId);
+          allow delete: if false;
+        }
+        match /groupMemberships/{membershipId} {
+          allow read: if canManageGroupRoster(orgId, resource.data.get('groupId', ''));
+          allow create: if validGroupMembershipCreate(orgId, membershipId);
+          allow update: if validGroupMembershipUpdate(orgId);
+          allow delete: if false;
+        }
+        match /groupMeetings/{meetingId} {
+          allow read: if canManageGroupRoster(orgId, resource.data.get('groupId', ''));
+          allow create: if validGroupMeetingCreate(orgId);
+          allow update: if validGroupMeetingClose(orgId);
+          allow delete: if false;
+        }
+        match /groupAttendance/{attendanceId} {
+          allow read: if canManageGroupRoster(orgId, resource.data.get('groupId', ''));
+          allow create: if validGroupAttendanceCreate(orgId, attendanceId);
+          allow update, delete: if false;
+        }
+        match /journeyMilestones/{milestoneId} {
+          allow read: if canAccessCongregation(orgId, resource.data.get('congregationId', ''));
+          allow create: if validJourneyMilestoneCreate(orgId, milestoneId);
+          allow update: if validJourneyMilestoneUpdate(orgId);
+          allow delete: if false;
+        }
+        match /discipleships/{discipleshipId} {
+          allow read: if canOperateDiscipleship(
+            orgId,
+            resource.data.get('congregationId', ''),
+            resource.data.get('disciplerId', '')
+          );
+          allow create: if tenantCreate(orgId)
+            && canOperateDiscipleship(
+              orgId,
+              request.resource.data.get('congregationId', ''),
+              request.resource.data.get('disciplerId', '')
+            )
+            && validDiscipleshipCreate();
+          allow update: if tenantUnchanged(orgId) && congregationUnchanged()
+            && canOperateDiscipleship(
+              orgId,
+              resource.data.get('congregationId', ''),
+              resource.data.get('disciplerId', '')
+            )
+            && request.resource.data.get('disciplerId', '') == resource.data.get('disciplerId', '')
+            && validDiscipleshipUpdate();
+          allow delete: if false;
+        }
+        match /pastoralHandoffs/{handoffId} {
+          allow read: if canManagePastoral(orgId)
+            && canAccessCongregation(orgId, resource.data.get('congregationId', ''));
+          allow create: if canManageCare(orgId)
+            && validPastoralHandoffCreate(orgId, handoffId);
+          allow update: if canManagePastoral(orgId)
+            && canAccessCongregation(orgId, resource.data.get('congregationId', ''))
+            && validPastoralHandoffResolve(orgId);
+          allow delete: if false;
+        }
+
+        match /pastoral/{pastoralId} {
+          allow read: if role(orgId, ['owner', 'pastor']);
+          allow create: if tenantCreate(orgId) && role(orgId, ['owner', 'pastor']);
+          allow update: if tenantUnchanged(orgId) && role(orgId, ['owner', 'pastor']);
+          allow delete: if false;
+        }
+        match /audit/{auditId} {
+          allow read: if canViewGovernance(orgId)
+            && (
+              (
+                resource.data.get('congregationId', '') is string
+                && resource.data.get('congregationId', '').size() > 0
+                && canAccessCongregation(orgId, resource.data.get('congregationId', ''))
+              )
+              || (resource.data.get('congregationId', '') == '' && isOrgAdmin(orgId))
+            );
+          allow create: if hasMembership(orgId) && validAudit(orgId);
+          allow update, delete: if false;
+        }
+        match /retentionRequests/{requestId} {
+          allow read: if canManagePrivacy(orgId)
+            && canAccessCongregation(orgId, resource.data.get('congregationId', ''));
+          allow create: if canManagePrivacy(orgId)
+            && canAccessCongregation(orgId, request.resource.data.get('congregationId', ''))
+            && validPrivacyRequestCreate(orgId);
+          allow update: if validPrivacyRequestUpdate(orgId, requestId);
+          allow delete: if false;
+        }
+        match /{document=**} { allow read, write: if false; }
+      }
+    }
+
+    match /users/{uid} {
+      allow read: if signedIn() && request.auth.uid == uid;
+      allow write: if false;
+    }
+    match /organization_members/{membershipId} {
+      allow read: if signedIn()
+        && resource.data.get('uid', resource.data.get('userId', '')) == request.auth.uid;
+      allow write: if false;
+    }
+    match /subscriptions/{orgId} {
+      allow read: if hasMembership(orgId);
+      allow write: if false;
+    }
+    match /{document=**} { allow read, write: if false; }
+  }
+}
+)
+        && (
+          eligible == null
+          || (
+            eligible is list
+            && eligible.size() <= 2000
+            && eligible.size() == request.resource.data.get('expectedPeopleCount', -1)
+            && request.resource.data.get('eligibilityVersion', 0) == 1
+            && request.resource.data.get('eligibilitySource', '') == 'operator_confirmed_unit_roster'
+          )
+        );
     }
     function validPresenceCheckCreate(orgId) {
       let sessionId = request.resource.data.get('sessionId', '');
