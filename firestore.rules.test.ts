@@ -2021,7 +2021,7 @@ describe('Tenant-controlled feature rollout',()=>{
     const root='organizations/org-a/products/raiz_e_mesa/settings/releaseFlags'
     const payload={organizationId:'org-a',flags:{
       memberBulkImport:true,personProfileEdit:false,familyLinks:false,
-      verifiedFrequency:false,optionalProjects:false,crossUnitPresence:false,eventSeries:false,
+      verifiedFrequency:false,optionalProjects:false,crossUnitPresence:false,eventSeries:false,personAliases:false,
     },updatedAt:serverTimestamp(),updatedBy:'rollout-admin'}
     await assertFails(setDoc(doc(environment.authenticatedContext('rollout-reception').firestore(),root),{
       ...payload,updatedBy:'rollout-reception',
@@ -2173,5 +2173,87 @@ describe('Weekly event series and human-opened sessions',()=>{
     }))
     await assertFails(setDoc(doc(db,root+'presenceSessions/archived-series'),validSession))
     await assertFails(deleteDoc(doc(db,root+'eventSeries/series-one')))
+  })
+})
+
+describe('Reversible person alias and tenant protection',()=>{
+  it('requires a church administrator and an immutable matching event for each link or reversal',async()=>{
+    await seedMembership('alias-admin','org-a','admin')
+    await seedMembership('alias-reception','org-a','presence_host',['unit-a'],{canManagePeople:true})
+    await environment.withSecurityRulesDisabled(async context=>{
+      const db=context.firestore()
+      await setDoc(doc(db,'organizations/org-a/products/raiz_e_mesa/people/duplicate-a'),{
+        organizationId:'org-a',congregationId:'unit-a',name:'Test Person A',consent:false,
+      })
+      await setDoc(doc(db,'organizations/org-a/products/raiz_e_mesa/people/canonical-b'),{
+        organizationId:'org-a',congregationId:'unit-b',name:'Test Person B',consent:true,
+      })
+    })
+    const root='organizations/org-a/products/raiz_e_mesa/'
+    const admin=environment.authenticatedContext('alias-admin').firestore()
+    const reception=environment.authenticatedContext('alias-reception').firestore()
+    const aliasPath=root+'personAliases/duplicate-a'
+    const eventPath=root+'personAliasEvents/link-1'
+    const alias={
+      organizationId:'org-a',duplicatePersonId:'duplicate-a',canonicalPersonId:'canonical-b',
+      sourceCongregationId:'unit-a',targetCongregationId:'unit-b',
+      status:'active',revision:1,lastEventId:'link-1',
+      createdAt:serverTimestamp(),createdBy:'alias-admin',
+      updatedAt:serverTimestamp(),updatedBy:'alias-admin',
+    }
+    const event={
+      organizationId:'org-a',aliasId:'duplicate-a',
+      duplicatePersonId:'duplicate-a',canonicalPersonId:'canonical-b',
+      action:'linked',revision:1,reason:'Identidade conferida por registros diferentes',
+      recordedAt:serverTimestamp(),recordedBy:'alias-admin',
+    }
+    await assertFails(setDoc(doc(reception,aliasPath),{...alias,createdBy:'alias-reception',updatedBy:'alias-reception'}))
+    await assertFails(setDoc(doc(admin,aliasPath),alias))
+    const batch=writeBatch(admin)
+    batch.set(doc(admin,aliasPath),alias)
+    batch.set(doc(admin,eventPath),event)
+    await assertSucceeds(batch.commit())
+    await assertFails(updateDoc(doc(admin,aliasPath),{
+      status:'reverted',revision:2,lastEventId:'reversal-1',
+      updatedAt:serverTimestamp(),updatedBy:'alias-admin',
+    }))
+    const undo=writeBatch(admin)
+    undo.update(doc(admin,aliasPath),{
+      status:'reverted',revision:2,lastEventId:'reversal-1',
+      updatedAt:serverTimestamp(),updatedBy:'alias-admin',
+    })
+    undo.set(doc(admin,root+'personAliasEvents/reversal-1'),{
+      ...event,action:'reverted',revision:2,reason:'Correção solicitada e conferida pela equipe',
+    })
+    await assertSucceeds(undo.commit())
+    await assertFails(deleteDoc(doc(admin,aliasPath)))
+    await assertFails(updateDoc(doc(admin,eventPath),{reason:'sem motivo'}))
+    const original=await getDoc(doc(admin,root+'people/duplicate-a'))
+    const primary=await getDoc(doc(admin,root+'people/canonical-b'))
+    expect(original.exists()).toBe(true)
+    expect(primary.exists()).toBe(true)
+    expect(original.data()?.consent).toBe(false)
+    expect(primary.data()?.consent).toBe(true)
+    expect(original.data()?.congregationId).toBe('unit-a')
+  })
+  it('does not permit links to missing or other-tenant identities',async()=>{
+    await seedMembership('alias-admin','org-a','admin')
+    const admin=environment.authenticatedContext('alias-admin').firestore()
+    const root='organizations/org-a/products/raiz_e_mesa/'
+    const batch=writeBatch(admin)
+    batch.set(doc(admin,root+'personAliases/missing-person'),{
+      organizationId:'org-a',duplicatePersonId:'missing-person',canonicalPersonId:'other-person',
+      sourceCongregationId:'unit-a',targetCongregationId:'unit-b',
+      status:'active',revision:1,lastEventId:'attempt',
+      createdAt:serverTimestamp(),createdBy:'alias-admin',
+      updatedAt:serverTimestamp(),updatedBy:'alias-admin',
+    })
+    batch.set(doc(admin,root+'personAliasEvents/attempt'),{
+      organizationId:'org-a',aliasId:'missing-person',duplicatePersonId:'missing-person',
+      canonicalPersonId:'other-person',action:'linked',revision:1,
+      reason:'Tentativa sem confirmação de identidade',
+      recordedAt:serverTimestamp(),recordedBy:'alias-admin',
+    })
+    await assertFails(batch.commit())
   })
 })
