@@ -50,7 +50,7 @@ export async function createJourneyOptionalProject(input:{
   const batch=writeBatch(firestore)
   batch.set(ref,{
     organizationId:input.access.organizationId,name,description,projectType:'custom',
-    unitIds:units,status:'draft',version:1,createdAt:serverTimestamp(),
+    unitIds:units,status:'draft',version:1,versionRecordId:versionRef.id,createdAt:serverTimestamp(),
     createdBy:input.access.userId,updatedAt:serverTimestamp(),updatedBy:input.access.userId,
     activatedAt:null,archivedAt:null,
   })
@@ -81,7 +81,7 @@ export async function changeJourneyProjectStatus(input:{
     const version=project.version+1
     const versionRef=doc(firestore,journeyCollectionPath(access.organizationId,'projectVersions')+'/'+project.id+'_v'+version)
     tx.update(ref,{
-      status,version,updatedAt:serverTimestamp(),updatedBy:access.userId,
+      status,version,versionRecordId:versionRef.id,updatedAt:serverTimestamp(),updatedBy:access.userId,
       ...(status==='active'?{activatedAt:serverTimestamp()}:{archivedAt:serverTimestamp()}),
     })
     tx.set(versionRef,{
