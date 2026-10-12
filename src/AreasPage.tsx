@@ -17,10 +17,10 @@ const copy={
     loading:'Preparando suas áreas…', noAccess:'Seu perfil ainda não possui uma área operacional atribuída.',
     available:'Disponível para você', restricted:'Sem acesso neste papel', open:'Abrir área',
     presence:'Presença',presenceDesc:'Próximo culto, sessão, visitantes, confirmação de presença e vínculo.',
-    table:'Mesa Aberta',tableDesc:'Preparação, convidados e registro de quem participou da Mesa.',
+    table:'Encontros',tableDesc:'Preparação, convidados e registro de participação.',
     care:'Cuidado & Conexão',careDesc:'Contatos atribuídos, prazo de 24–48h, resultado e próximo passo.',
-    groups:'Casas de Paz',groupsDesc:'Encontros, participantes, convidados, capacidade e operação da Casa.',
-    root:'Raiz',rootDesc:'Pessoas acompanhadas, progresso e próximo passo do discipulado.',next:'Próximos passos',nextDesc:'Vida, serviço, formação, batismo, membresia e multiplicação conforme a jornada configurada.',
+    groups:'Grupos',groupsDesc:'Encontros, participantes, convidados e capacidade.',
+    root:'Acompanhamento',rootDesc:'Pessoas acompanhadas, encontros e próximos passos.',next:'Próximos passos',nextDesc:'Vida, serviço, formação, batismo, membresia e multiplicação conforme a jornada configurada.',
     principle:'Você não precisa conhecer o sistema inteiro. O NestJourney mostra somente o que o seu papel pode operar.',
   },
   en:{
@@ -28,10 +28,10 @@ const copy={
     loading:'Preparing your areas…', noAccess:'Your profile does not have an operational area assigned yet.',
     available:'Available to you', restricted:'Not available for this role', open:'Open area',
     presence:'Presence',presenceDesc:'Next service, session, visitors, attendance confirmation, and relationship.',
-    table:'Open Table',tableDesc:'Preparation, guests, and recording who joined the Table.',
+    table:'Gatherings',tableDesc:'Preparation, guests, and participation records.',
     care:'Care & Connection',careDesc:'Assigned contacts, 24–48h promise, outcome, and next step.',
-    groups:'Peace Houses',groupsDesc:'Meetings, participants, guests, capacity, and house operations.',
-    root:'Root',rootDesc:'People you disciple, progress, and the next discipleship step.',next:'Next steps',nextDesc:'Life, service, formation, baptism, membership, and multiplication according to the configured journey.',
+    groups:'Groups',groupsDesc:'Meetings, participants, guests, and capacity.',
+    root:'Mentoring',rootDesc:'People supported, meetings, and next steps.',next:'Next steps',nextDesc:'Life, service, formation, baptism, membership, and multiplication according to the configured journey.',
     principle:'You do not need to understand the whole system. NestJourney shows only what your role can operate.',
   },
   es:{
@@ -39,10 +39,10 @@ const copy={
     loading:'Preparando tus áreas…', noAccess:'Tu perfil todavía no tiene un área operativa asignada.',
     available:'Disponible para ti', restricted:'Sin acceso en este papel', open:'Abrir área',
     presence:'Presencia',presenceDesc:'Próximo culto, sesión, visitantes, confirmación de presencia y vínculo.',
-    table:'Mesa Abierta',tableDesc:'Preparación, invitados y registro de quién participó de la Mesa.',
+    table:'Encuentros',tableDesc:'Preparación, invitados y registro de participación.',
     care:'Cuidado & Conexión',careDesc:'Contactos asignados, plazo de 24–48h, resultado y próximo paso.',
-    groups:'Casas de Paz',groupsDesc:'Encuentros, participantes, invitados, capacidad y operación de la Casa.',
-    root:'Raíz',rootDesc:'Personas acompañadas, progreso y próximo paso del discipulado.',next:'Próximos pasos',nextDesc:'Vida, servicio, formación, bautismo, membresía y multiplicación según la jornada configurada.',
+    groups:'Grupos',groupsDesc:'Encuentros, participantes, invitados y capacidad.',
+    root:'Acompañamiento',rootDesc:'Personas acompañadas, encuentros y próximos pasos.',next:'Próximos pasos',nextDesc:'Vida, servicio, formación, bautismo, membresía y multiplicación según la jornada configurada.',
     principle:'No necesitas conocer todo el sistema. NestJourney muestra solamente lo que tu papel puede operar.',
   }
 } as const
@@ -95,7 +95,7 @@ export default function AreasPage(){
   return <main className="journey-section-page"><div className="journey-section-shell">
     <header className="journey-section-header"><div><span className="journey-section-kicker">NestJourney / Journey</span><h1>{base.title}</h1><p>{base.subtitle}</p></div><select value={locale} onChange={e=>{const next=e.target.value as AppLocale;setLocale(next);persistLocale(next)}}>{(Object.keys(localeLabels) as AppLocale[]).map(id=><option key={id} value={id}>{localeLabels[id]}</option>)}</select></header>
 
-    <JourneyPath locale={locale} steps={playbook?.stages.map(stage=>stage.label)}/>
+    {playbook?.id !== 'nestjourney-universal' ? <JourneyPath locale={locale} steps={playbook?.stages.map(stage=>stage.label)}/> : null}
 
     {!hasOperationalArea?<section className="journey-section-block"><GuidedEmptyState icon={ShieldCheck} title={empty.title} body={empty.body} primary={{label:empty.primary,href:'/help'}} secondary={{label:empty.secondary||base.title,href:'/my-today'}}/></section>:null}
 
