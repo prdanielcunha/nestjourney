@@ -449,11 +449,11 @@ export default function PresenceAssistPage() {
     finally { setBusy(false) }
   }} eligiblePeople={people} locale={locale} online={online} /> : null}
 
-  {showVisitor ? <VisitorModal close={() => setShowVisitor(false)} save={async (name, phone, consent, preferredContactChannel, claimBond) => {
+  {showVisitor ? <VisitorModal close={() => setShowVisitor(false)} save={async (name, phone, consent, preferredContactChannel, claimBond,requestId) => {
     if (!access || !displaySession || !online) return
     setBusy(true); setError('')
     try {
-      const person = await createMinimalVisitor({ organizationId: access.organizationId, congregationId, actorId: access.userId, name, phone, consent, preferredContactChannel })
+      const person = await createMinimalVisitor({ organizationId: access.organizationId, congregationId, actorId: access.userId, name, phone, consent, preferredContactChannel, requestId })
       await recordPresenceCheck({ organizationId: access.organizationId, congregationId, sessionId: displaySession.id, personId: person.id, actorId: access.userId, state: 'present_confirmed' })
       let bondFailed = false
       if (claimBond) {
@@ -558,19 +558,28 @@ function SessionModal({ close, create, eligiblePeople, locale, preset, online }:
   </div>
 }
 
-function VisitorModal({ close, save, locale }: { close: () => void; save: (name: string, phone: string, consent: boolean, preferredContactChannel: 'whatsapp' | 'phone' | undefined, claimBond: boolean) => Promise<void>; locale: AppLocale }) {
+function VisitorModal({ close, save, locale }: { close: () => void; save: (name: string, phone: string, consent: boolean, preferredContactChannel: 'whatsapp' | 'phone' | undefined, claimBond: boolean,requestId:string) => Promise<void>; locale: AppLocale }) {
   const t = presenceAssistCopy[locale]
   const bond = bondCopy(locale)
+  const [requestId] = useState(()=>crypto.randomUUID())
+  const [saving,setSaving] = useState(false)
+  const savingGuard=useRef(false)
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
   const [consent, setConsent] = useState(false)
   const [preferredContactChannel, setPreferredContactChannel] = useState<'whatsapp' | 'phone'>('whatsapp')
   const [claimBond, setClaimBond] = useState(true)
   const phoneValid = phone.replace(/\D/g, '').length >= 8
+  const submit=async()=>{
+    if(savingGuard.current)return
+    savingGuard.current=true;setSaving(true)
+    try{await save(name,phone,consent,consent?preferredContactChannel:undefined,claimBond,requestId)}
+    finally{savingGuard.current=false;setSaving(false)}
+  }
   const contactHint = locale === 'en'
     ? 'When contact is authorized, a valid number and preferred channel are required before creating the care task.'
     : locale === 'es'
       ? 'Cuando el contacto está autorizado, se exige un número válido y el canal preferido antes de crear la tarea de cuidado.'
       : 'Quando o contato é autorizado, informe um número válido e o canal preferido antes de criar a tarefa de cuidado.'
-  return <div className="presence-modal-backdrop" onMouseDown={close}><section className="presence-panel presence-modal visitor-form" role="dialog" aria-modal="true" aria-labelledby="presence-visitor-title" onMouseDown={(event) => event.stopPropagation()}><div className="presence-session-head"><h2 id="presence-visitor-title">{t.newVisitor}</h2><button className="presence-button" onClick={close} aria-label={t.cancel}><X size={17} /></button></div><div className="presence-modal-grid"><label className="presence-field"><span>{t.visitorName}</span><input value={name} onChange={(event) => setName(event.target.value)} autoFocus /></label><label className="presence-check"><input type="checkbox" checked={consent} onChange={(event) => { setConsent(event.target.checked); if (!event.target.checked) setPhone('') }} /><span>{t.consent}</span></label><label className="presence-field"><span>{t.phone}</span><input inputMode="tel" value={phone} onChange={(event) => setPhone(event.target.value)} disabled={!consent} aria-invalid={consent&&!phoneValid} /></label>{consent?<label className="presence-field"><span>{locale==='en'?'Preferred channel':locale==='es'?'Canal preferido':'Canal preferido'}</span><select value={preferredContactChannel} onChange={(event)=>setPreferredContactChannel(event.target.value as 'whatsapp'|'phone')}><option value="whatsapp">WhatsApp</option><option value="phone">{locale==='en'?'Phone call':locale==='es'?'Llamada':'Ligação'}</option></select></label>:null}{consent?<p className="coverage-note">{contactHint}</p>:null}<label className="presence-check"><input type="checkbox" checked={claimBond} onChange={(event) => setClaimBond(event.target.checked)} /><span>{bond.visitorClaim}</span></label></div><div className="presence-modal-actions"><button className="presence-button" onClick={close}>{t.cancel}</button><button className="presence-button primary" disabled={!name.trim() || (consent && !phoneValid)} onClick={() => void save(name, phone, consent, consent ? preferredContactChannel : undefined, claimBond)}>{t.saveVisitor}</button></div></section></div>
+  return <div className="presence-modal-backdrop" onMouseDown={()=>{if(!saving)close()}}><section className="presence-panel presence-modal visitor-form" role="dialog" aria-modal="true" aria-labelledby="presence-visitor-title" onMouseDown={(event) => event.stopPropagation()}><div className="presence-session-head"><h2 id="presence-visitor-title">{t.newVisitor}</h2><button className="presence-button" onClick={close} disabled={saving} aria-label={t.cancel}><X size={17} /></button></div><div className="presence-modal-grid"><label className="presence-field"><span>{t.visitorName}</span><input value={name} onChange={(event) => setName(event.target.value)} autoFocus /></label><label className="presence-check"><input type="checkbox" checked={consent} onChange={(event) => { setConsent(event.target.checked); if (!event.target.checked) setPhone('') }} /><span>{t.consent}</span></label><label className="presence-field"><span>{t.phone}</span><input inputMode="tel" value={phone} onChange={(event) => setPhone(event.target.value)} disabled={!consent} aria-invalid={consent&&!phoneValid} /></label>{consent?<label className="presence-field"><span>{locale==='en'?'Preferred channel':locale==='es'?'Canal preferido':'Canal preferido'}</span><select value={preferredContactChannel} onChange={(event)=>setPreferredContactChannel(event.target.value as 'whatsapp'|'phone')}><option value="whatsapp">WhatsApp</option><option value="phone">{locale==='en'?'Phone call':locale==='es'?'Llamada':'Ligação'}</option></select></label>:null}{consent?<p className="coverage-note">{contactHint}</p>:null}<label className="presence-check"><input type="checkbox" checked={claimBond} onChange={(event) => setClaimBond(event.target.checked)} /><span>{bond.visitorClaim}</span></label></div><div className="presence-modal-actions"><button className="presence-button" disabled={saving} onClick={close}>{t.cancel}</button><button className="presence-button primary" disabled={saving || !name.trim() || (consent && !phoneValid)} onClick={()=>void submit()}>{t.saveVisitor}</button></div></section></div>
 }
