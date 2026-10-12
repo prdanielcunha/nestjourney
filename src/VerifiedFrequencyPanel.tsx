@@ -22,7 +22,7 @@ export function VerifiedFrequencyPanel({access,person,locale}: {
   const [error,setError]=useState('')
   const [summaries,setSummaries]=useState<VerifiedFrequency[]>([])
   const [truncated,setTruncated]=useState(false)
-  const canRead=access.canManagePresence || access.broadJourneyAccess
+  const canRead=access.canManagePresence
   if (!canRead) return null
 
   const text=locale==='en'
