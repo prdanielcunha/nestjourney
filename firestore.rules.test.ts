@@ -1885,3 +1885,35 @@ describe('Versioned presence eligibility contract', () => {
     await assertFails(setDoc(doc(db,base+'eligibility-bad-type'), {...payload,eventTypeId:'invalid / event'}))
   })
 })
+
+describe('Reviewed member import permission and neutrality', () => {
+  it('allows tenant admin, not reception, to create imported members with zero contact/attendance', async () => {
+    await seedMembership('member-admin','org-a','admin')
+    await seedMembership('member-reception','org-a','presence_host',['unit-a'],{canManagePeople:true})
+    const path='organizations/org-a/products/raiz_e_mesa/people/imported-one'
+    const imported={organizationId:'org-a',congregationId:'unit-a',name:'Ana Maria',
+      preferredName:'Ana',communityStatus:'member',consent:false,phone:'',
+      preferredContactChannel:'',visits:0,stage:'new',dataSource:'manual_member_import',
+      importBatchId:'test-batch',createdBy:'member-admin',createdAt:serverTimestamp()}
+    await assertFails(setDoc(doc(environment.authenticatedContext('member-reception').firestore(),path),{
+      ...imported,createdBy:'member-reception',
+    }))
+    await assertSucceeds(setDoc(doc(environment.authenticatedContext('member-admin').firestore(),path),imported))
+    await assertFails(setDoc(doc(environment.authenticatedContext('member-admin').firestore(),
+      'organizations/org-a/products/raiz_e_mesa/people/imported-invalid'),{
+      ...imported,consent:true,createdBy:'member-admin',phone:'999999999',
+    }))
+  })
+  it('denies global SaaS role with no actual church membership from importing',async()=>{
+    await seedMembership('member-admin','org-a','admin')
+    await environment.withSecurityRulesDisabled(async context=>{
+      await setDoc(doc(context.firestore(),'users/system-importer'),{systemRole:'ceo'})
+    })
+    await assertFails(setDoc(doc(environment.authenticatedContext('system-importer').firestore(),
+      'organizations/org-a/products/raiz_e_mesa/people/global-import'),{
+      organizationId:'org-a',congregationId:'unit-a',name:'SaaS Imported Person',
+      communityStatus:'member',consent:false,phone:'',preferredContactChannel:'',
+      visits:0,dataSource:'manual_member_import',createdAt:serverTimestamp(),createdBy:'system-importer',
+    }))
+  })
+})
