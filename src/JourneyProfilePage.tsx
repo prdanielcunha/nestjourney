@@ -34,6 +34,7 @@ import { JourneyAreaFocus } from './JourneyAreaFocus'
 import { FamilyPanel } from './FamilyPanel'
 import { VerifiedFrequencyPanel } from './VerifiedFrequencyPanel'
 import { MemberImportPanel } from './MemberImportPanel'
+import { canImportJourneyMembers } from './memberBulkImportRepository'
 import { PersonAdminPanel } from './PersonAdminPanel'
 import { CrossUnitVisitsPanel } from './CrossUnitVisitsPanel'
 import { PersonAliasPanel } from './PersonAliasPanel'
@@ -83,7 +84,7 @@ export default function JourneyProfilePage() {
     return()=>{active=false}
   },[access])
   const canView = Boolean(access && canViewJourneyPeople(access))
-  const canRegisterMember = Boolean(access && (access.isSystemAdmin || access.isOwner || ['owner','admin','pastor'].includes(access.organizationRole)))
+  const canRegisterMember = canImportJourneyMembers(access)
   async function registerMember() {
     if (!access || !canRegisterMember || !congregationId) return
     setBusy(true); setError('')
