@@ -828,6 +828,8 @@ export async function loadJourneyAccess(userId: string, organizationId: string):
   const role = asString(membership.journeyRole || organizationRole)
   const congregationIds = asStringArray(membership.congregationIds)
   const organizationHasBroadAccess = ['owner', 'admin', 'pastor', 'data_admin'].includes(organizationRole)
+  const isActiveChurchMember = membership.status === undefined || ['active','ativo'].includes(asString(membership.status))
+  const hasPastoralChurchRole = isOwner || (isActiveChurchMember && PASTORAL_ROLES.has(organizationRole))
 
   const resolved: JourneyAccessContext = {
     organizationId,
@@ -848,7 +850,7 @@ export async function loadJourneyAccess(userId: string, organizationId: string):
     canManageImplementation: isSystemAdmin || isOwner || IMPLEMENTATION_ROLES.has(organizationRole) || IMPLEMENTATION_ROLES.has(role) || permissions.canManageImplementation === true,
     canViewGovernance: isSystemAdmin || isOwner || GOVERNANCE_ROLES.has(organizationRole) || GOVERNANCE_ROLES.has(role) || permissions.canViewGovernance === true,
     canManagePrivacy: isSystemAdmin || isOwner || PRIVACY_ROLES.has(organizationRole) || PRIVACY_ROLES.has(role) || permissions.canManagePrivacy === true,
-    canManagePastoral: isSystemAdmin || isOwner || PASTORAL_ROLES.has(organizationRole) || PASTORAL_ROLES.has(role) || permissions.canManagePastoral === true,
+    canManagePastoral: hasPastoralChurchRole,
     broadJourneyAccess: isSystemAdmin
       || isOwner
       || organizationHasBroadAccess
