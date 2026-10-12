@@ -150,3 +150,5 @@
 .presence-eligible-options input{width:18px;height:18px;flex:none;accent-color:var(--nj-accent)}
 .presence-eligible-picker p{margin:0;color:var(--nj-text-muted);font-size:12px;line-height:1.5}
 @media(max-width:640px){.presence-eligible-options{grid-template-columns:1fr;max-height:220px}}
+
+.presence-eligibility-note{margin:0;padding:8px 10px;border:1px solid var(--nj-border);border-radius:10px;color:var(--nj-text-muted);font-size:12px;line-height:1.5}
