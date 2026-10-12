@@ -24,6 +24,7 @@ import {
 import { getInitialLocale, localeLabels, persistLocale, type AppLocale } from './i18n'
 import { AccessDeniedState } from './AccessDeniedState'
 import { OptionalProjectsPanel } from './OptionalProjectsPanel'
+import { loadJourneyRolloutFlags, DEFAULT_JOURNEY_ROLLOUT_FLAGS, type JourneyRolloutFlags } from './journeyReleaseFlags'
 import './JourneySectionPages.css'
 import './PlaybookStudioPage.css'
 
@@ -118,6 +119,7 @@ export default function PlaybookStudioPage(){
   const [locale,setLocale]=useState<AppLocale>(getInitialLocale)
   const t=copy[locale]
   const [access,setAccess]=useState<JourneyAccessContext|null>(null)
+  const [rollout,setRollout]=useState<JourneyRolloutFlags>(DEFAULT_JOURNEY_ROLLOUT_FLAGS)
   const [playbooks,setPlaybooks]=useState<JourneyPlaybookDefinition[]>([])
   const [activeId,setActiveId]=useState('')
   const [selectedId,setSelectedId]=useState('')
@@ -159,6 +161,14 @@ export default function PlaybookStudioPage(){
     }catch(cause){console.error(cause);setError(t.error)}finally{setLoading(false)}
   },[reload,t.error])
   useEffect(()=>{void bootstrap()},[bootstrap])
+  useEffect(()=>{
+    if(!access){setRollout(DEFAULT_JOURNEY_ROLLOUT_FLAGS);return}
+    let active=true
+    void loadJourneyRolloutFlags(access)
+      .then(flags=>{if(active)setRollout(flags)})
+      .catch(()=>{if(active)setRollout(DEFAULT_JOURNEY_ROLLOUT_FLAGS)})
+    return()=>{active=false}
+  },[access])
 
   useEffect(()=>{
     if(!selectedId)return
@@ -196,7 +206,7 @@ export default function PlaybookStudioPage(){
       <div className="playbook-header-actions"><a className="journey-primary-button" href="/more"><ArrowLeft size={16}/>{t.back}</a><select value={locale} onChange={e=>{const next=e.target.value as AppLocale;setLocale(next);persistLocale(next)}}>{(Object.keys(localeLabels) as AppLocale[]).map(id=><option key={id} value={id}>{localeLabels[id]}</option>)}</select></div>
     </header>
     {error?<div className="settings-error playbook-error"><span>{error}</span><button type="button" onClick={()=>void bootstrap()} disabled={busy}>{t.retry}</button></div>:null}{message?<div className="settings-success"><Check size={15}/>{message}</div>:null}
-    <OptionalProjectsPanel access={access} locale={locale}/>
+    {rollout.optionalProjects?<OptionalProjectsPanel access={access} locale={locale}/>:null}
 
     <section className="journey-section-note"><ShieldCheck size={18}/><p>{t.safe}</p></section>
 
