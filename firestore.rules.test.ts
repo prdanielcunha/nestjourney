@@ -2010,3 +2010,34 @@ describe('Explicitly opt-in project programs and canonical enrollment',()=>{
     await assertFails(deleteDoc(doc(db,root+'projects/my-project')))
   })
 })
+
+describe('Tenant-controlled feature rollout',()=>{
+  it('allows tenant admin and blocks reception/global SaaS support from changing flags',async()=>{
+    await seedMembership('rollout-admin','org-a','admin')
+    await seedMembership('rollout-reception','org-a','presence_host',['unit-a'],{canManagePeople:true})
+    await environment.withSecurityRulesDisabled(async ctx=>{
+      await setDoc(doc(ctx.firestore(),'users/global-rollout'),{systemRole:'ceo'})
+    })
+    const root='organizations/org-a/products/raiz_e_mesa/settings/releaseFlags'
+    const payload={organizationId:'org-a',flags:{
+      memberBulkImport:true,personProfileEdit:false,familyLinks:false,
+      verifiedFrequency:false,optionalProjects:false,
+    },updatedAt:serverTimestamp(),updatedBy:'rollout-admin'}
+    await assertFails(setDoc(doc(environment.authenticatedContext('rollout-reception').firestore(),root),{
+      ...payload,updatedBy:'rollout-reception',
+    }))
+    await assertFails(setDoc(doc(environment.authenticatedContext('global-rollout').firestore(),root),{
+      ...payload,updatedBy:'global-rollout',
+    }))
+    const admin=environment.authenticatedContext('rollout-admin').firestore()
+    await assertSucceeds(setDoc(doc(admin,root),payload))
+    await assertSucceeds(updateDoc(doc(admin,root),{
+      flags:{...payload.flags,optionalProjects:true},
+      updatedAt:serverTimestamp(),updatedBy:'rollout-admin',
+    }))
+    await assertFails(updateDoc(doc(admin,root),{
+      flags:{...payload.flags,optionalProjects:'on'},
+      updatedAt:serverTimestamp(),updatedBy:'rollout-admin',
+    }))
+  })
+})
