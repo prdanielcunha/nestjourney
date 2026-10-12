@@ -5,6 +5,7 @@ import { buildJourneyProfileSnapshot } from './journeyProfile'
 import {
   canManageJourneyGroupRoster,
   getActiveJourneyOrganizationId, resolveActiveJourneyCongregationId, setActiveJourneyCongregationId,
+  createJourneyMember,
   listCareRequests,
   listJourneyCongregations,
   listJourneyDiscipleships,
@@ -49,6 +50,9 @@ export default function JourneyProfilePage() {
   const [congregations, setCongregations] = useState<JourneyCongregation[]>([])
   const [congregationId, setCongregationId] = useState('')
   const [people, setPeople] = useState<JourneyPersonRecord[]>([])
+  const [showMemberForm, setShowMemberForm] = useState(false)
+  const [memberName, setMemberName] = useState('')
+  const [memberPreferredName, setMemberPreferredName] = useState('')
   const [care, setCare] = useState<CareRequestRecord[]>([])
   const [groups, setGroups] = useState<JourneyGroupRecord[]>([])
   const [memberships, setMemberships] = useState<JourneyGroupMembership[]>([])
@@ -62,6 +66,24 @@ export default function JourneyProfilePage() {
   const [error, setError] = useState('')
 
   const canView = Boolean(access && canViewJourneyPeople(access))
+  const canRegisterMember = Boolean(access && (access.isSystemAdmin || access.isOwner || ['owner','admin','pastor'].includes(access.organizationRole)))
+  async function registerMember() {
+    if (!access || !canRegisterMember || !congregationId) return
+    setBusy(true); setError('')
+    try {
+      const id = await createJourneyMember({ access, congregationId, name: memberName, preferredName: memberPreferredName })
+      await refreshScope(access, congregationId)
+      setSelectedId(id)
+      setMemberName('')
+      setMemberPreferredName('')
+      setShowMemberForm(false)
+    } catch (cause) {
+      console.error('Member registration failed', cause)
+      setError(cause instanceof Error && cause.message === 'person_possible_duplicate'
+        ? (locale === 'en' ? 'A person with this name is already registered. Check the existing profile first.' : locale === 'es' ? 'Ya existe una persona con este nombre. Revise su ficha antes de crear otro registro.' : 'Já existe uma pessoa com esse nome. Confira o cadastro existente antes de criar outro.')
+        : t.error)
+    } finally { setBusy(false) }
+  }
   const canReadDiscipleship = Boolean(access && (access.broadJourneyAccess || access.canManageDiscipleship))
   const selected = people.find((person) => person.id === selectedId) ?? people[0]
   const snapshot = useMemo(() => selected ? buildJourneyProfileSnapshot({ person: selected, careRequests: care, groups, memberships, discipleships }) : null, [selected, care, groups, memberships, discipleships])
@@ -201,10 +223,23 @@ export default function JourneyProfilePage() {
 
     <section className="journey-hero">
       <div><span className="journey-kicker">Journey / Profile</span><h1>{t.title}</h1><p>{t.subtitle}</p></div>
-      <div className="journey-shortcuts">{shortcuts.map((item,index)=>{const Icon=item.Icon;return <a className={'journey-button '+(index===shortcuts.length-1?'primary':'')} href={item.href} key={item.href}><Icon size={16}/>{item.label}</a>})}</div>
+      <div className="journey-shortcuts">{shortcuts.map((item,index)=>{const Icon=item.Icon;return <a className={'journey-button '+(index===shortcuts.length-1?'primary':'')} href={item.href} key={item.href}><Icon size={16}/>{item.label}</a>})}{canRegisterMember ? <button type="button" className="journey-button primary" onClick={() => setShowMemberForm(value => !value)} aria-expanded={showMemberForm}>{locale==='en'?'Register member':locale==='es'?'Registrar miembro':'Cadastrar membro'}</button> : null}</div>
     </section>
 
     {error ? <div className="journey-error" role="alert">{error}</div> : null}
+
+    {showMemberForm && canRegisterMember ? <section className="journey-panel journey-member-entry" aria-label={locale==='en'?'Member registration':locale==='es'?'Registro de miembro':'Cadastro de membro'}>
+      <h2>{locale==='en'?'New member':locale==='es'?'Nuevo miembro':'Novo membro'}</h2>
+      <p>{locale==='en'?'A member does not need a MillionsNest login. Attendance and messaging are not assumed.' : locale==='es'?'El miembro no necesita acceso a MillionsNest. La asistencia y los mensajes no se presumen.' : 'O membro não precisa de login no MillionsNest. Presença e autorização de contato não são presumidas.'}</p>
+      <form onSubmit={event => {event.preventDefault();void registerMember()}}>
+        <label><span>{locale==='en'?'Full name':locale==='es'?'Nombre completo':'Nome completo'}</span><input required minLength={2} maxLength={160} autoComplete="name" value={memberName} onChange={e=>setMemberName(e.target.value)} /></label>
+        <label><span>{locale==='en'?'Preferred name (optional)':locale==='es'?'Nombre preferido (opcional)':'Nome preferido (opcional)'}</span><input maxLength={120} value={memberPreferredName} onChange={e=>setMemberPreferredName(e.target.value)}/></label>
+        <div className="journey-member-entry-actions">
+          <button type="button" className="journey-button" onClick={()=>setShowMemberForm(false)}>{locale==='en'?'Cancel':locale==='es'?'Cancelar':'Cancelar'}</button>
+          <button type="submit" disabled={busy || !congregationId || memberName.trim().length<2} className="journey-button primary">{busy?'…':locale==='en'?'Save member':locale==='es'?'Guardar miembro':'Salvar membro'}</button>
+        </div>
+      </form>
+    </section> : null}
 
     <section className="journey-area-toolbar">
       {congregations.length>1?<label><span>{t.congregation}</span><select value={congregationId} onChange={(event) => void selectCongregation(event.target.value)} disabled={busy}>{congregations.map((item) => <option value={item.id} key={item.id}>{item.name}{item.city ? ` · ${item.city}` : ''}</option>)}</select></label>:null}
@@ -215,7 +250,7 @@ export default function JourneyProfilePage() {
       <aside className="journey-panel journey-people">
         <div className="journey-section-head"><span>{t.people}</span><b>{visiblePeople.length}</b></div>
         <div className="journey-people-list">
-          {visiblePeople.map((person) => <button className={selected?.id === person.id ? 'active' : ''} key={person.id} onClick={() => setSelectedId(person.id)}><span className="journey-avatar">{initials(person.name)}</span><span><strong>{person.name}</strong><small>{person.visits ?? 0} · {formatDate(person.firstVisit, locale)}</small></span></button>)}
+          {visiblePeople.map((person) => <button className={selected?.id === person.id ? 'active' : ''} key={person.id} onClick={() => setSelectedId(person.id)}><span className="journey-avatar">{initials(person.name)}</span><span><strong>{person.preferredName || person.name}</strong><small>{person.communityStatus==='member'?(locale==='en'?'Member':locale==='es'?'Miembro':'Membro'):`${person.visits ?? 0} · ${formatDate(person.firstVisit, locale)}`}</small></span></button>)}
           {!visiblePeople.length ? <p className="journey-empty">{t.noPeople}</p> : null}
         </div>
       </aside>
