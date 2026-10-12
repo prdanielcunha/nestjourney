@@ -652,6 +652,21 @@ service cloud.firestore {
         && request.resource.data.get('bondAssignedBy', '') == resource.data.get('bondAssignedBy', '');
     }
     // SaaS support privileges alone never grant family relationship access.
+    function linkedPersonAliasEvent(orgId, duplicateId, action) {
+      let eventId = request.resource.data.get('lastEventId','');
+      let eventData = getAfter(
+        /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/personAliasEvents/$(eventId)
+      ).data;
+      return eventId is string
+        && eventId.size() > 0
+        && eventData.get('aliasId','') == duplicateId
+        && eventData.get('duplicatePersonId','') == duplicateId
+        && eventData.get('canonicalPersonId','') == request.resource.data.get('canonicalPersonId','')
+        && eventData.get('action','') == action
+        && eventData.get('revision',0) == request.resource.data.get('revision',0)
+        && eventData.get('recordedBy','') == request.auth.uid
+        && eventData.get('recordedAt',null) == request.time;
+    }
     function canManageFamilyRegistry(orgId) {
       return hasProductAccess(orgId)
         && (
@@ -2053,6 +2068,78 @@ service cloud.firestore {
         }
         // Universal family registry. Church persons remain canonical and are never duplicated.
         // Family ties require explicit admin confirmation; there is no surname-based inference.
+        // Manual logical identity reconciliation. No people or historic facts are rewritten.
+        // Only real church administrators can create or reverse identity aliases.
+        match /personAliases/{duplicateId} {
+          allow read: if canManageFamilyRegistry(orgId);
+          allow create: if tenantCreate(orgId) && canManageFamilyRegistry(orgId)
+            && request.resource.data.keys().hasOnly([
+              'organizationId','duplicatePersonId','canonicalPersonId',
+              'sourceCongregationId','targetCongregationId','status','revision',
+              'lastEventId','createdAt','createdBy','updatedAt','updatedBy'
+            ])
+            && duplicateId == request.resource.data.get('duplicatePersonId','')
+            && duplicateId != request.resource.data.get('canonicalPersonId','')
+            && request.resource.data.get('status','') == 'active'
+            && request.resource.data.get('revision',0) == 1
+            && request.resource.data.get('createdAt',null) == request.time
+            && request.resource.data.get('updatedAt',null) == request.time
+            && request.resource.data.get('createdBy','') == request.auth.uid
+            && request.resource.data.get('updatedBy','') == request.auth.uid
+            && !exists(
+              /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/personAliases/$(request.resource.data.canonicalPersonId)
+            )
+            && get(
+              /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/people/$(duplicateId)
+            ).data.get('congregationId','') == request.resource.data.get('sourceCongregationId','')
+            && get(
+              /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/people/$(request.resource.data.canonicalPersonId)
+            ).data.get('congregationId','') == request.resource.data.get('targetCongregationId','')
+            && linkedPersonAliasEvent(orgId,duplicateId,'linked');
+          allow update: if tenantUnchanged(orgId) && canManageFamilyRegistry(orgId)
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'status','revision','lastEventId','updatedAt','updatedBy'
+            ])
+            && resource.data.get('status','') == 'active'
+            && request.resource.data.get('status','') == 'reverted'
+            && request.resource.data.get('revision',0) == resource.data.get('revision',0)+1
+            && request.resource.data.get('updatedAt',null) == request.time
+            && request.resource.data.get('updatedBy','') == request.auth.uid
+            && linkedPersonAliasEvent(orgId,duplicateId,'reverted');
+          allow delete: if false;
+        }
+        match /personAliasEvents/{eventId} {
+          allow read: if canManageFamilyRegistry(orgId);
+          allow create: if tenantCreate(orgId) && canManageFamilyRegistry(orgId)
+            && request.resource.data.keys().hasOnly([
+              'organizationId','aliasId','duplicatePersonId','canonicalPersonId',
+              'action','revision','reason','recordedAt','recordedBy'
+            ])
+            && request.resource.data.get('aliasId','') == request.resource.data.get('duplicatePersonId','')
+            && request.resource.data.get('action','') in ['linked','reverted']
+            && request.resource.data.get('revision',0) is int
+            && request.resource.data.get('revision',0) >= 1
+            && request.resource.data.get('reason','') is string
+            && request.resource.data.get('reason','').size() >= 15
+            && request.resource.data.get('reason','').size() <= 300
+            && request.resource.data.get('recordedAt',null) == request.time
+            && request.resource.data.get('recordedBy','') == request.auth.uid
+            && getAfter(
+              /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/personAliases/$(request.resource.data.aliasId)
+            ).data.get('lastEventId','') == eventId
+            && getAfter(
+              /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/personAliases/$(request.resource.data.aliasId)
+            ).data.get('revision',0) == request.resource.data.revision
+            && getAfter(
+              /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/personAliases/$(request.resource.data.aliasId)
+            ).data.get('canonicalPersonId','') == request.resource.data.canonicalPersonId
+            && getAfter(
+              /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/personAliases/$(request.resource.data.aliasId)
+            ).data.get('status','') == (
+              request.resource.data.action == 'linked' ? 'active' : 'reverted'
+            );
+          allow update, delete: if false;
+        }
         match /families/{familyId} {
           allow read: if canManageFamilyRegistry(orgId);
           allow create: if tenantCreate(orgId)
