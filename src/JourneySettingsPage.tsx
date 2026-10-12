@@ -17,8 +17,8 @@ const copy={
   'pt-BR':{
     title:'Configurações do NestJourney',subtitle:'Ajuste os nomes que sua igreja usa sem mudar a lógica, os dados ou a segurança do produto.',
     loading:'Carregando configurações…',noAccess:'Somente pastores e administradores autorizados podem alterar os nomes dos módulos.',
-    names:'Nomes dos módulos',namesDesc:'Exemplos: “Mesa Aberta” pode virar “Café da Família”, “Casa de Paz” pode virar “PG” e “Raiz” pode virar “Caminho”.',
-    presence:'Recepção',table:'Mesa Aberta',care:'Cuidado & Conexão',groups:'Casa de Paz',root:'Raiz',
+    names:'Nomes dos módulos',namesDesc:'Ajuste os nomes neutros de Encontros, Grupos e Acompanhamento. Projetos como Raiz e Mesa são opcionais por organização.',
+    presence:'Presença',table:'Encontros',care:'Cuidado',groups:'Grupos',root:'Acompanhamento',
     presenceHelp:'Equipe que recebe, identifica vínculo e registra presença.',tableHelp:'Momento de comunhão após o culto.',careHelp:'Contato autorizado em 24–48h e próximos passos.',groupsHelp:'Comunidade pequena nos lares.',rootHelp:'Discipulado inicial em sete encontros.',
     save:'Salvar nomes',saving:'Salvando…',saved:'Nomes atualizados',reset:'Usar nomes padrão',
     empty:'Deixe vazio para usar o nome padrão do idioma do usuário.',safety:'A personalização muda apenas a linguagem exibida. Permissões, coleções e histórico permanecem canônicos.',error:'Não foi possível salvar as configurações.'
@@ -27,7 +27,7 @@ const copy={
     title:'NestJourney Settings',subtitle:'Adjust the names your church uses without changing product logic, data, or security.',
     loading:'Loading settings…',noAccess:'Only authorized pastors and administrators can change module names.',
     names:'Module names',namesDesc:'Examples: “Open Table” can become “Family Café”, “Peace House” can become “Small Group”, and “Root” can become “Path”.',
-    presence:'Welcome',table:'Open Table',care:'Care & Connection',groups:'Peace House',root:'Root',
+    presence:'Presence',table:'Gatherings',care:'Care',groups:'Groups',root:'Mentoring',
     presenceHelp:'Team that welcomes people, notices relationships, and records presence.',tableHelp:'Community time after the service.',careHelp:'Authorized 24–48h contact and next steps.',groupsHelp:'Small community in homes.',rootHelp:'Initial discipleship in seven meetings.',
     save:'Save names',saving:'Saving…',saved:'Names updated',reset:'Use default names',
     empty:'Leave blank to use the default name for the user language.',safety:'Customization changes display language only. Permissions, collections, and history remain canonical.',error:'Settings could not be saved.'
@@ -35,8 +35,8 @@ const copy={
   es:{
     title:'Configuración de NestJourney',subtitle:'Ajusta los nombres que usa tu iglesia sin cambiar la lógica, los datos ni la seguridad del producto.',
     loading:'Cargando configuración…',noAccess:'Solo pastores y administradores autorizados pueden cambiar los nombres de los módulos.',
-    names:'Nombres de los módulos',namesDesc:'Ejemplos: “Mesa Abierta” puede ser “Café de la Familia”, “Casa de Paz” puede ser “PG” y “Raíz” puede ser “Camino”.',
-    presence:'Recepción',table:'Mesa Abierta',care:'Cuidado & Conexión',groups:'Casa de Paz',root:'Raíz',
+    names:'Nombres de los módulos',namesDesc:'Personalice los nombres neutrales de Encuentros, Grupos y Acompañamiento. Los proyectos ministeriales son opcionales.',
+    presence:'Presencia',table:'Encuentros',care:'Cuidado',groups:'Grupos',root:'Acompañamiento',
     presenceHelp:'Equipo que recibe, percibe vínculos y registra presencia.',tableHelp:'Momento de comunión después del culto.',careHelp:'Contacto autorizado en 24–48h y próximos pasos.',groupsHelp:'Comunidad pequeña en hogares.',rootHelp:'Discipulado inicial en siete encuentros.',
     save:'Guardar nombres',saving:'Guardando…',saved:'Nombres actualizados',reset:'Usar nombres predeterminados',
     empty:'Déjalo vacío para usar el nombre predeterminado del idioma del usuario.',safety:'La personalización cambia solo el texto mostrado. Permisos, colecciones e historial siguen siendo canónicos.',error:'No se pudo guardar la configuración.'
