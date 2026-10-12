@@ -1917,3 +1917,41 @@ describe('Reviewed member import permission and neutrality', () => {
     }))
   })
 })
+
+describe('Administrative profile mutation requires same-transaction audit',()=>{
+  it('permits tenant admin to update preferred name and status only with append-only audit',async()=>{
+    await seedMembership('profile-admin','org-a','admin')
+    await seedMembership('profile-reception','org-a','presence_host',['unit-a'],{canManagePeople:true})
+    const personPath='organizations/org-a/products/raiz_e_mesa/people/p-one'
+    const auditPath='organizations/org-a/products/raiz_e_mesa/audit/p-one-profile-1'
+    await environment.withSecurityRulesDisabled(async ctx=>{
+      await setDoc(doc(ctx.firestore(),personPath),{
+        organizationId:'org-a',congregationId:'unit-a',name:'Full Name',
+        consent:false,phone:'',preferredName:'',communityStatus:'not_informed',
+      })
+    })
+    const db=environment.authenticatedContext('profile-admin').firestore()
+    const receptionist=environment.authenticatedContext('profile-reception').firestore()
+    await assertFails(updateDoc(doc(db,personPath),{
+      preferredName:'Nickname',communityStatus:'member',profileRevision:1,
+      profileUpdatedAt:serverTimestamp(),profileUpdatedBy:'profile-admin',profileAuditId:'p-one-profile-1',
+    }))
+    const batch=writeBatch(db)
+    batch.update(doc(db,personPath),{
+      preferredName:'Nickname',communityStatus:'member',profileRevision:1,
+      profileUpdatedAt:serverTimestamp(),profileUpdatedBy:'profile-admin',profileAuditId:'p-one-profile-1',
+    })
+    batch.set(doc(db,auditPath),{
+      organizationId:'org-a',congregationId:'unit-a',actorId:'profile-admin',
+      action:'person.profile_updated',targetRef:'person:p-one',
+      createdAt:serverTimestamp(),oldStatus:'not_informed',newStatus:'member',preferredNameChanged:true,
+    })
+    await assertSucceeds(batch.commit())
+    await assertFails(updateDoc(doc(receptionist,personPath),{
+      communityStatus:'former_member',profileRevision:2,
+      profileUpdatedAt:serverTimestamp(),profileUpdatedBy:'profile-reception',profileAuditId:'p-one-profile-2',
+    }))
+    await assertFails(updateDoc(doc(db,personPath),{consent:true,phone:'11111111'}))
+    await assertFails(updateDoc(doc(db,auditPath),{oldStatus:'member'}))
+  })
+})
