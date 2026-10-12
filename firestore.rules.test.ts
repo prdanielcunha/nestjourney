@@ -1955,3 +1955,58 @@ describe('Administrative profile mutation requires same-transaction audit',()=>{
     await assertFails(updateDoc(doc(db,auditPath),{oldStatus:'member'}))
   })
 })
+
+describe('Explicitly opt-in project programs and canonical enrollment',()=>{
+  it('requires a linked immutable version for creation and activation',async()=>{
+    await seedMembership('project-admin','org-a','admin')
+    const db=environment.authenticatedContext('project-admin').firestore()
+    const root='organizations/org-a/products/raiz_e_mesa/'
+    const projPath=root+'projects/my-project'
+    const version1=root+'projectVersions/my-project_v1'
+    const draft={organizationId:'org-a',name:'Cuidado em família',
+      description:'Projeto voluntário',projectType:'custom',unitIds:['unit-a'],
+      status:'draft',version:1,versionRecordId:'my-project_v1',
+      createdAt:serverTimestamp(),updatedAt:serverTimestamp(),
+      createdBy:'project-admin',updatedBy:'project-admin',activatedAt:null,archivedAt:null}
+    await assertFails(setDoc(doc(db,projPath),draft))
+    const batch=writeBatch(db)
+    batch.set(doc(db,projPath),draft)
+    batch.set(doc(db,version1),{organizationId:'org-a',projectId:'my-project',
+      version:1,status:'draft',reason:'project_created',recordedAt:serverTimestamp(),recordedBy:'project-admin'})
+    await assertSucceeds(batch.commit())
+    await assertFails(updateDoc(doc(db,projPath),{
+      status:'active',version:2,versionRecordId:'my-project_v2',updatedAt:serverTimestamp(),
+      updatedBy:'project-admin',activatedAt:serverTimestamp(),
+    }))
+    const next=writeBatch(db)
+    next.update(doc(db,projPath),{
+      status:'active',version:2,versionRecordId:'my-project_v2',updatedAt:serverTimestamp(),
+      updatedBy:'project-admin',activatedAt:serverTimestamp(),
+    })
+    next.set(doc(db,root+'projectVersions/my-project_v2'),{
+      organizationId:'org-a',projectId:'my-project',version:2,status:'active',
+      reason:'project_activated',recordedAt:serverTimestamp(),recordedBy:'project-admin',
+    })
+    await assertSucceeds(next.commit())
+    await assertFails(updateDoc(doc(db,version1),{status:'archived'}))
+    await environment.withSecurityRulesDisabled(async ctx=>{
+      await setDoc(doc(ctx.firestore(),root+'people/existing-person'),{
+        organizationId:'org-a',congregationId:'unit-a',name:'Registered Person',
+      })
+      await setDoc(doc(ctx.firestore(),root+'people/other-unit-person'),{
+        organizationId:'org-a',congregationId:'unit-b',name:'Other campus',
+      })
+    })
+    await assertSucceeds(setDoc(doc(db,root+'projectEnrollments/my-project__existing-person'),{
+      organizationId:'org-a',projectId:'my-project',personId:'existing-person',
+      congregationId:'unit-a',projectVersion:2,status:'active',
+      enrolledAt:serverTimestamp(),enrolledBy:'project-admin',
+    }))
+    await assertFails(setDoc(doc(db,root+'projectEnrollments/my-project__other-unit-person'),{
+      organizationId:'org-a',projectId:'my-project',personId:'other-unit-person',
+      congregationId:'unit-b',projectVersion:2,status:'active',
+      enrolledAt:serverTimestamp(),enrolledBy:'project-admin',
+    }))
+    await assertFails(deleteDoc(doc(db,root+'projects/my-project')))
+  })
+})
