@@ -11,6 +11,7 @@ import {
 import { notifyJourneyLabelsChanged, useJourneyLabels } from './journeyLabels'
 import { getInitialLocale, localeLabels, persistLocale, type AppLocale } from './i18n'
 import { AccessDeniedState } from './AccessDeniedState'
+import { JourneyReleaseFlagsPanel } from './JourneyReleaseFlagsPanel'
 import './JourneySettingsPage.css'
 
 const copy={
@@ -99,6 +100,7 @@ export default function JourneySettingsPage(){
       <p className="settings-hint">{t.empty}</p>
       <div className="settings-actions"><button disabled={busy} className="secondary" onClick={()=>{const empty={presence:'',table:'',care:'',groups:'',discipleship:''};setForm(empty);void save(empty)}}><RotateCcw size={15}/>{t.reset}</button><button disabled={busy} className="primary" onClick={()=>void save()}>{busy?t.saving:t.save}</button></div>
     </section>
+    {access?<JourneyReleaseFlagsPanel access={access} locale={locale}/>:null}
     <section className="settings-safety"><Settings2 size={18}/><p>{t.safety}</p></section>
   </div></main>
 }
