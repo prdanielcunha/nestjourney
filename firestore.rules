@@ -656,6 +656,18 @@ service cloud.firestore {
           )
         );
     }
+    function linkedProjectVersion(orgId, projectId) {
+      let versionRef = request.resource.data.get('versionRecordId','');
+      let versionPath = /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/projectVersions/$(versionRef);
+      return versionRef is string
+        && versionRef.size() >= 3
+        && existsAfter(versionPath)
+        && getAfter(versionPath).data.get('projectId','') == projectId
+        && getAfter(versionPath).data.get('version',0) == request.resource.data.get('version',0)
+        && getAfter(versionPath).data.get('status','') == request.resource.data.get('status','')
+        && getAfter(versionPath).data.get('recordedBy','') == request.auth.uid
+        && getAfter(versionPath).data.get('recordedAt',null) == request.time;
+    }
     function canManageJourneySettings(orgId) {
       return isSystemAdmin() || role(orgId, ['owner', 'admin', 'pastor']);
     }
@@ -2045,6 +2057,102 @@ service cloud.firestore {
             && get(
               /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/people/$(request.resource.data.personId)
             ).data.get('congregationId', '') == request.resource.data.congregationId;
+          allow update, delete: if false;
+        }
+        // Optional programs do not exist until the church deliberately creates them.
+        // Participation holds only personId references; never duplicate canonical people.
+        match /projects/{projectId} {
+          allow read: if canManageFamilyRegistry(orgId);
+          allow create: if tenantCreate(orgId) && canManageFamilyRegistry(orgId)
+            && request.resource.data.keys().hasOnly([
+              'organizationId','name','description','projectType','unitIds','status',
+              'version','versionRecordId','createdAt','createdBy','updatedAt','updatedBy',
+              'activatedAt','archivedAt'
+            ])
+            && request.resource.data.get('name','') is string
+            && request.resource.data.get('name','').size() >= 2
+            && request.resource.data.get('name','').size() <= 80
+            && request.resource.data.get('description','') is string
+            && request.resource.data.get('description','').size() <= 280
+            && request.resource.data.get('projectType','') == 'custom'
+            && request.resource.data.get('unitIds',[]) is list
+            && request.resource.data.get('unitIds',[]).size() >= 1
+            && request.resource.data.get('unitIds',[]).size() <= 30
+            && request.resource.data.get('status','') == 'draft'
+            && request.resource.data.get('version',0) == 1
+            && request.resource.data.get('createdAt',null) == request.time
+            && request.resource.data.get('updatedAt',null) == request.time
+            && request.resource.data.get('createdBy','') == request.auth.uid
+            && request.resource.data.get('updatedBy','') == request.auth.uid
+            && request.resource.data.get('activatedAt','x') == null
+            && request.resource.data.get('archivedAt','x') == null
+            && linkedProjectVersion(orgId, projectId);
+          allow update: if tenantUnchanged(orgId) && canManageFamilyRegistry(orgId)
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+              'status','version','versionRecordId','updatedAt','updatedBy',
+              'activatedAt','archivedAt'
+            ])
+            && (
+              (resource.data.get('status','') == 'draft'
+                && request.resource.data.get('status','') == 'active'
+                && request.resource.data.get('activatedAt',null) == request.time)
+              || (resource.data.get('status','') == 'active'
+                && request.resource.data.get('status','') == 'archived'
+                && request.resource.data.get('archivedAt',null) == request.time)
+            )
+            && request.resource.data.get('version',-1) == resource.data.get('version',0) + 1
+            && request.resource.data.get('updatedAt',null) == request.time
+            && request.resource.data.get('updatedBy','') == request.auth.uid
+            && linkedProjectVersion(orgId, projectId);
+          allow delete: if false;
+        }
+        match /projectVersions/{versionId} {
+          allow read: if canManageFamilyRegistry(orgId);
+          allow create: if tenantCreate(orgId) && canManageFamilyRegistry(orgId)
+            && request.resource.data.keys().hasOnly([
+              'organizationId','projectId','version','status','reason','recordedAt','recordedBy'
+            ])
+            && request.resource.data.get('projectId','') is string
+            && request.resource.data.get('projectId','').size() > 0
+            && request.resource.data.get('version',0) is int
+            && request.resource.data.get('version',0) >= 1
+            && request.resource.data.get('status','') in ['draft','active','archived']
+            && request.resource.data.get('reason','') in ['project_created','project_activated','project_archived']
+            && request.resource.data.get('recordedAt',null) == request.time
+            && request.resource.data.get('recordedBy','') == request.auth.uid
+            && getAfter(
+              /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/projects/$(request.resource.data.projectId)
+            ).data.get('versionRecordId','') == versionId
+            && getAfter(
+              /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/projects/$(request.resource.data.projectId)
+            ).data.get('version',0) == request.resource.data.version;
+          allow update, delete: if false;
+        }
+        match /projectEnrollments/{enrollmentId} {
+          allow read: if canManageFamilyRegistry(orgId);
+          allow create: if tenantCreate(orgId) && canManageFamilyRegistry(orgId)
+            && request.resource.data.keys().hasOnly([
+              'organizationId','projectId','personId','congregationId','projectVersion',
+              'status','enrolledAt','enrolledBy'
+            ])
+            && request.resource.data.get('projectId','') is string
+            && request.resource.data.get('personId','') is string
+            && enrollmentId == request.resource.data.projectId + '__' + request.resource.data.personId
+            && request.resource.data.get('status','') == 'active'
+            && request.resource.data.get('enrolledAt',null) == request.time
+            && request.resource.data.get('enrolledBy','') == request.auth.uid
+            && get(
+              /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/projects/$(request.resource.data.projectId)
+            ).data.get('status','') == 'active'
+            && request.resource.data.get('congregationId','') in get(
+              /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/projects/$(request.resource.data.projectId)
+            ).data.get('unitIds',[])
+            && request.resource.data.get('projectVersion',0) == get(
+              /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/projects/$(request.resource.data.projectId)
+            ).data.get('version',0)
+            && get(
+              /databases/$(database)/documents/organizations/$(orgId)/products/raiz_e_mesa/people/$(request.resource.data.personId)
+            ).data.get('congregationId','') == request.resource.data.congregationId;
           allow update, delete: if false;
         }
         match /teamInterests/{interestId} {
