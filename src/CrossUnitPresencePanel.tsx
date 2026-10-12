@@ -65,8 +65,8 @@ export function CrossUnitPresencePanel({access,congregationId,units,session,chec
     const previous=latest.get(person.id)
     if(undo&&(!previous||previous.state!=='present_confirmed'))return
     if(!undo&&previous?.state==='present_confirmed')return
-    const reason=undo?window.prompt(copy.reason)?.trim():undefined
-    if(undo&&(!reason||reason.length>240))return
+    const reason=previous?window.prompt(copy.reason)?.trim():undefined
+    if(previous&&(!reason||reason.length>240))return
     setBusy(true);setError('')
     try{
       await recordPresenceCheck({
@@ -74,7 +74,7 @@ export function CrossUnitPresencePanel({access,congregationId,units,session,chec
         sessionId:session.id,personId:person.id,actorId:access.userId,
         state:undo?'unverified':'present_confirmed',
         correctedFromCheckId:previous?.id,
-        correctionReason:previous?reason||'Presença real confirmada após correção':undefined,
+        correctionReason:reason,
       })
       await onChanged()
     }catch(cause){console.error('Cross-campus attendance denied',cause);setError(copy.error)}
