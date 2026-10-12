@@ -274,7 +274,7 @@ describe('Presence Assist and canonical evidence', () => {
     batch.set(correction, {
       organizationId: 'org-a', congregationId: 'unit-a', sessionId: 'session-correction', personId: 'person-correction',
       state: 'absent_confirmed', source: 'retroactive_human_correction', actorId: 'coord-a',
-      recordedAt: serverTimestamp(), correctedFromCheckId: 'original-correction',
+      recordedAt: serverTimestamp(), correctedFromCheckId: 'original-correction', correctionReason: 'Correção humana registrada',
     })
     batch.set(fact, {
       eventId: 'presence-correction-open', eventType: 'PRESENCE_CORRECTED',
@@ -287,6 +287,28 @@ describe('Presence Assist and canonical evidence', () => {
       },
     })
     await assertSucceeds(batch.commit())
+
+    // A correction may restore an erroneous absence/presence to unverified without deleting the fact trail.
+    const reversal = doc(db, 'organizations/org-a/products/raiz_e_mesa/presenceChecks/correction-reversal')
+    const reversalFact = doc(db, 'organizations/org-a/products/raiz_e_mesa/facts/presence-correction-reversal')
+    const reversalBatch = writeBatch(db)
+    reversalBatch.set(reversal, {
+      organizationId: 'org-a', congregationId: 'unit-a', sessionId: 'session-correction', personId: 'person-correction',
+      state: 'unverified', source: 'retroactive_human_correction', actorId: 'coord-a',
+      recordedAt: serverTimestamp(), correctedFromCheckId: 'correction-open', correctionReason: 'Conferência incorreta',
+    })
+    reversalBatch.set(reversalFact, {
+      eventId: 'presence-correction-reversal', eventType: 'PRESENCE_CORRECTED',
+      occurredAt: serverTimestamp(), recordedAt: serverTimestamp(), organizationId: 'org-a',
+      actorId: 'coord-a', subjectRef: 'person:person-correction', sourceApp: 'nestjourney',
+      scope: 'congregation:unit-a', evidenceRef: 'presenceCheck:correction-reversal',
+      sensitivity: 'confidential', version: 1,
+      payload: {
+        checkId: 'correction-reversal', sessionId: 'session-correction', state: 'unverified',
+        source: 'retroactive_human_correction', correctedFromCheckId: 'correction-open', correctionReason: 'Conferência incorreta',
+      },
+    })
+    await assertSucceeds(reversalBatch.commit())
 
     await assertFails(setDoc(doc(db, 'organizations/org-a/products/raiz_e_mesa/presenceChecks/correction-same-state'), {
       organizationId: 'org-a', congregationId: 'unit-a', sessionId: 'session-correction', personId: 'person-correction',
