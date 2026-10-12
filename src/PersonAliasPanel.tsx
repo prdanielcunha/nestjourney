@@ -39,6 +39,7 @@ export function PersonAliasPanel({access,person,people,units,locale}:{
     done:'Link status saved. Original records remain intact.',
     error:'Could not save this reconciliation. Check identity, permissions and stale data.',
     noOptions:'No other person records found in this campus.',
+    reverted:'This link was reversed. The historical record is retained; open a new review for a different decision.',
   }:locale==='es'?{
     title:'Revisar fichas duplicadas',intro:'Vínculo lógico confirmado por un administrador. Los IDs, históricos, familias y permisos siguen intactos.',
     open:'Revisar posible duplicado',close:'Cerrar',unit:'¿Dónde está la ficha principal?',
@@ -50,6 +51,7 @@ export function PersonAliasPanel({access,person,people,units,locale}:{
     done:'Vínculo guardado; los registros originales permanecen.',
     error:'No fue posible guardar. Revise permisos y datos.',
     noOptions:'No hay otras personas disponibles en esta sede.',
+    reverted:'Este vínculo fue revertido y el historial permanece; solicite una nueva revisión para otro vínculo.',
   }:{
     title:'Conciliação de cadastros duplicados',intro:'Vínculo lógico confirmado por um administrador. IDs originais, presenças, famílias e consentimentos permanecem intactos.',
     open:'Conferir possível duplicidade',close:'Fechar',unit:'Em qual unidade está o cadastro principal?',
@@ -61,6 +63,7 @@ export function PersonAliasPanel({access,person,people,units,locale}:{
     done:'Vínculo registrado; cadastros originais preservados.',
     error:'Não foi possível registrar a conciliação. Confira permissões e informações.',
     noOptions:'Nenhum outro cadastro nesta unidade.',
+    reverted:'O vínculo foi desfeito, mantendo o histórico. Para outra conciliação, solicite nova revisão administrativa.',
   }
   const reload=useCallback(async()=>{
     const [nextAlias,nextInbound]=await Promise.all([
@@ -109,7 +112,7 @@ export function PersonAliasPanel({access,person,people,units,locale}:{
     <button type="button" onClick={()=>setExpanded(v=>!v)} aria-expanded={expanded}>{expanded?copy.close:copy.open}</button>
     {expanded?<div className="person-alias-fields">
       <p className="person-alias-warning">{copy.warning}</p>
-      {!alias||alias.status==='reverted'?<>
+      {!alias?<>
         <label>{copy.unit}<select disabled={busy} value={unitId} onChange={e=>void loadOptions(e.target.value)}>
           {units.map(unit=><option key={unit.id} value={unit.id}>{unit.name}</option>)}
         </select></label>
@@ -119,11 +122,12 @@ export function PersonAliasPanel({access,person,people,units,locale}:{
         </select></label>
         {!available.length?<p className="person-alias-warning">{copy.noOptions}</p>:null}
       </>:null}
-      <label>{copy.reason}<textarea value={reason} maxLength={300} minLength={15} rows={3} onChange={e=>setReason(e.target.value)} /></label>
-      <button type="button" disabled={busy||reason.trim().length<15||(!alias?.status||alias.status!=='active')&&!canonicalId} onClick={()=>void save(alias?.status==='active')}>
+      {alias?.status==='reverted'?<p className="person-alias-warning">{copy.reverted}</p>:null}
+      {alias?.status!=='reverted'?<label>{copy.reason}<textarea value={reason} maxLength={300} minLength={15} rows={3} onChange={e=>setReason(e.target.value)} /></label>:null}
+      {alias?.status!=='reverted'?<button type="button" disabled={busy||reason.trim().length<15||(!alias?.status||alias.status!=='active')&&!canonicalId} onClick={()=>void save(alias?.status==='active')}>
         {alias?.status==='active'?<RotateCcw size={16}/>:<Link2 size={16}/>}
         {alias?.status==='active'?copy.unlink:copy.link}
-      </button>
+      </button>:null}
     </div>:null}
   </section>
 }
