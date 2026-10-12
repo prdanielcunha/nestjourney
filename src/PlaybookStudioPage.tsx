@@ -164,7 +164,7 @@ export default function PlaybookStudioPage(){
     if(selected)setForm(selected)
   },[selectedId,playbooks])
 
-  const official=form?.id===JOURNEY_PLAYBOOK_DEFAULT_ID
+  const official=form?.id===JOURNEY_PLAYBOOK_DEFAULT_ID||form?.id==='nestjourney-universal'
   const kinds=Object.keys(kindLabels[locale]) as JourneyPlaybookStageKind[]
   const setArea=(key:keyof JourneyPlaybookDefinition['areaLabels'],value:string)=>setForm(current=>current?({...current,areaLabels:{...current.areaLabels,[key]:value}}):current)
   const setStage=(index:number,patch:Partial<JourneyPlaybookStage>)=>setForm(current=>current?({...current,stages:current.stages.map((stage,i)=>i===index?{...stage,...patch}:stage)}):current)
@@ -207,7 +207,7 @@ export default function PlaybookStudioPage(){
       </aside>
 
       {form?<section className="playbook-editor">
-        {official?<section className="journey-section-block playbook-official"><Sparkles size={20}/><div><span className="journey-section-kicker">{t.official}</span><h2>{form.name}</h2><p>{t.officialHelp}</p><button className="journey-primary-button" onClick={()=>{const next=draftVariation(access.organizationId,createRaizEMesaPlaybook(access.organizationId));setForm(next);setSelectedId(next.id)}}><Copy size={16}/>{t.clone}</button></div></section>:null}
+        {official?<section className="journey-section-block playbook-official"><Sparkles size={20}/><div><span className="journey-section-kicker">{t.official}</span><h2>{form.name}</h2><p>{form.id==='nestjourney-universal'?(locale==='en'?'The universal core works without a ministry project. Clone only if you want a customized program.':locale==='es'?'El núcleo universal funciona sin proyecto ministerial. Cree una copia solo para un programa opcional.':'O núcleo universal funciona sem projeto ministerial. Crie uma variação somente se desejar um programa opcional.'):t.officialHelp}</p><button className="journey-primary-button" onClick={()=>{const next=draftVariation(access.organizationId,form);setForm(next);setSelectedId(next.id)}}><Copy size={16}/>{t.clone}</button></div></section>:null}
 
         <section className="journey-section-block">
           <div className="playbook-grid two">
@@ -266,7 +266,7 @@ export default function PlaybookStudioPage(){
           </div>
         </section>
 
-        {!official?<div className="playbook-savebar"><button className="journey-primary-button secondary" disabled={busy} onClick={()=>void save('draft')}><Save size={16}/>{busy?t.saving:t.save}</button><button className="journey-primary-button" disabled={busy} onClick={()=>void save('active')}><Route size={16}/>{t.activate}</button></div>:activeId!==form.id?<div className="playbook-savebar"><button className="journey-primary-button" disabled={busy} onClick={async()=>{if(!access)return;setBusy(true);try{await setActiveJourneyPlaybook(access,form.id);await reload(access);setMessage(t.activated)}catch(cause){console.error(cause);setError(t.error)}finally{setBusy(false)}}}><Route size={16}/>{t.activate}</button></div>:null}
+        {!official?<div className="playbook-savebar"><button className="journey-primary-button secondary" disabled={busy} onClick={()=>void save('draft')}><Save size={16}/>{busy?t.saving:t.save}</button><button className="journey-primary-button" disabled={busy} onClick={()=>void save('active')}><Route size={16}/>{t.activate}</button></div>:activeId!==form.id?<div className="playbook-savebar"><button className="journey-primary-button" disabled={busy} onClick={async()=>{if(!access)return;setBusy(true);try{if(form.id===JOURNEY_PLAYBOOK_DEFAULT_ID){const stored=await listJourneyPlaybooks(access);if(!stored.some(item=>item.id===form.id))await saveJourneyPlaybook(access,form)}await setActiveJourneyPlaybook(access,form.id);await reload(access);setMessage(t.activated)}catch(cause){console.error(cause);setError(t.error)}finally{setBusy(false)}}}><Route size={16}/>{t.activate}</button></div>:null}
       </section>:null}
     </section>
   </div></main>
