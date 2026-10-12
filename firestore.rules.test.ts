@@ -2288,6 +2288,9 @@ describe('Person-declared availability never becomes a presence fact',()=>{
     await assertFails(setDoc(doc(db,root+'personAvailabilityEvents/fake-withdrawal'),{
       ...report,action:'withdrawn',sourceEventId:'not-existing',
     }))
+    await assertFails(setDoc(doc(db,root+'personAvailabilityEvents/forged-withdrawal-date'),{
+      ...report,action:'withdrawn',sourceEventId:'report-one',endsOn:'2026-11-19',
+    }))
     await assertSucceeds(setDoc(doc(db,root+'personAvailabilityEvents/withdrawal-one'),{
       ...report,action:'withdrawn',sourceEventId:'report-one',
     }))
