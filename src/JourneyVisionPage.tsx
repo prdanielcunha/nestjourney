@@ -45,10 +45,10 @@ import './JourneySectionPages.css'
 const experienceCopy:Record<AppLocale,Record<JourneyResponsibility,{name:string;summary:string;items:string[]}>>={
   'pt-BR':{
     presence_host:{name:'Anfitrião de Presença',summary:'Entrada simples, sem painel de gestão.',items:['Próximo culto e sessão','Confirmar presença','Registrar visitante','Informar vínculo criado']},
-    mesa_team:{name:'Equipe da Mesa',summary:'Tudo que a equipe precisa para a Mesa, sem acesso desnecessário a outras áreas.',items:['Sessão do culto','Convidados','Participação na Mesa','Anfitrião de vínculo']},
+    mesa_team:{name:'Equipe de Encontros',summary:'Tudo que a equipe precisa para a Mesa, sem acesso desnecessário a outras áreas.',items:['Sessão do culto','Convidados','Participação na Mesa','Anfitrião de vínculo']},
     caregiver:{name:'Cuidador',summary:'Fila pessoal de cuidado e prazo.',items:['Contatos atribuídos','Prazo de 24–48h','Resultado do contato','Próximo passo permitido']},
-    group_leader:{name:'Líder de Casa',summary:'Operação da Casa sob sua responsabilidade.',items:['Próximo encontro','Participantes e convidados','Capacidade','Pedidos de entrada']},
-    discipler:{name:'Discipulador',summary:'Acompanhamento relacional do Raiz.',items:['Pessoas acompanhadas','Encontro atual 1–7','Próxima data','Próximo passo registrado']},
+    group_leader:{name:'Líder de Grupo',summary:'Operação da Casa sob sua responsabilidade.',items:['Próximo encontro','Participantes e convidados','Capacidade','Pedidos de entrada']},
+    discipler:{name:'Acompanhante',summary:'Acompanhamento relacional do Raiz.',items:['Pessoas acompanhadas','Encontro atual 1–7','Próxima data','Próximo passo registrado']},
     coordinator:{name:'Coordenador',summary:'Qualidade da operação e distribuição de carga.',items:['Pendências da área','Itens sem responsável','Carga da equipe','Pontos de atenção operacional']},
     pastor:{name:'Pastor',summary:'Visão de cuidado que realmente pede decisão pastoral.',items:['Cuidado atrasado','Encaminhamentos pastorais','Jornadas sem próximo passo factual','Saúde operacional']},
     admin:{name:'Dono / Administrador',summary:'Toda a organização em uma única visão.',items:['Todas as áreas','Equipes e acessos','Implantação','Relatórios e configurações']},
@@ -59,8 +59,8 @@ const experienceCopy:Record<AppLocale,Record<JourneyResponsibility,{name:string;
     presence_host:{name:'Presence Host',summary:'Simple entry, without management noise.',items:['Next service and session','Confirm attendance','Register visitor','Record relationship']},
     mesa_team:{name:'Table Team',summary:'Everything needed for the Table without unnecessary access to other areas.',items:['Service session','Guests','Table participation','Relationship host']},
     caregiver:{name:'Caregiver',summary:'Personal care queue and promise timing.',items:['Assigned contacts','24–48h promise','Contact outcome','Allowed next step']},
-    group_leader:{name:'House Leader',summary:'Operations for the group under your care.',items:['Next meeting','Participants and guests','Capacity','Entry requests']},
-    discipler:{name:'Discipler',summary:'Relational Root follow-up.',items:['People you accompany','Current meeting 1–7','Next date','Recorded next step']},
+    group_leader:{name:'Group Leader',summary:'Operations for the group under your care.',items:['Next meeting','Participants and guests','Capacity','Entry requests']},
+    discipler:{name:'Mentor',summary:'Relational Root follow-up.',items:['People you accompany','Current meeting 1–7','Next date','Recorded next step']},
     coordinator:{name:'Coordinator',summary:'Operational quality and workload distribution.',items:['Area pending work','Unassigned items','Team load','Operational attention points']},
     pastor:{name:'Pastor',summary:'Care view for what truly needs pastoral decision.',items:['Overdue care','Pastoral handoffs','Journeys without a factual next step','Operational health']},
     admin:{name:'Owner / Administrator',summary:'The whole organization in one view.',items:['All areas','Teams and access','Implementation','Reports and settings']},
@@ -69,10 +69,10 @@ const experienceCopy:Record<AppLocale,Record<JourneyResponsibility,{name:string;
   },
   es:{
     presence_host:{name:'Anfitrión de Presencia',summary:'Entrada simple, sin ruido de gestión.',items:['Próximo culto y sesión','Confirmar presencia','Registrar visitante','Informar vínculo']},
-    mesa_team:{name:'Equipo de la Mesa',summary:'Todo lo necesario para la Mesa sin acceso innecesario a otras áreas.',items:['Sesión del culto','Invitados','Participación en la Mesa','Anfitrión de vínculo']},
+    mesa_team:{name:'Equipo de Encuentros',summary:'Todo lo necesario para la Mesa sin acceso innecesario a otras áreas.',items:['Sesión del culto','Invitados','Participación en la Mesa','Anfitrión de vínculo']},
     caregiver:{name:'Cuidador',summary:'Fila personal de cuidado y plazo.',items:['Contactos asignados','Plazo de 24–48h','Resultado del contacto','Próximo paso permitido']},
-    group_leader:{name:'Líder de Casa',summary:'Operación de la Casa bajo su responsabilidad.',items:['Próximo encuentro','Participantes e invitados','Capacidad','Solicitudes de entrada']},
-    discipler:{name:'Discipulador',summary:'Acompañamiento relacional de Raíz.',items:['Personas acompañadas','Encuentro actual 1–7','Próxima fecha','Próximo paso registrado']},
+    group_leader:{name:'Líder de Grupo',summary:'Operación de la Casa bajo su responsabilidad.',items:['Próximo encuentro','Participantes e invitados','Capacidad','Solicitudes de entrada']},
+    discipler:{name:'Acompanhante',summary:'Acompañamiento relacional de Raíz.',items:['Personas acompañadas','Encuentro actual 1–7','Próxima fecha','Próximo paso registrado']},
     coordinator:{name:'Coordinador',summary:'Calidad operativa y distribución de carga.',items:['Pendientes del área','Elementos sin responsable','Carga del equipo','Puntos de atención operativa']},
     pastor:{name:'Pastor',summary:'Visión de cuidado que realmente requiere decisión pastoral.',items:['Cuidado atrasado','Derivaciones pastorales','Jornadas sin próximo paso factual','Salud operativa']},
     admin:{name:'Dueño / Administrador',summary:'Toda la organización en una sola visión.',items:['Todas las áreas','Equipos y accesos','Implementación','Informes y configuración']},
@@ -112,9 +112,9 @@ const copy={
 } as const
 
 const unitPulseCopy={
-  'pt-BR':{title:'Leitura rápida por unidade',desc:'Troque de unidade sem abrir módulo por módulo. O destaque usa apenas fatos operacionais registrados.',attention:'Precisa de atenção',watch:'Acompanhar',clear:'Sem pendência crítica',people:'Pessoas',debt:'Cuidado atrasado',unassigned:'Sem responsável',pastoral:'Pastoral',root:'Raiz ativo'},
-  en:{title:'Quick campus read',desc:'Switch campuses without opening every module. Highlights use only recorded operational facts.',attention:'Needs attention',watch:'Watch',clear:'No critical pending work',people:'People',debt:'Cuidado atrasado',unassigned:'Unassigned',pastoral:'Pastoral',root:'Active Root'},
-  es:{title:'Lectura rápida por sede',desc:'Cambia de sede sin abrir módulo por módulo. El destaque usa solo hechos operativos registrados.',attention:'Necesita atención',watch:'Acompañar',clear:'Sin pendiente crítico',people:'Personas',debt:'Cuidado atrasado',unassigned:'Sin responsable',pastoral:'Pastoral',root:'Raíz activo'},
+  'pt-BR':{title:'Leitura rápida por unidade',desc:'Troque de unidade sem abrir módulo por módulo. O destaque usa apenas fatos operacionais registrados.',attention:'Precisa de atenção',watch:'Acompanhar',clear:'Sem pendência crítica',people:'Pessoas',debt:'Cuidado atrasado',unassigned:'Sem responsável',pastoral:'Pastoral',root:'Acompanhamento ativo'},
+  en:{title:'Quick campus read',desc:'Switch campuses without opening every module. Highlights use only recorded operational facts.',attention:'Needs attention',watch:'Watch',clear:'No critical pending work',people:'People',debt:'Cuidado atrasado',unassigned:'Unassigned',pastoral:'Pastoral',root:'Active mentoring'},
+  es:{title:'Lectura rápida por sede',desc:'Cambia de sede sin abrir módulo por módulo. El destaque usa solo hechos operativos registrados.',attention:'Necesita atención',watch:'Acompañar',clear:'Sin pendiente crítico',people:'Personas',debt:'Cuidado atrasado',unassigned:'Sin responsable',pastoral:'Pastoral',root:'Acompañamiento activo'},
 } as const
 
 export default function JourneyVisionPage(){
@@ -259,10 +259,10 @@ export default function JourneyVisionPage(){
   const activeJourneyCount=organizations.filter(x=>x.journeyStatus==='active'||x.journeyStatus==='trialing').length
   const areaNames={
     presence:labels.presence||('pt-BR'===locale?'Presença':locale==='es'?'Presencia':'Presence'),
-    mesa:labels.table||('pt-BR'===locale?'Mesa Aberta':locale==='es'?'Mesa Abierta':'Open Table'),
+    mesa:labels.table||('pt-BR'===locale?'Encontros':locale==='es'?'Encuentros':'Gatherings'),
     care:labels.care||('pt-BR'===locale?'Cuidado & Conexão':locale==='es'?'Cuidado & Conexión':'Care & Connection'),
-    groups:labels.groups||('pt-BR'===locale?'Casas de Paz':locale==='es'?'Casas de Paz':'Peace Houses'),
-    root:labels.discipleship||('pt-BR'===locale?'Raiz':locale==='es'?'Raíz':'Root'),
+    groups:labels.groups||('pt-BR'===locale?'Grupos':locale==='es'?'Grupos':'Groups'),
+    root:labels.discipleship||('pt-BR'===locale?'Acompanhamento':locale==='es'?'Acompañamiento':'Mentoring'),
   }
   const activeUnit=units.find(unit=>unit.id===unitId)
   const attentionTotal=metrics.careDebt+metrics.careUnassigned+metrics.pastoral+metrics.withoutNextStep
