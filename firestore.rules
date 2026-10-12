@@ -584,10 +584,6 @@ service cloud.firestore {
           )
         );
     }
-    function validCommunityStatusCreate(orgId) {
-      let status = request.resource.data.get('communityStatus', '');
-      return status in ['', 'visitor', 'not_informed'] || (status == 'member' && isOrgAdmin(orgId));
-    }
     function personBondEmptyOnCreate() {
       return request.resource.data.get('bondHostRef', '') == ''
         && request.resource.data.get('bondAssignedAt', null) == null
@@ -1902,9 +1898,15 @@ service cloud.firestore {
           allow create: if tenantCreate(orgId)
             && request.resource.data.get('deletedAt', null) == null
             && canAccessCongregation(orgId, request.resource.data.get('congregationId', ''))
-            && canManagePeople(orgId)
+            && (
+              request.resource.data.get('communityStatus', '') == 'member'
+                ? isOrgAdmin(orgId)
+                : (
+                  request.resource.data.get('communityStatus', '') in ['', 'visitor', 'not_informed']
+                  && canManagePeople(orgId)
+                )
+            )
             && validPersonContactCreate()
-            && validCommunityStatusCreate(orgId)
             && personBondEmptyOnCreate();
           allow update: if tenantUnchanged(orgId) && congregationUnchanged()
             && canAccessCongregation(orgId, resource.data.get('congregationId', ''))
