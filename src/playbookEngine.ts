@@ -142,6 +142,34 @@ export function createRaizEMesaPlaybook(organizationId: string): JourneyPlaybook
   }
 }
 
+
+/** Built-in core view; never persisted as an opt-in ministry project implicitly. */
+export function createNeutralJourneyPlaybook(organizationId: string): JourneyPlaybookDefinition {
+  const base = createRaizEMesaPlaybook(organizationId)
+  const generic: Record<string, string> = {
+    presence: 'Cultos e presença', table: 'Encontros', care: 'Cuidado',
+    groups: 'Grupos', discipleship: 'Acompanhamento',
+  }
+  const stages = base.stages.filter(stage => stage.kind in generic).map(stage => ({
+    ...stage, label: generic[stage.kind],
+    ...(stage.kind === 'groups' ? { nextAction: 'Combinar participação em grupo quando a pessoa desejar.' } : {}),
+  }))
+  const implementationPhases: JourneyImplementationPhaseDefinition[] = [{
+    id: 'core', title: 'Início da igreja', objective: 'Cadastrar pessoas e verificar presença sem projetos.',
+    items: ['Cadastrar uma pessoa', 'Abrir um culto ou encontro', 'Confirmar uma presença'],
+    targetWeek: 0, responsibleRoles: ['owner', 'admin', 'pastor', 'coordinator'],
+  }]
+  return {
+    ...base, id: 'nestjourney-universal', name: 'Núcleo da igreja',
+    description: 'Pessoas, cultos, presença, cuidado e grupos. Programas são opcionais.',
+    areaLabels: {
+      presence: 'Presença', table: 'Encontros', care: 'Cuidado',
+      groups: 'Grupos', discipleship: 'Acompanhamento',
+    }, stages, implementationPhases,
+    implementationKeys: implementationKeysForPhases(implementationPhases),
+  }
+}
+
 export function normalizeJourneyPlaybook(input: Partial<JourneyPlaybookDefinition> & { organizationId: string }, fallbackId = 'custom-playbook'): JourneyPlaybookDefinition {
   const organizationId = cleanText(input.organizationId, 256)
   if (!organizationId || organizationId.includes('/') || organizationId.includes('\\')) throw new Error('invalid_organization_id')

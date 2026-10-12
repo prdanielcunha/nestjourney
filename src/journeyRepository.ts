@@ -4,7 +4,7 @@ import {
 } from 'firebase/firestore'
 import { db } from './firebase'
 import { journeyCollectionPath } from './productIdentity'
-import { createRaizEMesaPlaybook, JOURNEY_PLAYBOOK_DEFAULT_ID, normalizeJourneyPlaybook, type JourneyPlaybookDefinition } from './playbookEngine'
+import { createRaizEMesaPlaybook, createNeutralJourneyPlaybook, JOURNEY_PLAYBOOK_DEFAULT_ID, normalizeJourneyPlaybook, type JourneyPlaybookDefinition } from './playbookEngine'
 import { planFollowupOutcome, type FollowupNextActionCode, type FollowupOutcomeCode } from './followup'
 import { calculatePresenceCoverage, canUseAbsenceEvidence, type CarePromise, type PresenceCheck, type PresenceSession, type PresenceSource, type PresenceVerificationState } from './intelligence'
 import { evaluateAuthorizedContact, normalizeGroupCapacity, type GroupCapacityPolicy, type PreferredContactChannel } from './roadmapReadiness'
@@ -1003,7 +1003,8 @@ export async function loadActiveJourneyPlaybook(access: JourneyAccessContext): P
   const playbooks = await listJourneyPlaybooks(access)
   const active = playbooks.find((item) => item.status === 'active')
   if (active) return active
-  return ensureDefaultJourneyPlaybook(access)
+  // No project enrolled: use a neutral, transient view. Do not write the Raiz e Mesa template.
+  return createNeutralJourneyPlaybook(access.organizationId)
 }
 
 export async function setActiveJourneyPlaybook(access: JourneyAccessContext, playbookId: string) {

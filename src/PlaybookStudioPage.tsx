@@ -3,7 +3,6 @@ import { ArrowLeft, Check, CirclePlus, Copy, Route, Save, ShieldCheck, Sparkles,
 import { auth } from './firebase'
 import {
   canConfigureJourneyPlaybooks,
-  ensureDefaultJourneyPlaybook,
   getActiveJourneyOrganizationId,
   listJourneyPlaybooks,
   loadActiveJourneyPlaybook,
@@ -15,6 +14,7 @@ import {
 import {
   JOURNEY_PLAYBOOK_DEFAULT_ID,
   createRaizEMesaPlaybook,
+  createNeutralJourneyPlaybook,
   normalizeJourneyPlaybook,
   type JourneyImplementationPhaseDefinition,
   type JourneyPlaybookDefinition,
@@ -124,12 +124,12 @@ export default function PlaybookStudioPage(){
   const [loading,setLoading]=useState(true),[busy,setBusy]=useState(false),[message,setMessage]=useState(''),[error,setError]=useState('')
 
   const reload=useCallback(async(nextAccess:JourneyAccessContext)=>{
-    const fallback=createRaizEMesaPlaybook(nextAccess.organizationId)
+    const fallback=createNeutralJourneyPlaybook(nextAccess.organizationId)
+    const optionalTemplate=createRaizEMesaPlaybook(nextAccess.organizationId)
     try{
-      await ensureDefaultJourneyPlaybook(nextAccess)
       const [items,active]=await Promise.all([listJourneyPlaybooks(nextAccess),loadActiveJourneyPlaybook(nextAccess)])
-      const available=items.length?items:[fallback]
-      const resolvedActive=items.length?active:fallback
+      const available=items.length?items:[fallback,optionalTemplate]
+      const resolvedActive=active
       setPlaybooks(available)
       setActiveId(resolvedActive.id)
       setSelectedId(current=>available.some(item=>item.id===current)?current:resolvedActive.id)
