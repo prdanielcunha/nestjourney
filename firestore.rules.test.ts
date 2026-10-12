@@ -2299,3 +2299,27 @@ describe('Person-declared availability never becomes a presence fact',()=>{
     expect(person.data()?.name).toBe('Known member')
   })
 })
+
+describe('Confidential pastoral notes are not a SaaS CEO privilege',()=>{
+  it('denies global-only admin but accepts a real church pastor',async()=>{
+    await seedMembership('org-pastor','org-a','pastor')
+    await seedMembership('global-only','org-a','member',['unit-a'])
+    await environment.withSecurityRulesDisabled(async ctx=>{
+      await setDoc(doc(ctx.firestore(),'users/global-only'),{systemRole:'ceo'})
+      await setDoc(doc(ctx.firestore(),'organizations/org-a/products/raiz_e_mesa/pastoral/private-note'),{
+        organizationId:'org-a',details:'Private pastoral content',
+      })
+    })
+    const root='organizations/org-a/products/raiz_e_mesa/pastoral/'
+    const ceo=environment.authenticatedContext('global-only').firestore()
+    const pastor=environment.authenticatedContext('org-pastor').firestore()
+    await assertFails(getDoc(doc(ceo,root+'private-note')))
+    await assertSucceeds(getDoc(doc(pastor,root+'private-note')))
+    await assertFails(setDoc(doc(ceo,root+'ceo-note'),{
+      organizationId:'org-a',details:'Unapproved write',
+    }))
+    await assertSucceeds(setDoc(doc(pastor,root+'pastor-note'),{
+      organizationId:'org-a',details:'Permitted pastoral note',
+    }))
+  })
+})
