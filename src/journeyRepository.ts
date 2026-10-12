@@ -2329,6 +2329,9 @@ export async function listPresenceSessions(organizationId: string, congregationI
       closedAt: data.closedAt ? toIso(data.closedAt) : undefined,
       expectedPeopleCount: typeof data.expectedPeopleCount === 'number' ? data.expectedPeopleCount : 0,
       minimumCoveragePercent: typeof data.minimumCoveragePercent === 'number' ? data.minimumCoveragePercent : 90,
+      eligiblePersonIds: Array.isArray(data.eligiblePersonIds) ? data.eligiblePersonIds.filter((id: unknown): id is string => typeof id === 'string' && id.length > 0) : undefined,
+      eligibilityVersion: data.eligibilityVersion === 1 ? 1 : undefined,
+      eventTypeId: asString(data.eventTypeId) || undefined,
       status,
       createdBy: asString(data.createdBy),
       closedBy: asString(data.closedBy) || undefined,
@@ -2537,7 +2540,13 @@ export async function createPresenceSession(input: {
   eventName: string
   expectedPeopleCount: number
   minimumCoveragePercent: number
+  eligiblePersonIds?: string[]
+  eventTypeId?: string
 }) {
+  const roster = input.eligiblePersonIds
+  if (roster && (roster.length > 2000 || new Set(roster).size !== roster.length || roster.some(id => !id || id.includes('/')) || input.expectedPeopleCount !== roster.length)) throw new Error('session_roster_invalid')
+  const eventTypeId = String(input.eventTypeId || 'general').trim()
+  if (!/^[a-z][a-z0-9_-]{0,39}$/.test(eventTypeId)) throw new Error('event_type_invalid')
   const firestore = requireDb()
   const sessions = collection(firestore, journeyCollectionPath(input.organizationId, 'presenceSessions'))
   const sessionRef = doc(sessions)
@@ -2555,6 +2564,8 @@ export async function createPresenceSession(input: {
     status: 'open',
     expectedPeopleCount: Math.max(0, Math.floor(input.expectedPeopleCount)),
     minimumCoveragePercent: Math.max(0, Math.min(100, input.minimumCoveragePercent)),
+    ...(roster ? { eligiblePersonIds: roster, eligibilityVersion: 1, eligibilitySource: 'operator_confirmed_unit_roster' } : {}),
+    eventTypeId,
     createdBy: input.actorId,
   })
   batch.set(factRef, {
