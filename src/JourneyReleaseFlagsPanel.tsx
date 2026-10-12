@@ -9,9 +9,9 @@ import {
 } from './journeyReleaseFlags'
 import './JourneyReleaseFlagsPanel.css'
 const names:Record<AppLocale,Record<JourneyRolloutKey,string>>={
-  'pt-BR':{memberBulkImport:'Importação de membros',personProfileEdit:'Edição administrativa de pessoas',familyLinks:'Vínculos familiares',verifiedFrequency:'Frequência com evidências',optionalProjects:'Catálogo de projetos opcionais'},
-  en:{memberBulkImport:'Member CSV import',personProfileEdit:'Administrative person editor',familyLinks:'Family relationships',verifiedFrequency:'Evidence-only attendance',optionalProjects:'Optional project catalog'},
-  es:{memberBulkImport:'Importación de miembros',personProfileEdit:'Edición administrativa de personas',familyLinks:'Vínculos familiares',verifiedFrequency:'Asistencia verificada',optionalProjects:'Catálogo de programas opcionales'},
+  'pt-BR':{memberBulkImport:'Importação de membros',personProfileEdit:'Edição administrativa de pessoas',familyLinks:'Vínculos familiares',verifiedFrequency:'Frequência com evidências',optionalProjects:'Catálogo de projetos opcionais',crossUnitPresence:'Presença de membros de outras unidades'},
+  en:{memberBulkImport:'Member CSV import',personProfileEdit:'Administrative person editor',familyLinks:'Family relationships',verifiedFrequency:'Evidence-only attendance',optionalProjects:'Optional project catalog',crossUnitPresence:'Cross-campus member attendance'},
+  es:{memberBulkImport:'Importación de miembros',personProfileEdit:'Edición administrativa de personas',familyLinks:'Vínculos familiares',verifiedFrequency:'Asistencia verificada',optionalProjects:'Catálogo de programas opcionales',crossUnitPresence:'Asistencia de otras sedes'},
 }
 export function JourneyReleaseFlagsPanel({access,locale}:{
   access:JourneyAccessContext;locale:AppLocale
