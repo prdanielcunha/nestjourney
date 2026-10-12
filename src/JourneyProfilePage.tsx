@@ -32,6 +32,7 @@ import { AccessDeniedState } from './AccessDeniedState'
 import { JourneyPath, inferJourneyStep } from './JourneyPath'
 import { JourneyAreaFocus } from './JourneyAreaFocus'
 import { FamilyPanel } from './FamilyPanel'
+import { VerifiedFrequencyPanel } from './VerifiedFrequencyPanel'
 import './JourneyProfilePage.css'
 
 function initials(name: string) {
@@ -299,6 +300,7 @@ export default function JourneyProfilePage() {
             </article>
           </div>
           {access && selected ? <FamilyPanel access={access} person={selected} people={people} locale={locale}/> : null}
+          {access && selected ? <VerifiedFrequencyPanel key={selected.id} access={access} person={selected} locale={locale}/> : null}
         </>}
       </section>
     </section>
