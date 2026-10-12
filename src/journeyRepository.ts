@@ -2544,11 +2544,13 @@ export async function createPresenceSession(input: {
   minimumCoveragePercent: number
   eligiblePersonIds?: string[]
   eventTypeId?: string
+  eventSeriesId?: string
 }) {
   const roster = input.eligiblePersonIds
   if (roster && (roster.length > 2000 || new Set(roster).size !== roster.length || roster.some(id => !id || id.includes('/')) || input.expectedPeopleCount !== roster.length)) throw new Error('session_roster_invalid')
   const eventTypeId = String(input.eventTypeId || 'general').trim()
   if (!/^[a-z][a-z0-9_-]{0,39}$/.test(eventTypeId)) throw new Error('event_type_invalid')
+  if (input.eventSeriesId && !/^[A-Za-z0-9_-]{1,120}$/.test(input.eventSeriesId)) throw new Error('event_series_id_invalid')
   const firestore = requireDb()
   const sessions = collection(firestore, journeyCollectionPath(input.organizationId, 'presenceSessions'))
   const sessionRef = doc(sessions)
@@ -2568,6 +2570,7 @@ export async function createPresenceSession(input: {
     minimumCoveragePercent: Math.max(0, Math.min(100, input.minimumCoveragePercent)),
     ...(roster ? { eligiblePersonIds: roster, eligibilityVersion: 1, eligibilitySource: 'operator_confirmed_unit_roster' } : {}),
     eventTypeId,
+    ...(input.eventSeriesId ? { eventSeriesId: input.eventSeriesId } : {}),
     createdBy: input.actorId,
   })
   batch.set(factRef, {
