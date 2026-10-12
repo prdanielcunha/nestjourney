@@ -32,7 +32,7 @@ export interface JourneyFamilyEvent {
 const validRelation = (value: string): value is FamilyRelation => (FAMILY_RELATIONS as readonly string[]).includes(value)
 
 export function canManageJourneyFamilies(access: JourneyAccessContext | null): boolean {
-  return Boolean(access && (access.isSystemAdmin || access.isOwner || ['owner', 'admin', 'pastor', 'data_admin'].includes(access.organizationRole)))
+  return Boolean(access && (access.isOwner || ['owner', 'admin', 'pastor', 'data_admin'].includes(access.organizationRole)))
 }
 
 function assertScope(access: JourneyAccessContext, congregationId: string) {
