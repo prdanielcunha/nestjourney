@@ -9,9 +9,9 @@ import {
 } from './journeyReleaseFlags'
 import './JourneyReleaseFlagsPanel.css'
 const names:Record<AppLocale,Record<JourneyRolloutKey,string>>={
-  'pt-BR':{memberBulkImport:'Importação de membros',personProfileEdit:'Edição administrativa de pessoas',familyLinks:'Vínculos familiares',verifiedFrequency:'Frequência com evidências',optionalProjects:'Catálogo de projetos opcionais',crossUnitPresence:'Presença de membros de outras unidades',eventSeries:'Programação de encontros recorrentes'},
-  en:{memberBulkImport:'Member CSV import',personProfileEdit:'Administrative person editor',familyLinks:'Family relationships',verifiedFrequency:'Evidence-only attendance',optionalProjects:'Optional project catalog',crossUnitPresence:'Cross-campus member attendance',eventSeries:'Recurring gathering calendar'},
-  es:{memberBulkImport:'Importación de miembros',personProfileEdit:'Edición administrativa de personas',familyLinks:'Vínculos familiares',verifiedFrequency:'Asistencia verificada',optionalProjects:'Catálogo de programas opcionales',crossUnitPresence:'Asistencia de otras sedes',eventSeries:'Programación de encuentros recurrentes'},
+  'pt-BR':{memberBulkImport:'Importação de membros',personProfileEdit:'Edição administrativa de pessoas',familyLinks:'Vínculos familiares',verifiedFrequency:'Frequência com evidências',optionalProjects:'Catálogo de projetos opcionais',crossUnitPresence:'Presença de membros de outras unidades',eventSeries:'Programação de encontros recorrentes',personAliases:'Conciliação reversível de cadastros'},
+  en:{memberBulkImport:'Member CSV import',personProfileEdit:'Administrative person editor',familyLinks:'Family relationships',verifiedFrequency:'Evidence-only attendance',optionalProjects:'Optional project catalog',crossUnitPresence:'Cross-campus member attendance',eventSeries:'Recurring gathering calendar',personAliases:'Reversible duplicate record review'},
+  es:{memberBulkImport:'Importación de miembros',personProfileEdit:'Edición administrativa de personas',familyLinks:'Vínculos familiares',verifiedFrequency:'Asistencia verificada',optionalProjects:'Catálogo de programas opcionales',crossUnitPresence:'Asistencia de otras sedes',eventSeries:'Programación de encuentros recurrentes',personAliases:'Conciliación reversible de fichas'},
 }
 export function JourneyReleaseFlagsPanel({access,locale}:{
   access:JourneyAccessContext;locale:AppLocale
