@@ -595,6 +595,17 @@ service cloud.firestore {
         && request.resource.data.get('bondAssignedAt', null) == resource.data.get('bondAssignedAt', null)
         && request.resource.data.get('bondAssignedBy', '') == resource.data.get('bondAssignedBy', '');
     }
+    // SaaS support privileges alone never grant family relationship access.
+    function canManageFamilyRegistry(orgId) {
+      return hasProductAccess(orgId)
+        && (
+          isOwner(orgId)
+          || (
+            membershipIsActive(orgId)
+            && memberRole(orgId) in ['owner', 'admin', 'pastor', 'data_admin']
+          )
+        );
+    }
     function canManageJourneySettings(orgId) {
       return isSystemAdmin() || role(orgId, ['owner', 'admin', 'pastor']);
     }
@@ -1918,9 +1929,9 @@ service cloud.firestore {
         // Universal family registry. Church persons remain canonical and are never duplicated.
         // Family ties require explicit admin confirmation; there is no surname-based inference.
         match /families/{familyId} {
-          allow read: if isOrgAdmin(orgId);
+          allow read: if canManageFamilyRegistry(orgId);
           allow create: if tenantCreate(orgId)
-            && isOrgAdmin(orgId)
+            && canManageFamilyRegistry(orgId)
             && request.resource.data.keys().hasOnly([
               'organizationId', 'congregationId', 'label', 'createdAt', 'createdBy'
             ])
@@ -1934,9 +1945,9 @@ service cloud.firestore {
           allow update, delete: if false;
         }
         match /familyEvents/{eventId} {
-          allow read: if isOrgAdmin(orgId);
+          allow read: if canManageFamilyRegistry(orgId);
           allow create: if tenantCreate(orgId)
-            && isOrgAdmin(orgId)
+            && canManageFamilyRegistry(orgId)
             && request.resource.data.keys().hasOnly([
               'organizationId', 'congregationId', 'familyId', 'personId', 'action',
               'relationshipType', 'guardianFlag', 'recordedAt', 'recordedBy', 'reason'
