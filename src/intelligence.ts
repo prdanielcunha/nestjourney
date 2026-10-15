@@ -46,6 +46,10 @@ export interface PresenceSession {
   closedAt?: string
   expectedPeopleCount: number
   minimumCoveragePercent: number
+  /** Present only on new sessions. Frozen at session creation; never inferred for legacy history. */
+  eligiblePersonIds?: string[]
+  eligibilityVersion?: 1
+  eventTypeId?: string
 }
 
 export interface PresenceCheck {
@@ -59,6 +63,7 @@ export interface PresenceCheck {
   actorId: string
   recordedAt: string
   correctedFromCheckId?: string
+  correctionReason?: string
 }
 
 export interface PresenceCoverage {
@@ -102,11 +107,13 @@ function assertRequired(value: string | undefined, field: string) {
 }
 
 export function calculatePresenceCoverage(session: PresenceSession, checks: PresenceCheck[]): PresenceCoverage {
-  const expected = Math.max(0, Math.floor(session.expectedPeopleCount))
+  const eligible = Array.isArray(session.eligiblePersonIds) ? new Set(session.eligiblePersonIds) : null
+  const expected = eligible ? eligible.size : Math.max(0, Math.floor(session.expectedPeopleCount))
   const scoped = checks.filter((check) =>
     check.organizationId === session.organizationId &&
     check.congregationId === session.congregationId &&
-    check.sessionId === session.id
+    check.sessionId === session.id &&
+    (!eligible || eligible.has(check.personId))
   )
 
   const latestByPerson = new Map<string, PresenceCheck>()
@@ -139,10 +146,12 @@ export function canUseAbsenceEvidence(session: PresenceSession, checks: Presence
 export function confirmedAbsencePersonIds(session: PresenceSession, checks: PresenceCheck[]) {
   if (!canUseAbsenceEvidence(session, checks)) return []
 
+  const eligible = Array.isArray(session.eligiblePersonIds) ? new Set(session.eligiblePersonIds) : null
   const scoped = checks.filter((check) =>
     check.organizationId === session.organizationId &&
     check.congregationId === session.congregationId &&
-    check.sessionId === session.id
+    check.sessionId === session.id &&
+    (!eligible || eligible.has(check.personId))
   )
   const latestByPerson = new Map<string, PresenceCheck>()
   for (const check of scoped) {
@@ -213,7 +222,7 @@ export function createFactEvent(input: Omit<CanonicalFactEvent, 'sourceApp' | 'v
 }
 
 export function presenceCheckToFact(check: PresenceCheck): CanonicalFactEvent | null {
-  if (check.state === 'unverified') return null
+  if (check.state === 'unverified' && !check.correctedFromCheckId) return null
 
   const eventType: CanonicalEventType = check.correctedFromCheckId
     ? 'PRESENCE_CORRECTED'
@@ -234,7 +243,7 @@ export function presenceCheckToFact(check: PresenceCheck): CanonicalFactEvent | 
       sessionId: check.sessionId,
       state: check.state,
       source: check.source,
-      ...(check.correctedFromCheckId ? { correctedFromCheckId: check.correctedFromCheckId } : {}),
+      ...(check.correctedFromCheckId ? { correctedFromCheckId: check.correctedFromCheckId, ...(check.correctionReason ? { correctionReason: check.correctionReason } : {}) } : {}),
     },
   })
 }

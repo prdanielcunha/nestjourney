@@ -306,7 +306,7 @@ export default function TeamSetupPage(){
               <div className="team-role-editor">
                 <label><span>{locale==='en'?'Primary service team':locale==='es'?'Equipo principal':'Frente principal de serviço'}</span>
                   <select value={team.primaryArea} disabled={savingId===member.id} onChange={e=>setPrimaryFront(member.id,e.target.value as ServiceFront)}>
-                    {SERVICE_FRONTS.map(front=><option key={front} value={front}>{SERVICE_FRONT_LABELS[locale][front]}</option>)}
+                    {SERVICE_FRONTS.map(front=><option key={front} value={front}>{(front==='presence'?presenceName:front==='table'?tableName:front==='care'?careName:front==='house'?groupsName:front==='discipleship'?rootName:SERVICE_FRONT_LABELS[locale][front])}</option>)}
                   </select></label>
                 <label><span>{locale==='en'?'Team role':locale==='es'?'Papel en el equipo':'Papel na equipe'}</span>
                   <select value={team.teamRole} disabled={savingId===member.id} onChange={e=>setTeamDraft(member.id,{teamRole:e.target.value as ServiceTeamRole,otherLabel:undefined})}>
@@ -317,7 +317,7 @@ export default function TeamSetupPage(){
                 <fieldset className="journey-team-help"><legend>{locale==='en'?'Can also help in':locale==='es'?'También puede apoyar':'Também pode apoiar'}</legend>
                   <div>{SERVICE_WORK_FRONTS.filter(front=>front!==team.primaryArea).map(front=><label key={front}>
                     <input type="checkbox" disabled={savingId===member.id} checked={team.supportAreas.includes(front)} onChange={()=>toggleHelpFront(member.id,front)}/>
-                    <span>{SERVICE_FRONT_LABELS[locale][front]}</span>
+                    <span>{(front==='presence'?presenceName:front==='table'?tableName:front==='care'?careName:front==='house'?groupsName:front==='discipleship'?rootName:SERVICE_FRONT_LABELS[locale][front])}</span>
                   </label>)}</div>
                 </fieldset>
                 <p>{team.primaryArea==='support'?(locale==='en'?'Support does not grant leadership or unrestricted access.':locale==='es'?'Apoyo no otorga liderazgo ni acceso general.':'Apoio não concede liderança nem acesso amplo.'):roleMeta[1]}</p>

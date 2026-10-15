@@ -1,0 +1,13 @@
+.event-series-panel{display:grid;gap:13px;margin:16px 0;padding:18px;border:1px solid var(--nj-border);border-radius:18px;background:var(--nj-navy-900)}
+.event-series-panel header{display:flex;gap:11px;align-items:flex-start}.event-series-panel header>svg{color:var(--nj-accent);flex:none}
+.event-series-panel h2{margin:0 0 5px;font-size:19px}.event-series-panel header p{font-size:13px;line-height:1.55;margin:0;color:var(--nj-text-muted)}
+.event-series-panel button{justify-self:start;display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:44px;padding:9px 13px;border:1px solid var(--nj-border);border-radius:11px;background:var(--nj-surface);color:var(--nj-text);font:inherit;font-size:14px;cursor:pointer}
+.event-series-panel button:disabled{cursor:not-allowed;opacity:.5}
+.event-series-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.event-series-form label{display:grid;gap:7px;color:var(--nj-text-muted);font-size:13px}
+.event-series-form label:first-child,.event-series-form label:last-of-type{grid-column:1/-1}
+.event-series-form select,.event-series-form input{width:100%;min-height:44px;padding:9px 11px;border:1px solid var(--nj-border);border-radius:10px;color:var(--nj-text);background:var(--nj-bg);font:inherit;font-size:15px}
+.event-series-form button{background:var(--nj-accent-strong);color:var(--nj-on-accent);border-color:var(--nj-accent-strong)}
+.event-series-list{display:grid;gap:8px}.event-series-list article{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:11px;border:1px solid var(--nj-border);border-radius:11px}
+.event-series-list article>div:first-child{display:grid;gap:4px}.event-series-list strong{font-size:14px}.event-series-list span,.event-series-muted{font-size:12px;color:var(--nj-text-muted);line-height:1.5;margin:0}
+.event-series-list article>div:last-child{display:flex;gap:7px;flex-wrap:wrap}.event-series-error{color:var(--nj-danger-text);font-size:13px}.event-series-success{color:var(--nj-positive-text);font-size:13px;display:flex;gap:6px;align-items:center}
+@media(max-width:650px){.event-series-panel{padding:15px}.event-series-form{grid-template-columns:1fr}.event-series-list article{align-items:stretch;flex-direction:column}.event-series-panel button,.event-series-list article button{width:100%}.event-series-list article>div:last-child{display:grid}}

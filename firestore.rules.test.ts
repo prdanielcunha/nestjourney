@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { assertFails, assertSucceeds, initializeTestEnvironment, type RulesTestEnvironment } from '@firebase/rules-unit-testing'
 import { Timestamp, deleteDoc, doc, getDoc, serverTimestamp, setDoc, updateDoc, writeBatch } from 'firebase/firestore'
-import { afterAll, beforeAll, beforeEach, describe, it } from 'vitest'
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 
 let environment: RulesTestEnvironment
 beforeAll(async () => {
@@ -274,7 +274,7 @@ describe('Presence Assist and canonical evidence', () => {
     batch.set(correction, {
       organizationId: 'org-a', congregationId: 'unit-a', sessionId: 'session-correction', personId: 'person-correction',
       state: 'absent_confirmed', source: 'retroactive_human_correction', actorId: 'coord-a',
-      recordedAt: serverTimestamp(), correctedFromCheckId: 'original-correction',
+      recordedAt: serverTimestamp(), correctedFromCheckId: 'original-correction', correctionReason: 'Correção humana registrada',
     })
     batch.set(fact, {
       eventId: 'presence-correction-open', eventType: 'PRESENCE_CORRECTED',
@@ -287,6 +287,28 @@ describe('Presence Assist and canonical evidence', () => {
       },
     })
     await assertSucceeds(batch.commit())
+
+    // A correction may restore an erroneous absence/presence to unverified without deleting the fact trail.
+    const reversal = doc(db, 'organizations/org-a/products/raiz_e_mesa/presenceChecks/correction-reversal')
+    const reversalFact = doc(db, 'organizations/org-a/products/raiz_e_mesa/facts/presence-correction-reversal')
+    const reversalBatch = writeBatch(db)
+    reversalBatch.set(reversal, {
+      organizationId: 'org-a', congregationId: 'unit-a', sessionId: 'session-correction', personId: 'person-correction',
+      state: 'unverified', source: 'retroactive_human_correction', actorId: 'coord-a',
+      recordedAt: serverTimestamp(), correctedFromCheckId: 'correction-open', correctionReason: 'Conferência incorreta',
+    })
+    reversalBatch.set(reversalFact, {
+      eventId: 'presence-correction-reversal', eventType: 'PRESENCE_CORRECTED',
+      occurredAt: serverTimestamp(), recordedAt: serverTimestamp(), organizationId: 'org-a',
+      actorId: 'coord-a', subjectRef: 'person:person-correction', sourceApp: 'nestjourney',
+      scope: 'congregation:unit-a', evidenceRef: 'presenceCheck:correction-reversal',
+      sensitivity: 'confidential', version: 1,
+      payload: {
+        checkId: 'correction-reversal', sessionId: 'session-correction', state: 'unverified',
+        source: 'retroactive_human_correction', correctedFromCheckId: 'correction-open', correctionReason: 'Conferência incorreta',
+      },
+    })
+    await assertSucceeds(reversalBatch.commit())
 
     await assertFails(setDoc(doc(db, 'organizations/org-a/products/raiz_e_mesa/presenceChecks/correction-same-state'), {
       organizationId: 'org-a', congregationId: 'unit-a', sessionId: 'session-correction', personId: 'person-correction',
@@ -1742,5 +1764,599 @@ describe('Bulk team interest import rules', () => {
       doc(db, 'organizations/org-a/products/raiz_e_mesa/teamInterests/invalid-area'),
       teamInterest('coord-import-area', 'unit-a', ['finance']),
     ))
+  })
+})
+
+
+describe('Canonical member registration authority', () => {
+  it('does not allow a reception operator to declare someone a member', async () => {
+    await seedMembership('reception-a', 'org-a', 'presence_host', ['unit-a'], { canManagePeople: true })
+    const path = 'organizations/org-a/products/raiz_e_mesa/people/person-new-member'
+    const data = {
+      organizationId: 'org-a', congregationId: 'unit-a', name: 'Sample Member',
+      communityStatus: 'member', consent: false, phone: '', preferredContactChannel: '',
+      visits: 0, createdBy: 'reception-a', createdAt: serverTimestamp(),
+    }
+    await assertFails(setDoc(doc(environment.authenticatedContext('reception-a').firestore(), path), data))
+    await seedMembership('admin-a', 'org-a', 'admin', ['unit-a'])
+    await assertSucceeds(setDoc(doc(environment.authenticatedContext('admin-a').firestore(), path), {
+      ...data, createdBy: 'admin-a',
+    }))
+  })
+})
+
+describe('Universal family registry tenant/privacy contract', () => {
+  it('allows only admin-created explicit family memberships and immutable unlink facts', async () => {
+    await seedMembership('admin-family', 'org-a', 'admin')
+    await seedMembership('reception-family', 'org-a', 'presence_host', ['unit-a'], { canManagePeople: true })
+    const personPath = 'organizations/org-a/products/raiz_e_mesa/people/family-person'
+    const familyPath = 'organizations/org-a/products/raiz_e_mesa/families/family-one'
+    const eventPath = 'organizations/org-a/products/raiz_e_mesa/familyEvents/link-one'
+    await environment.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), personPath), {
+        organizationId: 'org-a', congregationId: 'unit-a', name: 'Person', consent: false,
+      })
+    })
+    const receptionist = environment.authenticatedContext('reception-family').firestore()
+    const admin = environment.authenticatedContext('admin-family').firestore()
+    await assertFails(setDoc(doc(receptionist, familyPath), {
+      organizationId: 'org-a', congregationId: 'unit-a', label: 'Family One',
+      createdAt: serverTimestamp(), createdBy: 'reception-family',
+    }))
+    const batch = writeBatch(admin)
+    batch.set(doc(admin, familyPath), {
+      organizationId: 'org-a', congregationId: 'unit-a', label: 'Family One',
+      createdAt: serverTimestamp(), createdBy: 'admin-family',
+    })
+    batch.set(doc(admin, eventPath), {
+      organizationId: 'org-a', congregationId: 'unit-a', familyId: 'family-one',
+      personId: 'family-person', action: 'link', relationshipType: 'child',
+      guardianFlag: false, recordedAt: serverTimestamp(), recordedBy: 'admin-family',
+    })
+    await assertSucceeds(batch.commit())
+    await assertFails(getDoc(doc(receptionist, familyPath)))
+    await assertSucceeds(getDoc(doc(admin, familyPath)))
+    await environment.withSecurityRulesDisabled(async context => {
+      await setDoc(doc(context.firestore(), 'users/global-support'), { systemRole: 'ceo' })
+    })
+    const globalSupport = environment.authenticatedContext('global-support').firestore()
+    await assertFails(getDoc(doc(globalSupport, familyPath)))
+    await assertFails(getDoc(doc(globalSupport, eventPath)))
+    await assertFails(updateDoc(doc(admin, eventPath), { guardianFlag: true }))
+    await assertFails(deleteDoc(doc(admin, eventPath)))
+    await assertFails(setDoc(doc(admin, 'organizations/org-a/products/raiz_e_mesa/familyEvents/guardian-spoof'), {
+      organizationId: 'org-a', congregationId: 'unit-a', familyId: 'family-one',
+      personId: 'family-person', action: 'link', relationshipType: 'relative',
+      guardianFlag: true, recordedAt: serverTimestamp(), recordedBy: 'admin-family',
+    }))
+    await assertFails(setDoc(doc(admin, 'organizations/org-a/products/raiz_e_mesa/familyEvents/wrong-unit'), {
+      organizationId: 'org-a', congregationId: 'unit-b', familyId: 'family-one',
+      personId: 'family-person', action: 'link', relationshipType: 'child',
+      guardianFlag: false, recordedAt: serverTimestamp(), recordedBy: 'admin-family',
+    }))
+    await assertFails(setDoc(doc(admin, 'organizations/org-a/products/raiz_e_mesa/familyEvents/unlink-without-reason'), {
+      organizationId: 'org-a', congregationId: 'unit-a', familyId: 'family-one',
+      personId: 'family-person', action: 'unlink', relationshipType: 'child',
+      guardianFlag: false, recordedAt: serverTimestamp(), recordedBy: 'admin-family',
+    }))
+    await assertSucceeds(setDoc(doc(admin, 'organizations/org-a/products/raiz_e_mesa/familyEvents/unlink-one'), {
+      organizationId: 'org-a', congregationId: 'unit-a', familyId: 'family-one',
+      personId: 'family-person', action: 'unlink', relationshipType: 'child',
+      guardianFlag: false, reason: 'Operador corrigiu o vínculo',
+      recordedAt: serverTimestamp(), recordedBy: 'admin-family',
+    }))
+  })
+})
+
+describe('Versioned presence eligibility contract', () => {
+  it('freezes the eligible roster and rejects inconsistent or mutable denominators', async () => {
+    await seedMembership('presence-scope', 'org-a', 'coordinator')
+    const db = environment.authenticatedContext('presence-scope').firestore()
+    const base = 'organizations/org-a/products/raiz_e_mesa/presenceSessions/'
+    const payload = {
+      organizationId:'org-a', congregationId:'unit-a', eventRef:'event:eligibility-1',
+      eventName:'Domingo', eventTypeId:'sunday',
+      openedAt:serverTimestamp(), closedAt:null, status:'open',
+      expectedPeopleCount:2, minimumCoveragePercent:90, createdBy:'presence-scope',
+      eligiblePersonIds:['person-1','person-2'], eligibilityVersion:1,
+      eligibilitySource:'operator_confirmed_unit_roster',
+    }
+    const sessionDoc=doc(db,base+'eligibility-one')
+    await assertSucceeds(setDoc(sessionDoc,payload))
+    await assertFails(updateDoc(sessionDoc,{eligiblePersonIds:['person-1']}))
+    await environment.withSecurityRulesDisabled(async context => {
+      await setDoc(doc(context.firestore(),'organizations/org-a/products/raiz_e_mesa/people/person-outside'), {
+        organizationId:'org-a', congregationId:'unit-a',name:'Outside audience',
+      })
+    })
+    const checkBase='organizations/org-a/products/raiz_e_mesa/presenceChecks/'
+    const outsideCheck = {
+      organizationId:'org-a', congregationId:'unit-a',sessionId:'eligibility-one',
+      personId:'person-outside',source:'human_check',actorId:'presence-scope',
+      recordedAt:serverTimestamp(),
+    }
+    await assertFails(setDoc(doc(db,checkBase+'outside-absent'), {
+      ...outsideCheck,state:'absent_confirmed',
+    }))
+    await assertSucceeds(setDoc(doc(db,checkBase+'outside-present'), {
+      ...outsideCheck,state:'present_confirmed',
+    }))
+    await assertFails(setDoc(doc(db,base+'eligibility-bad-count'), {...payload,expectedPeopleCount:3}))
+    await assertFails(setDoc(doc(db,base+'eligibility-bad-type'), {...payload,eventTypeId:'invalid / event'}))
+  })
+})
+
+describe('Reviewed member import permission and neutrality', () => {
+  it('allows tenant admin, not reception, to create imported members with zero contact/attendance', async () => {
+    await seedMembership('member-admin','org-a','admin')
+    await seedMembership('member-reception','org-a','presence_host',['unit-a'],{canManagePeople:true})
+    const path='organizations/org-a/products/raiz_e_mesa/people/imported-one'
+    const imported={organizationId:'org-a',congregationId:'unit-a',name:'Ana Maria',
+      preferredName:'Ana',communityStatus:'member',consent:false,phone:'',
+      preferredContactChannel:'',visits:0,stage:'new',dataSource:'manual_member_import',
+      importBatchId:'test-batch',createdBy:'member-admin',createdAt:serverTimestamp()}
+    await assertFails(setDoc(doc(environment.authenticatedContext('member-reception').firestore(),path),{
+      ...imported,createdBy:'member-reception',
+    }))
+    await assertSucceeds(setDoc(doc(environment.authenticatedContext('member-admin').firestore(),path),imported))
+    await assertFails(setDoc(doc(environment.authenticatedContext('member-admin').firestore(),
+      'organizations/org-a/products/raiz_e_mesa/people/imported-invalid'),{
+      ...imported,consent:true,createdBy:'member-admin',phone:'999999999',
+    }))
+  })
+  it('denies global SaaS role with no actual church membership from importing',async()=>{
+    await seedMembership('member-admin','org-a','admin')
+    await environment.withSecurityRulesDisabled(async context=>{
+      await setDoc(doc(context.firestore(),'users/system-importer'),{systemRole:'ceo'})
+    })
+    await assertFails(setDoc(doc(environment.authenticatedContext('system-importer').firestore(),
+      'organizations/org-a/products/raiz_e_mesa/people/global-import'),{
+      organizationId:'org-a',congregationId:'unit-a',name:'SaaS Imported Person',
+      communityStatus:'member',consent:false,phone:'',preferredContactChannel:'',
+      visits:0,dataSource:'manual_member_import',createdAt:serverTimestamp(),createdBy:'system-importer',
+    }))
+  })
+})
+
+describe('Administrative profile mutation requires same-transaction audit',()=>{
+  it('permits tenant admin to update preferred name and status only with append-only audit',async()=>{
+    await seedMembership('profile-admin','org-a','admin')
+    await seedMembership('profile-reception','org-a','presence_host',['unit-a'],{canManagePeople:true})
+    const personPath='organizations/org-a/products/raiz_e_mesa/people/p-one'
+    const auditPath='organizations/org-a/products/raiz_e_mesa/audit/p-one-profile-1'
+    await environment.withSecurityRulesDisabled(async ctx=>{
+      await setDoc(doc(ctx.firestore(),personPath),{
+        organizationId:'org-a',congregationId:'unit-a',name:'Full Name',
+        consent:false,phone:'',preferredName:'',communityStatus:'not_informed',
+      })
+    })
+    const db=environment.authenticatedContext('profile-admin').firestore()
+    const receptionist=environment.authenticatedContext('profile-reception').firestore()
+    await assertFails(updateDoc(doc(db,personPath),{
+      preferredName:'Nickname',communityStatus:'member',profileRevision:1,
+      profileUpdatedAt:serverTimestamp(),profileUpdatedBy:'profile-admin',profileAuditId:'p-one-profile-1',
+    }))
+    const batch=writeBatch(db)
+    batch.update(doc(db,personPath),{
+      preferredName:'Nickname',communityStatus:'member',profileRevision:1,
+      profileUpdatedAt:serverTimestamp(),profileUpdatedBy:'profile-admin',profileAuditId:'p-one-profile-1',
+    })
+    batch.set(doc(db,auditPath),{
+      organizationId:'org-a',congregationId:'unit-a',actorId:'profile-admin',
+      action:'person.profile_updated',targetRef:'person:p-one',
+      createdAt:serverTimestamp(),oldStatus:'not_informed',newStatus:'member',preferredNameChanged:true,
+    })
+    await assertSucceeds(batch.commit())
+    await assertFails(updateDoc(doc(receptionist,personPath),{
+      communityStatus:'former_member',profileRevision:2,
+      profileUpdatedAt:serverTimestamp(),profileUpdatedBy:'profile-reception',profileAuditId:'p-one-profile-2',
+    }))
+    await assertFails(updateDoc(doc(db,personPath),{consent:true,phone:'11111111'}))
+    await assertFails(updateDoc(doc(db,auditPath),{oldStatus:'member'}))
+  })
+})
+
+describe('Explicitly opt-in project programs and canonical enrollment',()=>{
+  it('requires a linked immutable version for creation and activation',async()=>{
+    await seedMembership('project-admin','org-a','admin')
+    const db=environment.authenticatedContext('project-admin').firestore()
+    const root='organizations/org-a/products/raiz_e_mesa/'
+    const projPath=root+'projects/my-project'
+    const version1=root+'projectVersions/my-project_v1'
+    const draft={organizationId:'org-a',name:'Cuidado em família',
+      description:'Projeto voluntário',projectType:'custom',unitIds:['unit-a'],
+      status:'draft',version:1,versionRecordId:'my-project_v1',
+      createdAt:serverTimestamp(),updatedAt:serverTimestamp(),
+      createdBy:'project-admin',updatedBy:'project-admin',activatedAt:null,archivedAt:null}
+    await assertFails(setDoc(doc(db,projPath),draft))
+    const batch=writeBatch(db)
+    batch.set(doc(db,projPath),draft)
+    batch.set(doc(db,version1),{organizationId:'org-a',projectId:'my-project',
+      version:1,status:'draft',reason:'project_created',recordedAt:serverTimestamp(),recordedBy:'project-admin'})
+    await assertSucceeds(batch.commit())
+    await assertFails(updateDoc(doc(db,projPath),{
+      status:'active',version:2,versionRecordId:'my-project_v2',updatedAt:serverTimestamp(),
+      updatedBy:'project-admin',activatedAt:serverTimestamp(),
+    }))
+    const next=writeBatch(db)
+    next.update(doc(db,projPath),{
+      status:'active',version:2,versionRecordId:'my-project_v2',updatedAt:serverTimestamp(),
+      updatedBy:'project-admin',activatedAt:serverTimestamp(),
+    })
+    next.set(doc(db,root+'projectVersions/my-project_v2'),{
+      organizationId:'org-a',projectId:'my-project',version:2,status:'active',
+      reason:'project_activated',recordedAt:serverTimestamp(),recordedBy:'project-admin',
+    })
+    await assertSucceeds(next.commit())
+    await assertFails(updateDoc(doc(db,version1),{status:'archived'}))
+    await environment.withSecurityRulesDisabled(async ctx=>{
+      await setDoc(doc(ctx.firestore(),root+'people/existing-person'),{
+        organizationId:'org-a',congregationId:'unit-a',name:'Registered Person',
+      })
+      await setDoc(doc(ctx.firestore(),root+'people/other-unit-person'),{
+        organizationId:'org-a',congregationId:'unit-b',name:'Other campus',
+      })
+    })
+    await assertSucceeds(setDoc(doc(db,root+'projectEnrollments/my-project__existing-person'),{
+      organizationId:'org-a',projectId:'my-project',personId:'existing-person',
+      congregationId:'unit-a',projectVersion:2,status:'active',
+      enrolledAt:serverTimestamp(),enrolledBy:'project-admin',
+    }))
+    await assertFails(setDoc(doc(db,root+'projectEnrollments/my-project__other-unit-person'),{
+      organizationId:'org-a',projectId:'my-project',personId:'other-unit-person',
+      congregationId:'unit-b',projectVersion:2,status:'active',
+      enrolledAt:serverTimestamp(),enrolledBy:'project-admin',
+    }))
+    await assertFails(deleteDoc(doc(db,root+'projects/my-project')))
+  })
+})
+
+describe('Tenant-controlled feature rollout',()=>{
+  it('allows tenant admin and blocks reception/global SaaS support from changing flags',async()=>{
+    await seedMembership('rollout-admin','org-a','admin')
+    await seedMembership('rollout-reception','org-a','presence_host',['unit-a'],{canManagePeople:true})
+    await environment.withSecurityRulesDisabled(async ctx=>{
+      await setDoc(doc(ctx.firestore(),'users/global-rollout'),{systemRole:'ceo'})
+    })
+    const root='organizations/org-a/products/raiz_e_mesa/settings/releaseFlags'
+    const payload={organizationId:'org-a',flags:{
+      memberBulkImport:true,personProfileEdit:false,familyLinks:false,
+      verifiedFrequency:false,optionalProjects:false,crossUnitPresence:false,eventSeries:false,personAliases:false,personAvailability:false,
+    },updatedAt:serverTimestamp(),updatedBy:'rollout-admin'}
+    await assertFails(setDoc(doc(environment.authenticatedContext('rollout-reception').firestore(),root),{
+      ...payload,updatedBy:'rollout-reception',
+    }))
+    await assertFails(setDoc(doc(environment.authenticatedContext('global-rollout').firestore(),root),{
+      ...payload,updatedBy:'global-rollout',
+    }))
+    const admin=environment.authenticatedContext('rollout-admin').firestore()
+    await assertSucceeds(setDoc(doc(admin,root),payload))
+    await assertSucceeds(updateDoc(doc(admin,root),{
+      flags:{...payload.flags,optionalProjects:true},
+      updatedAt:serverTimestamp(),updatedBy:'rollout-admin',
+    }))
+    await assertFails(updateDoc(doc(admin,root),{
+      flags:{...payload.flags,optionalProjects:'on'},
+      updatedAt:serverTimestamp(),updatedBy:'rollout-admin',
+    }))
+  })
+})
+
+describe('Project participation voluntary exit and reversible corrections',()=>{
+  it('keeps the person and enrollment ID, requiring immutable transition evidence',async()=>{
+    await seedMembership('program-admin','org-a','admin')
+    const root='organizations/org-a/products/raiz_e_mesa/'
+    const enrollmentId='p-1__person-1'
+    const recordPath=root+'projectEnrollments/'+enrollmentId
+    const initial={organizationId:'org-a',congregationId:'unit-a',projectId:'p-1',
+      personId:'person-1',projectVersion:2,status:'active',enrolledBy:'program-admin',
+      enrolledAt:Timestamp.fromMillis(1)}
+    await environment.withSecurityRulesDisabled(async ctx=>{
+      await setDoc(doc(ctx.firestore(),recordPath),initial)
+    })
+    const firestore=environment.authenticatedContext('program-admin').firestore()
+    await assertFails(updateDoc(doc(firestore,recordPath),{
+      status:'completed',revision:1,lastEventId:enrollmentId+'_v1',
+      statusUpdatedAt:serverTimestamp(),statusUpdatedBy:'program-admin',
+    }))
+    const eventPath=root+'projectEnrollmentEvents/'+enrollmentId+'_v1'
+    const batch=writeBatch(firestore)
+    batch.update(doc(firestore,recordPath),{
+      status:'completed',revision:1,lastEventId:enrollmentId+'_v1',
+      statusUpdatedAt:serverTimestamp(),statusUpdatedBy:'program-admin',
+    })
+    batch.set(doc(firestore,eventPath),{
+      organizationId:'org-a',congregationId:'unit-a',projectId:'p-1',
+      personId:'person-1',enrollmentId,revision:1,
+      fromStatus:'active',toStatus:'completed',reason:'left_voluntarily',
+      recordedAt:serverTimestamp(),recordedBy:'program-admin',
+    })
+    await assertSucceeds(batch.commit())
+    await assertFails(updateDoc(doc(firestore,eventPath),{reason:'corrected_record'}))
+    await assertFails(deleteDoc(doc(firestore,recordPath)))
+    const resume=writeBatch(firestore)
+    resume.update(doc(firestore,recordPath),{
+      status:'active',revision:2,lastEventId:enrollmentId+'_v2',
+      statusUpdatedAt:serverTimestamp(),statusUpdatedBy:'program-admin',
+    })
+    resume.set(doc(firestore,root+'projectEnrollmentEvents/'+enrollmentId+'_v2'),{
+      organizationId:'org-a',congregationId:'unit-a',projectId:'p-1',
+      personId:'person-1',enrollmentId,revision:2,
+      fromStatus:'completed',toStatus:'active',reason:'rejoined',
+      recordedAt:serverTimestamp(),recordedBy:'program-admin',
+    })
+    await assertSucceeds(resume.commit())
+    await assertSucceeds(getDoc(doc(firestore,recordPath)))
+    await assertSucceeds(getDoc(doc(firestore,eventPath)))
+  })
+})
+
+describe('Person attends another campus using the same canonical person ID',()=>{
+  it('allows home-campus visitor presence for a church administrator, never inferred absence',async()=>{
+    await seedMembership('cross-admin','org-a','admin',['unit-b'])
+    await seedMembership('cross-volunteer','org-a','presence_host',['unit-b'],{canManagePresence:true})
+    const root='organizations/org-a/products/raiz_e_mesa/'
+    await environment.withSecurityRulesDisabled(async ctx=>{
+      await setDoc(doc(ctx.firestore(),root+'people/person-home'),{
+        organizationId:'org-a',congregationId:'unit-a',name:'Existing member',
+      })
+      await setDoc(doc(ctx.firestore(),root+'presenceSessions/cross-session'),{
+        organizationId:'org-a',congregationId:'unit-b',eventName:'Sunday service',status:'open',
+        expectedPeopleCount:0,minimumCoveragePercent:90,
+      })
+    })
+    const admin=environment.authenticatedContext('cross-admin').firestore()
+    const operator=environment.authenticatedContext('cross-volunteer').firestore()
+    const source={
+      organizationId:'org-a',congregationId:'unit-b',sessionId:'cross-session',
+      personId:'person-home',state:'present_confirmed',source:'human_check',
+      recordedAt:serverTimestamp(),
+    }
+    await assertFails(setDoc(doc(operator,root+'presenceChecks/cross-volunteer-check'),{
+      ...source,actorId:'cross-volunteer',
+    }))
+    const realVisit=writeBatch(admin)
+    realVisit.set(doc(admin,root+'presenceChecks/cross-admin-check'),{
+      ...source,actorId:'cross-admin',
+    })
+    realVisit.set(doc(admin,root+'facts/presence-cross-admin-check'),{
+      eventId:'presence-cross-admin-check',eventType:'PRESENCE_CONFIRMED',
+      occurredAt:serverTimestamp(),recordedAt:serverTimestamp(),
+      organizationId:'org-a',actorId:'cross-admin',
+      subjectRef:'person:person-home',sourceApp:'nestjourney',
+      scope:'congregation:unit-b',evidenceRef:'presenceCheck:cross-admin-check',
+      sensitivity:'confidential',version:1,
+      payload:{checkId:'cross-admin-check',sessionId:'cross-session',state:'present_confirmed',source:'human_check'},
+    })
+    await assertSucceeds(realVisit.commit())
+    await assertFails(setDoc(doc(admin,root+'presenceChecks/cross-absence'),{
+      ...source,state:'absent_confirmed',actorId:'cross-admin',
+    }))
+    await assertSucceeds(setDoc(doc(admin,root+'presenceChecks/cross-undo'),{
+      ...source,state:'unverified',source:'retroactive_human_correction',
+      correctedFromCheckId:'cross-admin-check',correctionReason:'Correção confirmada',
+      actorId:'cross-admin',
+    }))
+    const home=await getDoc(doc(admin,root+'people/person-home'))
+    expect(home.data()?.congregationId).toBe('unit-a')
+  })
+})
+
+describe('Weekly event series and human-opened sessions',()=>{
+  it('does not automatically mark presence and forbids forged or archived series references',async()=>{
+    await seedMembership('series-admin','org-a','admin')
+    await seedMembership('series-volunteer','org-a','presence_host',['unit-a'],{canManagePresence:true})
+    const root='organizations/org-a/products/raiz_e_mesa/'
+    const db=environment.authenticatedContext('series-admin').firestore()
+    const volunteer=environment.authenticatedContext('series-volunteer').firestore()
+    const series={
+      organizationId:'org-a',congregationId:'unit-a',
+      title:'Quarta-feira',eventTypeId:'midweek',
+      weekday:3,localTime:'20:00',timeZone:'America/Sao_Paulo',
+      status:'active',createdAt:serverTimestamp(),createdBy:'series-admin',
+      archivedAt:null,archivedBy:'',
+    }
+    await assertFails(setDoc(doc(volunteer,root+'eventSeries/forbidden'),{...series,createdBy:'series-volunteer'}))
+    await assertSucceeds(setDoc(doc(db,root+'eventSeries/series-one'),series))
+    await assertSucceeds(getDoc(doc(volunteer,root+'eventSeries/series-one')))
+    const validSession={
+      organizationId:'org-a',congregationId:'unit-a',eventRef:'event:manual-session',
+      eventName:'Quarta-feira',eventSeriesId:'series-one',eventTypeId:'midweek',
+      openedAt:serverTimestamp(),status:'open',closedAt:null,
+      expectedPeopleCount:0,minimumCoveragePercent:90,createdBy:'series-admin',
+    }
+    await assertFails(setDoc(doc(db,root+'presenceSessions/wrong-type'),{...validSession,eventTypeId:'youth'}))
+    await assertFails(setDoc(doc(db,root+'presenceSessions/wrong-series'),{...validSession,eventSeriesId:'forged'}))
+    await assertSucceeds(setDoc(doc(db,root+'presenceSessions/manual-session'),validSession))
+    await assertSucceeds(updateDoc(doc(db,root+'eventSeries/series-one'),{
+      status:'archived',archivedAt:serverTimestamp(),archivedBy:'series-admin',
+    }))
+    await assertFails(setDoc(doc(db,root+'presenceSessions/archived-series'),validSession))
+    await assertFails(deleteDoc(doc(db,root+'eventSeries/series-one')))
+  })
+})
+
+describe('Reversible person alias and tenant protection',()=>{
+  it('requires a church administrator and an immutable matching event for each link or reversal',async()=>{
+    await seedMembership('alias-admin','org-a','admin')
+    await seedMembership('alias-reception','org-a','presence_host',['unit-a'],{canManagePeople:true})
+    await environment.withSecurityRulesDisabled(async context=>{
+      const db=context.firestore()
+      await setDoc(doc(db,'organizations/org-a/products/raiz_e_mesa/people/duplicate-a'),{
+        organizationId:'org-a',congregationId:'unit-a',name:'Test Person A',consent:false,
+      })
+      await setDoc(doc(db,'organizations/org-a/products/raiz_e_mesa/people/canonical-b'),{
+        organizationId:'org-a',congregationId:'unit-b',name:'Test Person B',consent:true,
+      })
+    })
+    const root='organizations/org-a/products/raiz_e_mesa/'
+    const admin=environment.authenticatedContext('alias-admin').firestore()
+    const reception=environment.authenticatedContext('alias-reception').firestore()
+    const aliasPath=root+'personAliases/duplicate-a'
+    const eventPath=root+'personAliasEvents/link-1'
+    const alias={
+      organizationId:'org-a',duplicatePersonId:'duplicate-a',canonicalPersonId:'canonical-b',
+      sourceCongregationId:'unit-a',targetCongregationId:'unit-b',
+      status:'active',revision:1,lastEventId:'link-1',
+      createdAt:serverTimestamp(),createdBy:'alias-admin',
+      updatedAt:serverTimestamp(),updatedBy:'alias-admin',
+    }
+    const event={
+      organizationId:'org-a',aliasId:'duplicate-a',
+      duplicatePersonId:'duplicate-a',canonicalPersonId:'canonical-b',
+      action:'linked',revision:1,reason:'Identidade conferida por registros diferentes',
+      recordedAt:serverTimestamp(),recordedBy:'alias-admin',
+    }
+    await assertFails(setDoc(doc(reception,aliasPath),{...alias,createdBy:'alias-reception',updatedBy:'alias-reception'}))
+    await assertFails(setDoc(doc(admin,aliasPath),alias))
+    const batch=writeBatch(admin)
+    batch.set(doc(admin,aliasPath),alias)
+    batch.set(doc(admin,eventPath),event)
+    await assertSucceeds(batch.commit())
+    await assertFails(updateDoc(doc(admin,aliasPath),{
+      status:'reverted',revision:2,lastEventId:'reversal-1',
+      updatedAt:serverTimestamp(),updatedBy:'alias-admin',
+    }))
+    const undo=writeBatch(admin)
+    undo.update(doc(admin,aliasPath),{
+      status:'reverted',revision:2,lastEventId:'reversal-1',
+      updatedAt:serverTimestamp(),updatedBy:'alias-admin',
+    })
+    undo.set(doc(admin,root+'personAliasEvents/reversal-1'),{
+      ...event,action:'reverted',revision:2,reason:'Correção solicitada e conferida pela equipe',
+    })
+    await assertSucceeds(undo.commit())
+    await assertFails(deleteDoc(doc(admin,aliasPath)))
+    await assertFails(updateDoc(doc(admin,eventPath),{reason:'sem motivo'}))
+    const original=await getDoc(doc(admin,root+'people/duplicate-a'))
+    const primary=await getDoc(doc(admin,root+'people/canonical-b'))
+    expect(original.exists()).toBe(true)
+    expect(primary.exists()).toBe(true)
+    expect(original.data()?.consent).toBe(false)
+    expect(primary.data()?.consent).toBe(true)
+    expect(original.data()?.congregationId).toBe('unit-a')
+  })
+  it('does not permit links to missing or other-tenant identities',async()=>{
+    await seedMembership('alias-admin','org-a','admin')
+    const admin=environment.authenticatedContext('alias-admin').firestore()
+    const root='organizations/org-a/products/raiz_e_mesa/'
+    const batch=writeBatch(admin)
+    batch.set(doc(admin,root+'personAliases/missing-person'),{
+      organizationId:'org-a',duplicatePersonId:'missing-person',canonicalPersonId:'other-person',
+      sourceCongregationId:'unit-a',targetCongregationId:'unit-b',
+      status:'active',revision:1,lastEventId:'attempt',
+      createdAt:serverTimestamp(),createdBy:'alias-admin',
+      updatedAt:serverTimestamp(),updatedBy:'alias-admin',
+    })
+    batch.set(doc(admin,root+'personAliasEvents/attempt'),{
+      organizationId:'org-a',aliasId:'missing-person',duplicatePersonId:'missing-person',
+      canonicalPersonId:'other-person',action:'linked',revision:1,
+      reason:'Tentativa sem confirmação de identidade',
+      recordedAt:serverTimestamp(),recordedBy:'alias-admin',
+    })
+    await assertFails(batch.commit())
+  })
+})
+
+describe('Person-declared availability never becomes a presence fact',()=>{
+  it('limits voluntary travel/pauses to tenant administrators and append-only corrections',async()=>{
+    await seedMembership('availability-admin','org-a','admin')
+    await seedMembership('availability-reception','org-a','presence_host',['unit-a'],{canManagePeople:true})
+    const root='organizations/org-a/products/raiz_e_mesa/'
+    await environment.withSecurityRulesDisabled(async ctx=>{
+      await setDoc(doc(ctx.firestore(),root+'people/person-one'),{
+        organizationId:'org-a',congregationId:'unit-a',name:'Known member',
+      })
+    })
+    const db=environment.authenticatedContext('availability-admin').firestore()
+    const receptionist=environment.authenticatedContext('availability-reception').firestore()
+    const path=root+'personAvailabilityEvents/report-one'
+    const report={
+      organizationId:'org-a',congregationId:'unit-a',personId:'person-one',
+      action:'reported',kind:'travel',startsOn:'2026-10-12',endsOn:'2026-10-18',
+      sourceEventId:'',recordedAt:serverTimestamp(),recordedBy:'availability-admin',
+    }
+    await assertFails(setDoc(doc(receptionist,path),{...report,recordedBy:'availability-reception'}))
+    await assertFails(setDoc(doc(db,root+'personAvailabilityEvents/fake-person'),{
+      ...report,personId:'missing-person',
+    }))
+    await assertFails(setDoc(doc(db,root+'personAvailabilityEvents/invented-category'),{
+      ...report,kind:'spiritual_crisis',
+    }))
+    await assertSucceeds(setDoc(doc(db,path),report))
+    await assertFails(updateDoc(doc(db,path),{endsOn:'2026-10-19'}))
+    await assertFails(setDoc(doc(db,root+'personAvailabilityEvents/fake-withdrawal'),{
+      ...report,action:'withdrawn',sourceEventId:'not-existing',
+    }))
+    await assertFails(setDoc(doc(db,root+'personAvailabilityEvents/forged-withdrawal-date'),{
+      ...report,action:'withdrawn',sourceEventId:'report-one',endsOn:'2026-11-19',
+    }))
+    await assertSucceeds(setDoc(doc(db,root+'personAvailabilityEvents/withdrawal-one'),{
+      ...report,action:'withdrawn',sourceEventId:'report-one',
+    }))
+    await assertFails(deleteDoc(doc(db,path)))
+    const person=await getDoc(doc(db,root+'people/person-one'))
+    expect(person.data()?.name).toBe('Known member')
+  })
+})
+
+describe('Confidential pastoral notes are not a SaaS CEO privilege',()=>{
+  it('denies global-only admin but accepts a real church pastor',async()=>{
+    await seedMembership('org-pastor','org-a','pastor')
+    await seedMembership('global-only','org-a','member',['unit-a'])
+    await environment.withSecurityRulesDisabled(async ctx=>{
+      await setDoc(doc(ctx.firestore(),'users/global-only'),{systemRole:'ceo'})
+      await setDoc(doc(ctx.firestore(),'organizations/org-a/products/raiz_e_mesa/pastoral/private-note'),{
+        organizationId:'org-a',details:'Private pastoral content',
+      })
+    })
+    const root='organizations/org-a/products/raiz_e_mesa/pastoral/'
+    const ceo=environment.authenticatedContext('global-only').firestore()
+    const pastor=environment.authenticatedContext('org-pastor').firestore()
+    await assertFails(getDoc(doc(ceo,root+'private-note')))
+    await assertSucceeds(getDoc(doc(pastor,root+'private-note')))
+    await assertFails(setDoc(doc(ceo,root+'ceo-note'),{
+      organizationId:'org-a',details:'Unapproved write',
+    }))
+    await assertSucceeds(setDoc(doc(pastor,root+'pastor-note'),{
+      organizationId:'org-a',details:'Permitted pastoral note',
+    }))
+  })
+})
+
+describe('Global SaaS operators do not get church person write permissions',()=>{
+  it('refuses manual member creation without real organization membership',async()=>{
+    await seedMembership('church-admin','org-a','admin')
+    await environment.withSecurityRulesDisabled(async ctx=>{
+      await setDoc(doc(ctx.firestore(),'users/saas-ceo'),{systemRole:'ceo'})
+    })
+    const root='organizations/org-a/products/raiz_e_mesa/people/'
+    const member={
+      organizationId:'org-a',congregationId:'unit-a',name:'Manually confirmed member',
+      communityStatus:'member',visits:0,stage:'new',phone:'',
+      preferredContactChannel:'',consent:false,
+      createdBy:'saas-ceo',createdAt:serverTimestamp(),
+      dataSource:'manual_member_registration',
+    }
+    await assertFails(setDoc(doc(environment.authenticatedContext('saas-ceo').firestore(),root+'ceo-only'),member))
+    await assertSucceeds(setDoc(doc(environment.authenticatedContext('church-admin').firestore(),root+'authorized-admin'),{
+      ...member,createdBy:'church-admin',
+    }))
+  })
+})
+
+describe('Pastoral handoffs do not leak to global SaaS support',()=>{
+  it('requires a tenant pastoral assignment rather than a global CEO role',async()=>{
+    await seedMembership('local-pastor','org-a','pastor')
+    await environment.withSecurityRulesDisabled(async ctx=>{
+      const db=ctx.firestore()
+      await setDoc(doc(db,'users/global-pastoral'),{systemRole:'ceo'})
+      await setDoc(doc(db,'organizations/org-a/products/raiz_e_mesa/pastoralHandoffs/private-handoff'),{
+        organizationId:'org-a',congregationId:'unit-a',status:'open',
+      })
+    })
+    const path='organizations/org-a/products/raiz_e_mesa/pastoralHandoffs/private-handoff'
+    await assertFails(getDoc(doc(environment.authenticatedContext('global-pastoral').firestore(),path)))
+    await assertSucceeds(getDoc(doc(environment.authenticatedContext('local-pastor').firestore(),path)))
   })
 })

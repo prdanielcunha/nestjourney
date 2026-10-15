@@ -64,8 +64,20 @@ describe('Presence Assist — qualidade e evidência', () => {
     expect(confirmedAbsencePersonIds(session, highCoverageChecks)).toEqual(['p3'])
   })
 
-  it('não emite fato para estado não verificado', () => {
+  it('não emite fato para estado não verificado sem correção', () => {
     expect(presenceCheckToFact(checks[1])).toBeNull()
+  })
+
+  it('permite desfazer marcação com motivo e evento auditável sem inventar ausência', () => {
+    const reverted: PresenceCheck = {
+      ...checks[2], id: 'reverted', state: 'unverified', source: 'retroactive_human_correction',
+      correctedFromCheckId: 'check-3', correctionReason: 'Registro corrigido',
+      recordedAt: '2026-09-20T12:05:00.000Z',
+    }
+    expect(presenceCheckToFact(reverted)?.eventType).toBe('PRESENCE_CORRECTED')
+    expect(presenceCheckToFact(reverted)?.payload.correctionReason).toBe('Registro corrigido')
+    expect(calculatePresenceCoverage(session, [...checks, reverted]).verified).toBe(1)
+    expect(confirmedAbsencePersonIds(session, [...checks, reverted])).toEqual([])
   })
 
   it('emite fato canônico com tenant, actor, source e evidenceRef', () => {

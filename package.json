@@ -1,7 +1,7 @@
 {
   "name": "nestjourney",
   "private": true,
-  "version": "0.9.0-beta.2",
+  "version": "0.9.0-beta.1",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -10,7 +10,8 @@
     "test": "vitest run --exclude firestore.rules.test.ts",
     "test:rules": "npx -y firebase-tools@14.25.1 emulators:exec --config firebase.emulator.json --only firestore --project raiz-e-mesa-rules-test \"vitest run firestore.rules.test.ts\"",
     "check": "npm run lint && npm test && npm run build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "release:preflight": "node scripts/release-preflight.mjs"
   },
   "dependencies": {
     "@millionsnest/ai": "https://github.com/prdanielcunha/NestAI/releases/download/sdk-v0.2.0/millionsnest-ai-0.2.0.tgz",

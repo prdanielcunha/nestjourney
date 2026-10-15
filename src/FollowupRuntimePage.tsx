@@ -19,6 +19,7 @@ import {
 } from './journeyRepository'
 import type { FollowupOutcomeCode, FollowupNextActionCode } from './followup'
 import { buildConnectFollowupLaunchUrl, resolveRequestedFollowupId } from './connectBridge'
+import { assertFreshJourneyContactAuthorized } from './freshContactAuthorization'
 import { followupRuntimeCopy, getInitialLocale, localeLabels, persistLocale, type AppLocale } from './i18n'
 import { GuidedEmptyState } from './GuidedEmptyState'
 import { emptyGuidance } from './emptyGuidance'
@@ -146,13 +147,29 @@ export default function FollowupRuntimePage() {
     try {
       const person = peopleById.get(request.personId)
       if (!person?.preferredContactChannel) throw new Error('followup_contact_not_ready')
+      const channel = await assertFreshJourneyContactAuthorized({access,congregationId:request.congregationId,personId:request.personId})
       const followupId = await startJourneyFollowup({ access, request })
-      window.location.assign(buildConnectFollowupLaunchUrl(followupId, person.preferredContactChannel))
+      window.location.assign(buildConnectFollowupLaunchUrl(followupId, channel))
     } catch (cause) {
       console.error(cause)
       const code = cause instanceof Error ? cause.message : ''
       setError(code === 'followup_owner_required' ? t.onlyOwner : code === 'followup_source_invalid' ? t.invalidSource : t.error)
     } finally { setBusy(false) }
+  }
+
+  async function openConnect(item: JourneyFollowupRecord) {
+    if(!access || item.ownerRef!==access.userId)return
+    setBusy(true);setError('')
+    try{
+      const channel=await assertFreshJourneyContactAuthorized({
+        access,congregationId:item.congregationId,personId:item.personId,
+      })
+      window.location.assign(buildConnectFollowupLaunchUrl(item.id,channel))
+    }catch(cause){
+      console.error('Fresh contact authorization denied Connect handoff',cause)
+      setError(t.revokedHint)
+      await refresh(access,congregationId)
+    }finally{setBusy(false)}
   }
 
   async function completeFollowup(item: JourneyFollowupRecord, outcomeCode: FollowupOutcomeCode) {
@@ -264,7 +281,7 @@ export default function FollowupRuntimePage() {
             <div className="followup-facts"><span><small>{t.contact}</small><b>{contactAllowed?person?.phone:t.contactUnavailable}</b></span><span><small>{locale==='en'?'Authorized channel':locale==='es'?'Canal autorizado':'Canal autorizado'}</small><b>{person?.preferredContactChannel==='whatsapp'?'WhatsApp':person?.preferredContactChannel==='phone'?(locale==='en'?'Phone call':locale==='es'?'Llamada':'Ligação'):t.contactUnavailable}</b></span><span><small>{t.source}</small><b>{t.firstContact}</b></span></div>
             {!contactAllowed?<p className="followup-revoked-note"><ShieldCheck size={15}/>{t.revokedHint}</p>:null}
             <div className="followup-card-actions">
-              {contactAllowed?<a className="followup-button" aria-disabled={!mine} href={mine?buildConnectFollowupLaunchUrl(item.id,person?.preferredContactChannel):undefined} onClick={(event)=>{if(!mine)event.preventDefault()}}><MessageCircle size={16}/>{t.openConnect}</a>:null}
+              {contactAllowed?<button className="followup-button" type="button" disabled={busy||!mine} onClick={()=>void openConnect(item)}><MessageCircle size={16}/>{t.openConnect}</button>:null}
               {contactAllowed?<button className="followup-button primary" disabled={busy||!mine} onClick={()=>setResolving(item)}><CheckCircle2 size={16}/>{t.recordOutcome}</button>:null}
               {!contactAllowed?<button className="followup-button primary span-all" disabled={busy||!mine} onClick={()=>void closeRevoked(item)}><ShieldCheck size={16}/>{t.closeRevoked}</button>:null}
             </div>

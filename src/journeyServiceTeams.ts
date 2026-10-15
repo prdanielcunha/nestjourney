@@ -16,9 +16,9 @@ export type JourneyServiceTeam = {
 }
 
 export const SERVICE_FRONT_LABELS: Record<AppLocale, Record<ServiceFront, string>> = {
-  'pt-BR': {presence:'Presença',table:'Mesa Aberta',care:'Cuidado & Conexão',house:'Casas de Paz',discipleship:'Raiz',support:'Apoio Geral'},
-  en: {presence:'Presence',table:'Open Table',care:'Care & Connection',house:'Peace Houses',discipleship:'Root',support:'General Support'},
-  es: {presence:'Presencia',table:'Mesa Abierta',care:'Cuidado y Conexión',house:'Casas de Paz',discipleship:'Raíz',support:'Apoyo General'},
+  'pt-BR': {presence:'Presença',table:'Encontros',care:'Cuidado',house:'Grupos',discipleship:'Acompanhamento',support:'Apoio Geral'},
+  en: {presence:'Presence',table:'Gatherings',care:'Care',house:'Groups',discipleship:'Mentoring',support:'General Support'},
+  es: {presence:'Presencia',table:'Encuentros',care:'Cuidado',house:'Grupos',discipleship:'Acompañamiento',support:'Apoyo General'},
 }
 export const SERVICE_TEAM_ROLE_LABELS: Record<AppLocale, Record<ServiceTeamRole, string>> = {
   'pt-BR': {leader:'Líder',integrant:'Integrante',auxiliary:'Auxiliar',trainee:'Em formação',other:'Outra função'},

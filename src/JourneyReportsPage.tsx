@@ -37,7 +37,7 @@ const copy={
   'pt-BR':{
     title:'Relatórios',subtitle:'Indicadores objetivos da operação. Sem score espiritual, sem ranking de pessoas.',
     loading:'Montando os relatórios…',noAccess:'Seu papel não possui acesso aos relatórios de gestão.',unit:'Unidade',
-    people:'Pessoas',careOpen:'Cuidados abertos',careDebt:'Cuidado atrasado',sessions:'Sessões abertas',groups:'Casas',nearCapacity:'Casas perto da capacidade',root:'Raiz ativo',pastoral:'Encaminhamentos pastorais',
+    people:'Pessoas',careOpen:'Cuidados abertos',careDebt:'Cuidado atrasado',sessions:'Sessões abertas',groups:'Grupos',nearCapacity:'Grupos perto da capacidade',root:'Acompanhamento ativo',pastoral:'Encaminhamentos pastorais',
     careHealth:'Cuidado no prazo',careHealthDesc:'Compromissos abertos e atrasados ajudam a coordenação a redistribuir carga.',
     continuity:'Continuidade 30/60/90',continuityDesc:'Continuidade factual: retorno registrado, vínculo com Casa ou Raiz ativo. Não é score de fé, maturidade ou valor.',
     eligible:'com tempo de acompanhamento',continued:'com continuidade registrada',
@@ -47,7 +47,7 @@ const copy={
   en:{
     title:'Reports',subtitle:'Objective operational indicators. No spiritual score and no ranking of people.',
     loading:'Building reports…',noAccess:'Your role does not have access to management reports.',unit:'Campus',
-    people:'People',careOpen:'Open care',careDebt:'Overdue care',sessions:'Open sessions',groups:'Houses',nearCapacity:'Houses near capacity',root:'Active Root',pastoral:'Pastoral handoffs',
+    people:'People',careOpen:'Open care',careDebt:'Overdue care',sessions:'Open sessions',groups:'Groups',nearCapacity:'Groups near capacity',root:'Active mentoring',pastoral:'Pastoral handoffs',
     careHealth:'Care timing',careHealthDesc:'Open and overdue commitments help coordinators redistribute workload.',
     continuity:'30/60/90 continuity',continuityDesc:'Factual continuity: recorded return, House link, or active Root. This is not a score of faith, maturity, or human worth.',
     eligible:'with enough follow-up time',continued:'with recorded continuity',
@@ -57,7 +57,7 @@ const copy={
   es:{
     title:'Informes',subtitle:'Indicadores operativos objetivos. Sin puntuación espiritual ni ranking de personas.',
     loading:'Preparando informes…',noAccess:'Tu papel no tiene acceso a los informes de gestión.',unit:'Sede',
-    people:'Personas',careOpen:'Cuidados abiertos',careDebt:'Cuidado atrasado',sessions:'Sesiones abiertas',groups:'Casas',nearCapacity:'Casas cerca de capacidad',root:'Raíz activo',pastoral:'Derivaciones pastorales',
+    people:'Personas',careOpen:'Cuidados abiertos',careDebt:'Cuidado atrasado',sessions:'Sesiones abiertas',groups:'Grupos',nearCapacity:'Grupos cerca de capacidad',root:'Acompañamiento activo',pastoral:'Derivaciones pastorales',
     careHealth:'Cuidado a tiempo',careHealthDesc:'Compromisos abiertos y atrasados ayudan a redistribuir la carga.',
     continuity:'Continuidad 30/60/90',continuityDesc:'Continuidad factual: retorno registrado, vínculo con Casa o Raíz activo. No es puntuación de fe, madurez ni valor.',
     eligible:'con tiempo suficiente de acompañamiento',continued:'con continuidad registrada',
@@ -156,7 +156,7 @@ export default function JourneyReportsPage(){
   const focusTitle=metrics.careDebt>0
     ?locale==='en'?metrics.careDebt+' overdue care promise(s)':locale==='es'?metrics.careDebt+' promesa(s) de cuidado vencida(s)':metrics.careDebt+' promessa(s) de cuidado vencida(s)'
     :metrics.near>0
-      ?locale==='en'?metrics.near+' House(s) near capacity':locale==='es'?metrics.near+' Casa(s) cerca de la capacidad':metrics.near+' Casa(s) perto da capacidade'
+      ?locale==='en'?metrics.near+' House(s) near capacity':locale==='es'?metrics.near+' grupo(s) cerca del límite':metrics.near+' grupo(s) perto do limite'
       :metrics.pastoral>0
         ?locale==='en'?metrics.pastoral+' pastoral handoff(s) open':locale==='es'?metrics.pastoral+' derivación(es) pastoral(es) abiertas':metrics.pastoral+' encaminhamento(s) pastoral(is) aberto(s)'
         :locale==='en'?'No critical operational signal in this campus':locale==='es'?'Sin señal operativa crítica en esta sede':'Nenhum sinal operacional crítico nesta unidade'
@@ -192,8 +192,8 @@ export default function JourneyReportsPage(){
       <div><span><Users size={16}/><strong>{t.people}</strong><p>{locale==='en'?'People recorded in this campus.':locale==='es'?'Personas registradas en esta sede.':'Pessoas registradas nesta unidade.'}</p></span><b>{metrics.people}</b></div>
       <div><span><HeartHandshake size={16}/><strong>{labels.care||t.careOpen}</strong><p>{t.careHealthDesc}</p></span><b>{careOnTime} / {metrics.careOpen}</b></div>
       <div><span><UserCheck size={16}/><strong>{t.sessions}</strong><p>{locale==='en'?'Open service sessions right now.':locale==='es'?'Sesiones de culto abiertas ahora.':'Sessões de culto abertas agora.'}</p></span><b>{metrics.sessions}</b></div>
-      <div><span><House size={16}/><strong>{labels.groups||t.groups}</strong><p>{locale==='en'?'Houses registered; attention only when near capacity.':locale==='es'?'Casas registradas; atención solo cuando se acercan a la capacidad.':'Casas registradas; atenção somente quando se aproximam da capacidade.'}</p></span><b>{metrics.groups}</b></div>
-      <div><span><Leaf size={16}/><strong>{labels.discipleship||t.root}</strong><p>{locale==='en'?'Active Root relationships.':locale==='es'?'Acompañamientos activos de Raíz.':'Acompanhamentos ativos no Raiz.'}</p></span><b>{metrics.discipleships}</b></div>
+      <div><span><House size={16}/><strong>{labels.groups||t.groups}</strong><p>{locale==='en'?'Groups registered; attention only when near capacity.':locale==='es'?'Grupos registrados; atención solo al alcanzar su capacidad.':'Grupos registrados; atenção somente quando se aproximam da capacidade.'}</p></span><b>{metrics.groups}</b></div>
+      <div><span><Leaf size={16}/><strong>{labels.discipleship||t.root}</strong><p>{locale==='en'?'Active mentoring relationships.':locale==='es'?'Acompañamientos activos registrados.':'Acompanhamentos ativos registrados.'}</p></span><b>{metrics.discipleships}</b></div>
     </section>
     <section className="journey-section-block">
       <header><div><span className="journey-section-kicker">{t.continuity}</span><h2>{t.continuity}</h2><p>{t.continuityDesc}</p></div></header>

@@ -5,17 +5,17 @@ const copy={
   'pt-BR':{
     title:'Jornada de cuidado',
     note:'Uma trilha, não uma esteira. O próximo passo nasce de vínculo, abertura e cuidado real.',
-    steps:['Culto','Mesa Aberta','Cuidado','Casa de Paz','Raiz','Vida & Serviço','Multiplicação'],
+    steps:['Culto','Encontros','Cuidado','Grupos','Acompanhamento','Participação','Serviço'],
   },
   en:{
     title:'Care journey',
     note:'A path, not a conveyor belt. The next step grows from relationship, openness, and real care.',
-    steps:['Service','Open Table','Care','Peace House','Root','Life & Service','Multiplication'],
+    steps:['Service','Gatherings','Care','Groups','Mentoring','Participation','Service'],
   },
   es:{
     title:'Jornada de cuidado',
     note:'Un camino, no una cinta transportadora. El próximo paso nace de vínculo, apertura y cuidado real.',
-    steps:['Culto','Mesa Abierta','Cuidado','Casa de Paz','Raíz','Vida y Servicio','Multiplicación'],
+    steps:['Culto','Encuentros','Cuidado','Grupos','Acompañamiento','Participación','Servicio'],
   },
 } as const
 

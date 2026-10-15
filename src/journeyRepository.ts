@@ -1,10 +1,11 @@
 import {
-  Timestamp, collection, doc, getDoc, getDocs, onSnapshot, query, runTransaction, serverTimestamp, setDoc, updateDoc, where, writeBatch,
+  Timestamp, collection, doc, getDoc, getDocFromServer, getDocs, onSnapshot, query, runTransaction, serverTimestamp, setDoc, updateDoc, where, writeBatch,
   type Firestore,
 } from 'firebase/firestore'
 import { db } from './firebase'
+import { presenceIntentCheckId } from './presenceIntent'
 import { journeyCollectionPath } from './productIdentity'
-import { createRaizEMesaPlaybook, JOURNEY_PLAYBOOK_DEFAULT_ID, normalizeJourneyPlaybook, type JourneyPlaybookDefinition } from './playbookEngine'
+import { createRaizEMesaPlaybook, createNeutralJourneyPlaybook, JOURNEY_PLAYBOOK_DEFAULT_ID, normalizeJourneyPlaybook, type JourneyPlaybookDefinition } from './playbookEngine'
 import { planFollowupOutcome, type FollowupNextActionCode, type FollowupOutcomeCode } from './followup'
 import { calculatePresenceCoverage, canUseAbsenceEvidence, type CarePromise, type PresenceCheck, type PresenceSession, type PresenceSource, type PresenceVerificationState } from './intelligence'
 import { evaluateAuthorizedContact, normalizeGroupCapacity, type GroupCapacityPolicy, type PreferredContactChannel } from './roadmapReadiness'
@@ -259,6 +260,9 @@ export interface PresencePerson {
 }
 
 export interface JourneyPersonRecord extends PresencePerson {
+  communityStatus?: 'member' | 'regular' | 'visitor' | 'former_member' | 'not_informed'
+  preferredName?: string
+  profileRevision?: number
   firstVisit?: string
   stage?: string
   groupId?: string
@@ -484,6 +488,7 @@ export interface MinimalVisitorInput {
   congregationId: string
   actorId: string
   name: string
+  requestId?: string
   phone?: string
   consent: boolean
   preferredContactChannel?: PreferredContactChannel
@@ -824,6 +829,8 @@ export async function loadJourneyAccess(userId: string, organizationId: string):
   const role = asString(membership.journeyRole || organizationRole)
   const congregationIds = asStringArray(membership.congregationIds)
   const organizationHasBroadAccess = ['owner', 'admin', 'pastor', 'data_admin'].includes(organizationRole)
+  const isActiveChurchMember = membership.status === undefined || ['active','ativo'].includes(asString(membership.status))
+  const hasPastoralChurchRole = isOwner || (isActiveChurchMember && PASTORAL_ROLES.has(organizationRole))
 
   const resolved: JourneyAccessContext = {
     organizationId,
@@ -844,7 +851,7 @@ export async function loadJourneyAccess(userId: string, organizationId: string):
     canManageImplementation: isSystemAdmin || isOwner || IMPLEMENTATION_ROLES.has(organizationRole) || IMPLEMENTATION_ROLES.has(role) || permissions.canManageImplementation === true,
     canViewGovernance: isSystemAdmin || isOwner || GOVERNANCE_ROLES.has(organizationRole) || GOVERNANCE_ROLES.has(role) || permissions.canViewGovernance === true,
     canManagePrivacy: isSystemAdmin || isOwner || PRIVACY_ROLES.has(organizationRole) || PRIVACY_ROLES.has(role) || permissions.canManagePrivacy === true,
-    canManagePastoral: isSystemAdmin || isOwner || PASTORAL_ROLES.has(organizationRole) || PASTORAL_ROLES.has(role) || permissions.canManagePastoral === true,
+    canManagePastoral: hasPastoralChurchRole || (isActiveChurchMember && permissions.canManagePastoral === true),
     broadJourneyAccess: isSystemAdmin
       || isOwner
       || organizationHasBroadAccess
@@ -1003,7 +1010,8 @@ export async function loadActiveJourneyPlaybook(access: JourneyAccessContext): P
   const playbooks = await listJourneyPlaybooks(access)
   const active = playbooks.find((item) => item.status === 'active')
   if (active) return active
-  return ensureDefaultJourneyPlaybook(access)
+  // No project enrolled: use a neutral, transient view. Do not write the Raiz e Mesa template.
+  return createNeutralJourneyPlaybook(access.organizationId)
 }
 
 export async function setActiveJourneyPlaybook(access: JourneyAccessContext, playbookId: string) {
@@ -1187,6 +1195,9 @@ export async function listJourneyPeople(organizationId: string, congregationId: 
       bondHostRef: asString(data.bondHostRef) || undefined,
       bondAssignedAt: data.bondAssignedAt ? toIso(data.bondAssignedAt) : undefined,
       firstVisit: asString(data.firstVisit) || undefined,
+      preferredName: asString(data.preferredName) || undefined,
+      communityStatus: (asString(data.communityStatus) || undefined) as JourneyPersonRecord['communityStatus'],
+      profileRevision: typeof data.profileRevision === 'number' ? data.profileRevision : 0,
       stage: asString(data.stage) || undefined,
       groupId: asString(data.groupId) || undefined,
       createdAt: data.createdAt ? toIso(data.createdAt) : undefined,
@@ -2324,6 +2335,9 @@ export async function listPresenceSessions(organizationId: string, congregationI
       closedAt: data.closedAt ? toIso(data.closedAt) : undefined,
       expectedPeopleCount: typeof data.expectedPeopleCount === 'number' ? data.expectedPeopleCount : 0,
       minimumCoveragePercent: typeof data.minimumCoveragePercent === 'number' ? data.minimumCoveragePercent : 90,
+      eligiblePersonIds: Array.isArray(data.eligiblePersonIds) ? data.eligiblePersonIds.filter((id: unknown): id is string => typeof id === 'string' && id.length > 0) : undefined,
+      eligibilityVersion: data.eligibilityVersion === 1 ? 1 : undefined,
+      eventTypeId: asString(data.eventTypeId) || undefined,
       status,
       createdBy: asString(data.createdBy),
       closedBy: asString(data.closedBy) || undefined,
@@ -2354,6 +2368,7 @@ export async function listPresenceChecks(organizationId: string, congregationId:
       actorId: asString(data.actorId),
       recordedAt: toIso(data.recordedAt),
       correctedFromCheckId: asString(data.correctedFromCheckId) || undefined,
+      correctionReason: asString(data.correctionReason) || undefined,
     }
   })
 }
@@ -2524,6 +2539,12 @@ export async function claimJourneyPersonBond(input: {
   return String(data.bondHostRef || input.access.userId)
 }
 
+/** Do not deliberately queue sensitive church facts in offline browser storage. */
+function assertSensitiveJourneyWriteIsOnline() {
+  if(typeof navigator!=='undefined' && navigator.onLine===false)
+    throw new Error('sensitive_write_offline_blocked')
+}
+
 export async function createPresenceSession(input: {
   organizationId: string
   congregationId: string
@@ -2531,10 +2552,21 @@ export async function createPresenceSession(input: {
   eventName: string
   expectedPeopleCount: number
   minimumCoveragePercent: number
+  eligiblePersonIds?: string[]
+  eventTypeId?: string
+  eventSeriesId?: string
+  requestId?: string
 }) {
+  assertSensitiveJourneyWriteIsOnline()
+  const roster = input.eligiblePersonIds
+  if (roster && (roster.length > 2000 || new Set(roster).size !== roster.length || roster.some(id => !id || id.includes('/')) || input.expectedPeopleCount !== roster.length)) throw new Error('session_roster_invalid')
+  const eventTypeId = String(input.eventTypeId || 'general').trim()
+  if (!/^[a-z][a-z0-9_-]{0,39}$/.test(eventTypeId)) throw new Error('event_type_invalid')
+  if (input.eventSeriesId && !/^[A-Za-z0-9_-]{1,120}$/.test(input.eventSeriesId)) throw new Error('event_series_id_invalid')
+  if (input.requestId && !/^[A-Za-z0-9_-]{8,120}$/.test(input.requestId)) throw new Error('session_request_id_invalid')
   const firestore = requireDb()
   const sessions = collection(firestore, journeyCollectionPath(input.organizationId, 'presenceSessions'))
-  const sessionRef = doc(sessions)
+  const sessionRef = input.requestId ? doc(sessions, 'req_'+input.requestId) : doc(sessions)
   const factRef = doc(firestore, `${journeyCollectionPath(input.organizationId, 'facts')}/presence-session-${sessionRef.id}`)
   const batch = writeBatch(firestore)
   const eventRef = `event:${sessionRef.id}`
@@ -2549,6 +2581,9 @@ export async function createPresenceSession(input: {
     status: 'open',
     expectedPeopleCount: Math.max(0, Math.floor(input.expectedPeopleCount)),
     minimumCoveragePercent: Math.max(0, Math.min(100, input.minimumCoveragePercent)),
+    ...(roster ? { eligiblePersonIds: roster, eligibilityVersion: 1, eligibilitySource: 'operator_confirmed_unit_roster' } : {}),
+    eventTypeId,
+    ...(input.eventSeriesId ? { eventSeriesId: input.eventSeriesId } : {}),
     createdBy: input.actorId,
   })
   batch.set(factRef, {
@@ -2566,7 +2601,31 @@ export async function createPresenceSession(input: {
     version: 1,
     payload: { sessionId: sessionRef.id },
   })
-  await batch.commit()
+  try {
+    await batch.commit()
+  } catch (cause) {
+    // A successful write can lose its network acknowledgement. Do not create
+    // another session on retry, and accept only the exact persisted request.
+    if (input.requestId) {
+      try {
+        const existing=await getDocFromServer(sessionRef)
+        const value=existing.data()
+        if(existing.exists()
+          && value?.organizationId===input.organizationId
+          && value.congregationId===input.congregationId
+          && value.createdBy===input.actorId
+          && value.eventName===input.eventName
+          && value.eventTypeId===eventTypeId
+          && value.expectedPeopleCount===input.expectedPeopleCount
+          && (value.eventSeriesId||'')===(input.eventSeriesId||'')){
+          return sessionRef.id
+        }
+      } catch {
+        // Preserve the original failure if server verification is unavailable.
+      }
+    }
+    throw cause
+  }
   return sessionRef.id
 }
 
@@ -2578,9 +2637,14 @@ export async function recordPresenceCheck(input: {
   actorId: string
   state: PresenceVerificationState
   correctedFromCheckId?: string
+  correctionReason?: string
 }) {
+  assertSensitiveJourneyWriteIsOnline()
+  if (input.state === 'unverified' && !input.correctedFromCheckId) throw new Error('unverified_requires_previous_check')
+  if (input.correctedFromCheckId && (!input.correctionReason?.trim() || input.correctionReason.trim().length > 240)) throw new Error('correction_reason_required')
   const firestore = requireDb()
-  const checkRef = doc(collection(firestore, journeyCollectionPath(input.organizationId, 'presenceChecks')))
+  const intentId=await presenceIntentCheckId(input)
+  const checkRef = doc(firestore, journeyCollectionPath(input.organizationId, 'presenceChecks')+'/'+intentId)
   const batch = writeBatch(firestore)
   const isCorrection = Boolean(input.correctedFromCheckId)
   const source: PresenceSource = isCorrection ? 'retroactive_human_correction' : 'human_check'
@@ -2594,10 +2658,10 @@ export async function recordPresenceCheck(input: {
     source,
     actorId: input.actorId,
     recordedAt: serverTimestamp(),
-    ...(isCorrection ? { correctedFromCheckId: input.correctedFromCheckId } : {}),
+    ...(isCorrection ? { correctedFromCheckId: input.correctedFromCheckId, correctionReason: input.correctionReason!.trim() } : {}),
   })
 
-  if (input.state !== 'unverified') {
+  if (input.state !== 'unverified' || isCorrection) {
     const factRef = doc(firestore, `${journeyCollectionPath(input.organizationId, 'facts')}/presence-${checkRef.id}`)
     batch.set(factRef, {
       eventId: factRef.id,
@@ -2617,12 +2681,36 @@ export async function recordPresenceCheck(input: {
         sessionId: input.sessionId,
         state: input.state,
         source,
-        ...(isCorrection ? { correctedFromCheckId: input.correctedFromCheckId } : {}),
+        ...(isCorrection ? { correctedFromCheckId: input.correctedFromCheckId, correctionReason: input.correctionReason!.trim() } : {}),
       },
     })
   }
 
-  await batch.commit()
+  try {
+    await batch.commit()
+  } catch (cause) {
+    // Firestore rejects an attempted rewrite of a previously committed check.
+    // If the first response was lost, verify the exact persisted intent server-side.
+    // Do not trust offline cache or suppress unrelated validation failures.
+    try {
+      const existing=await getDocFromServer(checkRef)
+      const value=existing.data()
+      if(existing.exists()
+        && value?.organizationId===input.organizationId
+        && value.congregationId===input.congregationId
+        && value.sessionId===input.sessionId
+        && value.personId===input.personId
+        && value.actorId===input.actorId
+        && value.state===input.state
+        && (value.correctedFromCheckId||'')===(input.correctedFromCheckId||'')
+        && (value.correctionReason||'')===(input.correctionReason?.trim()||'')){
+        return checkRef.id
+      }
+    } catch {
+      // A server read can fail during a real outage; preserve the original error.
+    }
+    throw cause
+  }
   return checkRef.id
 }
 
@@ -2632,6 +2720,7 @@ export async function closePresenceSession(
   checks: PresenceCheck[],
   actorId: string,
 ) {
+  assertSensitiveJourneyWriteIsOnline()
   const firestore = requireDb()
   const ref = doc(firestore, `${journeyCollectionPath(organizationId, 'presenceSessions')}/${session.id}`)
   const coverage = calculatePresenceCoverage(session, checks)
@@ -2646,7 +2735,31 @@ export async function closePresenceSession(
   await batch.commit()
 }
 
+
+/** Create a church person (without Hub login, invented visits, or implicit consent). */
+export async function createJourneyMember(input: { access: JourneyAccessContext; congregationId: string; name: string; preferredName?: string }): Promise<string> {
+  assertSensitiveJourneyWriteIsOnline()
+  const { access } = input
+  if (!(access.isOwner || ['owner', 'admin', 'pastor', 'data_admin'].includes(access.organizationRole))) throw new Error('member_registration_forbidden')
+  if (!access.broadJourneyAccess && !access.congregationIds.includes(input.congregationId)) throw new Error('member_unit_forbidden')
+  const name = input.name.trim().replace(/\s+/g, ' ')
+  const preferredName = String(input.preferredName ?? '').trim().replace(/\s+/g, ' ')
+  if (name.length < 2 || name.length > 160 || preferredName.length > 120) throw new Error('member_name_invalid')
+  const firestore = requireDb()
+  const normalize = (value: string) => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR').trim().replace(/\s+/g, ' ')
+  const existing = await getDocs(collection(firestore, journeyCollectionPath(access.organizationId, 'people')))
+  if (existing.docs.some(item => normalize(asString(item.data().name)) === normalize(name))) throw new Error('person_possible_duplicate')
+  const ref = doc(collection(firestore, journeyCollectionPath(access.organizationId, 'people')))
+  await setDoc(ref, { organizationId: access.organizationId, congregationId: input.congregationId,
+    name, preferredName, communityStatus: 'member', consent: false, phone: '', preferredContactChannel: '',
+    visits: 0, stage: 'new', createdAt: serverTimestamp(), createdBy: access.userId, dataSource: 'manual_member_registration' })
+  return ref.id
+}
+
 export async function createMinimalVisitor(input: MinimalVisitorInput) {
+  assertSensitiveJourneyWriteIsOnline()
+  if(input.requestId && !/^[A-Za-z0-9_-]{8,120}$/.test(input.requestId))
+    throw new Error('visitor_request_id_invalid')
   const firestore = requireDb()
   const name = input.name.trim()
   if (!name) throw new Error('visitor_name_required')
@@ -2655,7 +2768,9 @@ export async function createMinimalVisitor(input: MinimalVisitorInput) {
   const readiness = evaluateAuthorizedContact({ consent, phone, preferredContactChannel: input.preferredContactChannel })
   if (!readiness.ok) throw new Error('visitor_contact_required')
   const preferredContactChannel = readiness.preferredContactChannel
-  const personRef = doc(collection(firestore, journeyCollectionPath(input.organizationId, 'people')))
+  const personRef = input.requestId
+    ? doc(firestore,journeyCollectionPath(input.organizationId,'people')+'/req_'+input.requestId)
+    : doc(collection(firestore, journeyCollectionPath(input.organizationId, 'people')))
   const factRef = doc(firestore, `${journeyCollectionPath(input.organizationId, 'facts')}/visitor-${personRef.id}`)
   const careRef = input.consent ? doc(collection(firestore, journeyCollectionPath(input.organizationId, 'careRequests'))) : null
   const careRequestedFactRef = careRef
@@ -2719,7 +2834,31 @@ export async function createMinimalVisitor(input: MinimalVisitorInput) {
     })
   }
 
-  await batch.commit()
+  try {
+    await batch.commit()
+  } catch (cause) {
+    if(input.requestId){
+      // If the server committed but the acknowledgement was lost, return only
+      // a verified matching registration; do not recreate a second care task.
+      try{
+        const prior=await getDocFromServer(personRef)
+        const value=prior.data()
+        if(prior.exists()
+          && value?.organizationId===input.organizationId
+          && value.congregationId===input.congregationId
+          && value.createdBy===input.actorId
+          && value.name===name
+          && value.consent===consent
+          && (value.phone||'')===(consent?phone:'')
+          && (value.preferredContactChannel||'')===(consent?preferredContactChannel:''))
+          return {id:personRef.id,organizationId:input.organizationId,congregationId:input.congregationId,
+            name,phone:consent?phone:undefined,consent,preferredContactChannel,visits:1} satisfies PresencePerson
+      }catch{
+        // Server verification unavailable: preserve original error.
+      }
+    }
+    throw cause
+  }
   return { id: personRef.id, organizationId: input.organizationId, congregationId: input.congregationId, name, phone: consent ? phone : undefined, consent, preferredContactChannel, visits: 1 } satisfies PresencePerson
 }
 

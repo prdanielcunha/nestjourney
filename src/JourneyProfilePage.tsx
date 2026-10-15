@@ -5,6 +5,7 @@ import { buildJourneyProfileSnapshot } from './journeyProfile'
 import {
   canManageJourneyGroupRoster,
   getActiveJourneyOrganizationId, resolveActiveJourneyCongregationId, setActiveJourneyCongregationId,
+  createJourneyMember,
   listCareRequests,
   listJourneyCongregations,
   listJourneyDiscipleships,
@@ -30,6 +31,15 @@ import { emptyGuidance } from './emptyGuidance'
 import { AccessDeniedState } from './AccessDeniedState'
 import { JourneyPath, inferJourneyStep } from './JourneyPath'
 import { JourneyAreaFocus } from './JourneyAreaFocus'
+import { FamilyPanel } from './FamilyPanel'
+import { VerifiedFrequencyPanel } from './VerifiedFrequencyPanel'
+import { MemberImportPanel } from './MemberImportPanel'
+import { canImportJourneyMembers } from './memberBulkImportRepository'
+import { PersonAdminPanel } from './PersonAdminPanel'
+import { CrossUnitVisitsPanel } from './CrossUnitVisitsPanel'
+import { PersonAliasPanel } from './PersonAliasPanel'
+import { PersonAvailabilityPanel } from './PersonAvailabilityPanel'
+import { loadJourneyRolloutFlags, DEFAULT_JOURNEY_ROLLOUT_FLAGS, type JourneyRolloutFlags } from './journeyReleaseFlags'
 import './JourneyProfilePage.css'
 
 function initials(name: string) {
@@ -46,9 +56,13 @@ export default function JourneyProfilePage() {
   const [locale, setLocale] = useState<AppLocale>(getInitialLocale)
   const t = journeyProfileCopy[locale]
   const [access, setAccess] = useState<JourneyAccessContext | null>(null)
+  const [rollout,setRollout]=useState<JourneyRolloutFlags>(DEFAULT_JOURNEY_ROLLOUT_FLAGS)
   const [congregations, setCongregations] = useState<JourneyCongregation[]>([])
   const [congregationId, setCongregationId] = useState('')
   const [people, setPeople] = useState<JourneyPersonRecord[]>([])
+  const [showMemberForm, setShowMemberForm] = useState(false)
+  const [memberName, setMemberName] = useState('')
+  const [memberPreferredName, setMemberPreferredName] = useState('')
   const [care, setCare] = useState<CareRequestRecord[]>([])
   const [groups, setGroups] = useState<JourneyGroupRecord[]>([])
   const [memberships, setMemberships] = useState<JourneyGroupMembership[]>([])
@@ -61,7 +75,33 @@ export default function JourneyProfilePage() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
+  useEffect(()=>{
+    if(!access){setRollout(DEFAULT_JOURNEY_ROLLOUT_FLAGS);return}
+    let active=true
+    void loadJourneyRolloutFlags(access)
+      .then(value=>{if(active)setRollout(value)})
+      .catch(()=>{if(active)setRollout(DEFAULT_JOURNEY_ROLLOUT_FLAGS)})
+    return()=>{active=false}
+  },[access])
   const canView = Boolean(access && canViewJourneyPeople(access))
+  const canRegisterMember = canImportJourneyMembers(access)
+  async function registerMember() {
+    if (!access || !canRegisterMember || !congregationId) return
+    setBusy(true); setError('')
+    try {
+      const id = await createJourneyMember({ access, congregationId, name: memberName, preferredName: memberPreferredName })
+      await refreshScope(access, congregationId)
+      setSelectedId(id)
+      setMemberName('')
+      setMemberPreferredName('')
+      setShowMemberForm(false)
+    } catch (cause) {
+      console.error('Member registration failed', cause)
+      setError(cause instanceof Error && cause.message === 'person_possible_duplicate'
+        ? (locale === 'en' ? 'A person with this name is already registered. Check the existing profile first.' : locale === 'es' ? 'Ya existe una persona con este nombre. Revise su ficha antes de crear otro registro.' : 'Já existe uma pessoa com esse nome. Confira o cadastro existente antes de criar outro.')
+        : t.error)
+    } finally { setBusy(false) }
+  }
   const canReadDiscipleship = Boolean(access && (access.broadJourneyAccess || access.canManageDiscipleship))
   const selected = people.find((person) => person.id === selectedId) ?? people[0]
   const snapshot = useMemo(() => selected ? buildJourneyProfileSnapshot({ person: selected, careRequests: care, groups, memberships, discipleships }) : null, [selected, care, groups, memberships, discipleships])
@@ -171,7 +211,7 @@ export default function JourneyProfilePage() {
       href:'/care-integrity',
     }
     if(canReadDiscipleship&&snapshot.discipleship&&snapshot.discipleship.status!=='completed')return{
-      title:locale==='en'?'Root · meeting '+snapshot.discipleship.meeting+'/'+(activePlaybook?.discipleshipMeetingCount??7):locale==='es'?'Raíz · encuentro '+snapshot.discipleship.meeting+'/'+(activePlaybook?.discipleshipMeetingCount??7):'Raiz · encontro '+snapshot.discipleship.meeting+'/'+(activePlaybook?.discipleshipMeetingCount??7),
+      title:(activePlaybook?.areaLabels.discipleship|| (locale==='en'?'Mentoring':locale==='es'?'Acompañamiento':'Acompanhamento'))+' · '+(locale==='en'?'meeting ':locale==='es'?'encuentro ':'encontro ')+snapshot.discipleship.meeting+'/'+(activePlaybook?.discipleshipMeetingCount??7),
       body:locale==='en'?'The active discipleship relationship is this person’s current recorded next step.':locale==='es'?'La relación activa de discipulado es el próximo paso registrado para esta persona.':'O acompanhamento ativo no discipulado é o próximo passo registrado desta pessoa.',
       href:'/discipleship-runtime',
     }
@@ -201,10 +241,25 @@ export default function JourneyProfilePage() {
 
     <section className="journey-hero">
       <div><span className="journey-kicker">Journey / Profile</span><h1>{t.title}</h1><p>{t.subtitle}</p></div>
-      <div className="journey-shortcuts">{shortcuts.map((item,index)=>{const Icon=item.Icon;return <a className={'journey-button '+(index===shortcuts.length-1?'primary':'')} href={item.href} key={item.href}><Icon size={16}/>{item.label}</a>})}</div>
+      <div className="journey-shortcuts">{shortcuts.map((item,index)=>{const Icon=item.Icon;return <a className={'journey-button '+(index===shortcuts.length-1?'primary':'')} href={item.href} key={item.href}><Icon size={16}/>{item.label}</a>})}{canRegisterMember ? <button type="button" className="journey-button primary" onClick={() => setShowMemberForm(value => !value)} aria-expanded={showMemberForm}>{locale==='en'?'Register member':locale==='es'?'Registrar miembro':'Cadastrar membro'}</button> : null}</div>
     </section>
 
     {error ? <div className="journey-error" role="alert">{error}</div> : null}
+
+    {showMemberForm && canRegisterMember ? <section className="journey-panel journey-member-entry" aria-label={locale==='en'?'Member registration':locale==='es'?'Registro de miembro':'Cadastro de membro'}>
+      <h2>{locale==='en'?'New member':locale==='es'?'Nuevo miembro':'Novo membro'}</h2>
+      <p>{locale==='en'?'A member does not need a MillionsNest login. Attendance and messaging are not assumed.' : locale==='es'?'El miembro no necesita acceso a MillionsNest. La asistencia y los mensajes no se presumen.' : 'O membro não precisa de login no MillionsNest. Presença e autorização de contato não são presumidas.'}</p>
+      <form onSubmit={event => {event.preventDefault();void registerMember()}}>
+        <label><span>{locale==='en'?'Full name':locale==='es'?'Nombre completo':'Nome completo'}</span><input required minLength={2} maxLength={160} autoComplete="name" value={memberName} onChange={e=>setMemberName(e.target.value)} /></label>
+        <label><span>{locale==='en'?'Preferred name (optional)':locale==='es'?'Nombre preferido (opcional)':'Nome preferido (opcional)'}</span><input maxLength={120} value={memberPreferredName} onChange={e=>setMemberPreferredName(e.target.value)}/></label>
+        <div className="journey-member-entry-actions">
+          <button type="button" className="journey-button" onClick={()=>setShowMemberForm(false)}>{locale==='en'?'Cancel':locale==='es'?'Cancelar':'Cancelar'}</button>
+          <button type="submit" disabled={busy || !congregationId || memberName.trim().length<2} className="journey-button primary">{busy?'…':locale==='en'?'Save member':locale==='es'?'Guardar miembro':'Salvar membro'}</button>
+        </div>
+      </form>
+    </section> : null}
+
+    {rollout.memberBulkImport && access && congregationId && canRegisterMember?<MemberImportPanel key={access.organizationId+':'+congregationId} access={access} congregationId={congregationId} people={people} locale={locale} onCompleted={()=>refreshScope(access,congregationId)}/>:null}
 
     <section className="journey-area-toolbar">
       {congregations.length>1?<label><span>{t.congregation}</span><select value={congregationId} onChange={(event) => void selectCongregation(event.target.value)} disabled={busy}>{congregations.map((item) => <option value={item.id} key={item.id}>{item.name}{item.city ? ` · ${item.city}` : ''}</option>)}</select></label>:null}
@@ -215,7 +270,7 @@ export default function JourneyProfilePage() {
       <aside className="journey-panel journey-people">
         <div className="journey-section-head"><span>{t.people}</span><b>{visiblePeople.length}</b></div>
         <div className="journey-people-list">
-          {visiblePeople.map((person) => <button className={selected?.id === person.id ? 'active' : ''} key={person.id} onClick={() => setSelectedId(person.id)}><span className="journey-avatar">{initials(person.name)}</span><span><strong>{person.name}</strong><small>{person.visits ?? 0} · {formatDate(person.firstVisit, locale)}</small></span></button>)}
+          {visiblePeople.map((person) => <button className={selected?.id === person.id ? 'active' : ''} key={person.id} onClick={() => setSelectedId(person.id)}><span className="journey-avatar">{initials(person.name)}</span><span><strong>{person.preferredName || person.name}</strong><small>{person.communityStatus==='member'?(locale==='en'?'Member':locale==='es'?'Miembro':'Membro'):`${person.visits ?? 0} · ${formatDate(person.firstVisit, locale)}`}</small></span></button>)}
           {!visiblePeople.length ? <p className="journey-empty">{t.noPeople}</p> : null}
         </div>
       </aside>
@@ -235,7 +290,7 @@ export default function JourneyProfilePage() {
             actions={[{label:locale==='en'?'Open next step':locale==='es'?'Abrir próximo paso':'Abrir próximo passo',href:profileFocus.href,primary:true}]}
           />:null}
 
-          <JourneyPath
+          {activePlaybook?.id!=='nestjourney-universal'?<JourneyPath
             locale={locale}
             steps={activePlaybook?.stages.map(stage=>stage.label)}
             currentStep={inferJourneyStep({
@@ -243,7 +298,7 @@ export default function JourneyProfilePage() {
               hasGroup:snapshot.groups.length>0,
               hasDiscipleship:Boolean(snapshot.discipleship),
             })}
-          />
+          />:null}
 
           <div className="journey-card-grid">
             <article className="journey-panel journey-domain-card">
@@ -262,6 +317,12 @@ export default function JourneyProfilePage() {
               {!canReadDiscipleship ? <p className="journey-muted">{t.restrictedDiscipleship}</p> : snapshot.discipleship ? <div className="journey-discipleship"><div><span>{t.status}</span><strong>{snapshot.discipleship.status === 'completed' ? t.completed : snapshot.discipleship.status === 'paused' ? t.paused : t.active}</strong></div><div><span>{t.meeting}</span><strong>{snapshot.discipleship.meeting}/{activePlaybook?.discipleshipMeetingCount??7}</strong></div><div><span>{t.discipler}</span><strong>{snapshot.discipleship.disciplerName || snapshot.discipleship.disciplerId}</strong></div></div> : <p className="journey-muted">{t.noDiscipleship}</p>}
             </article>
           </div>
+          {rollout.personProfileEdit && access && selected ? <PersonAdminPanel key={selected.id+':'+(selected.profileRevision??0)} access={access} person={selected} locale={locale} onSaved={()=>refreshScope(access,congregationId)}/> : null}
+          {rollout.familyLinks && access && selected ? <FamilyPanel access={access} person={selected} people={people} locale={locale}/> : null}
+          {rollout.personAvailability && access && selected ? <PersonAvailabilityPanel key={selected.id} access={access} person={selected} locale={locale}/> : null}
+          {rollout.personAliases && access && selected ? <PersonAliasPanel key={selected.id} access={access} person={selected} people={people} units={congregations} locale={locale}/> : null}
+          {rollout.crossUnitPresence && access && selected ? <CrossUnitVisitsPanel key={selected.id} access={access} person={selected} units={congregations} locale={locale}/> : null}
+          {rollout.verifiedFrequency && access && selected ? <VerifiedFrequencyPanel key={selected.id} access={access} person={selected} locale={locale}/> : null}
         </>}
       </section>
     </section>

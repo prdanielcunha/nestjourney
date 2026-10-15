@@ -30,6 +30,10 @@ import { GuidedEmptyState } from './GuidedEmptyState'
 import { emptyGuidance } from './emptyGuidance'
 import { AccessDeniedState } from './AccessDeniedState'
 import { JourneyAreaFocus } from './JourneyAreaFocus'
+import { CrossUnitPresencePanel } from './CrossUnitPresencePanel'
+import { EventSeriesPanel } from './EventSeriesPanel'
+import type { JourneyEventSeries } from './journeyEventSeries'
+import { loadJourneyRolloutFlags, DEFAULT_JOURNEY_ROLLOUT_FLAGS, type JourneyRolloutFlags } from './journeyReleaseFlags'
 import './PresenceAssistPage.css'
 
 function initials(name: string) {
@@ -103,6 +107,7 @@ export default function PresenceAssistPage() {
     title: labels.presence || defaultTitle,
   }
   const [access, setAccess] = useState<JourneyAccessContext | null>(null)
+  const [rollout, setRollout] = useState<JourneyRolloutFlags>(DEFAULT_JOURNEY_ROLLOUT_FLAGS)
   const [congregations, setCongregations] = useState<JourneyCongregation[]>([])
   const [congregationId, setCongregationId] = useState('')
   const [people, setPeople] = useState<PresencePerson[]>([])
@@ -115,7 +120,18 @@ export default function PresenceAssistPage() {
   const bootstrapRunRef = useRef(0)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const [online,setOnline]=useState(()=>typeof navigator==='undefined'||navigator.onLine!==false)
+  useEffect(()=>{
+    const sync=()=>setOnline(navigator.onLine!==false)
+    window.addEventListener('online',sync)
+    window.addEventListener('offline',sync)
+    return()=>{window.removeEventListener('online',sync);window.removeEventListener('offline',sync)}
+  },[])
+  const offlineNote=locale==='en'?'This device is offline. Attendance recording is paused to avoid unsynchronized or duplicated evidence. Reconnect before saving.'
+    :locale==='es'?'Este dispositivo no tiene conexión. Las nuevas marcas están pausadas para evitar registros pendientes o duplicados.'
+    :'Este dispositivo está sem conexão. Novas marcações estão suspensas para evitar registros pendentes ou duplicados. Reconecte antes de registrar.'
   const [showSession, setShowSession] = useState(false)
+  const [seriesPreset, setSeriesPreset] = useState<JourneyEventSeries|null>(null)
   const [showVisitor, setShowVisitor] = useState(false)
   const [routedAbsenceIds, setRoutedAbsenceIds] = useState<Set<string>>(new Set())
 
@@ -195,6 +211,14 @@ export default function PresenceAssistPage() {
   }, [refreshScope, t.error])
 
   useEffect(() => { void bootstrap() }, [bootstrap])
+  useEffect(()=>{
+    if(!access){setRollout(DEFAULT_JOURNEY_ROLLOUT_FLAGS);return}
+    let alive=true
+    void loadJourneyRolloutFlags(access).then(flags=>{if(alive)setRollout(flags)})
+      .catch(()=>{if(alive)setRollout(DEFAULT_JOURNEY_ROLLOUT_FLAGS)})
+    return()=>{alive=false}
+  },[access])
+
 
   useEffect(() => {
     if (!access?.canManagePresence || !congregationId) return
@@ -218,11 +242,13 @@ export default function PresenceAssistPage() {
     finally { setBusy(false) }
   }
 
-  async function markPresenceState(person: PresencePerson, state: Exclude<PresenceVerificationState, 'unverified'>) {
-    if (!access || !displaySession || displaySession.status !== 'open') return
+  async function markPresenceState(person: PresencePerson, state: PresenceVerificationState) {
+    if (!access || !displaySession || displaySession.status !== 'open' || !online) return
     const previous = latest.get(person.id)
     if (previous?.state === state) return
     if (state === 'absent_confirmed' && !window.confirm(t.confirmAbsent.replace('{name}', person.name))) return
+    const correctionReason = previous ? window.prompt(locale === 'en' ? 'Reason for correcting this check:' : locale === 'es' ? 'Motivo de la corrección:' : 'Motivo da correção desta presença:')?.trim() : undefined
+    if (previous && (!correctionReason || correctionReason.length > 240)) return
     setBusy(true)
     setError('')
     try {
@@ -233,7 +259,8 @@ export default function PresenceAssistPage() {
         personId: person.id,
         actorId: access.userId,
         state,
-        correctedFromCheckId: previous && previous.state !== 'unverified' ? previous.id : undefined,
+        correctedFromCheckId: previous?.id,
+        correctionReason,
       })
       setChecks(await listPresenceChecks(access.organizationId, congregationId, displaySession.id))
     } catch (cause) { console.error(cause); setError(t.error) }
@@ -241,7 +268,7 @@ export default function PresenceAssistPage() {
   }
 
   async function claimBond(person: PresencePerson) {
-    if (!access || person.bondHostRef) return
+    if (!access || person.bondHostRef || !online) return
     setBusy(true)
     setError('')
     try {
@@ -270,7 +297,7 @@ export default function PresenceAssistPage() {
   }
 
   async function routeAbsenceToCare(person: PresencePerson) {
-    if (!access || !displaySession || displaySession.status !== 'closed') return
+    if (!access || !displaySession || displaySession.status !== 'closed' || !online) return
     if (!confirmedAbsences.includes(person.id) || routedAbsenceIds.has(person.id)) return
     setBusy(true)
     setError('')
@@ -287,7 +314,7 @@ export default function PresenceAssistPage() {
 
   const noSessionGuide=emptyGuidance(locale,'presence_no_session')
   const noPeopleGuide=emptyGuidance(locale,'presence_no_people')
-  const canAddVisitor=Boolean(access?.canManagePeople&&displaySession?.status==='open')
+  const canAddVisitor=Boolean(access?.canManagePeople&&displaySession?.status==='open'&&online)
   const activeUnit=congregations.find(item=>item.id===congregationId)
   const unverifiedCount=coverage?.unverified??people.length
   const focusTitle=displaySession?.status==='open'
@@ -340,6 +367,7 @@ export default function PresenceAssistPage() {
     </section>
 
     {error ? <div className="presence-error" role="alert">{error}</div> : null}
+    {!online?<div className="presence-error" role="status">{offlineNote}</div>:null}
 
     <JourneyAreaFocus
       locale={locale}
@@ -355,9 +383,9 @@ export default function PresenceAssistPage() {
         ?[
           {label:locale==='en'?'Go to people':locale==='es'?'Ir a personas':'Ir para pessoas',href:'#presence-people',primary:true},
           ...(canAddVisitor?[{label:t.newVisitor,onClick:()=>setShowVisitor(true)}]:[]),
-          {label:t.close,onClick:()=>void closeSession(),disabled:busy},
+          {label:t.close,onClick:()=>void closeSession(),disabled:busy||!online},
         ]
-        :[{label:t.newSession,onClick:()=>setShowSession(true),disabled:!congregationId||busy,primary:true}]
+        :[{label:t.newSession,onClick:()=>setShowSession(true),disabled:!congregationId||busy||!online,primary:true}]
       }
     />
 
@@ -371,12 +399,16 @@ export default function PresenceAssistPage() {
       {coverage ? <><div className="coverage-wrap"><span className="coverage-number">{coverage.percent}%</span><div className="coverage-track" aria-label={`${t.coverage}: ${coverage.percent}%`}><span style={{ width: `${coverage.percent}%` }} /></div><div className="coverage-meta">{coverage.verified} {t.verified}<br />{coverage.unverified} {t.unverified}</div></div><p className="coverage-note">{coverage.meetsMinimum ? t.qualityReady : t.qualityNotReady}</p>{displaySession.status === 'closed' ? <p className="coverage-note">{coverage.meetsMinimum ? `${t.absenceEvidence}: ${confirmedAbsences.length}` : t.absenceBlocked}</p> : null}</> : null}
     </section> : <div className="presence-panel"><GuidedEmptyState icon={UserCheck} title={noSessionGuide.title} body={noSessionGuide.body} primary={{label:noSessionGuide.primary,onClick:()=>setShowSession(true)}} secondary={{label:noSessionGuide.secondary||t.back,href:'/my-today'}}/></div>}
 
+    {rollout.eventSeries && access && congregationId ? <EventSeriesPanel key={access.organizationId+':'+congregationId} access={access} congregationId={congregationId} locale={locale} canLaunch={displaySession?.status!=='open'} onLaunch={series=>{setSeriesPreset(series);setShowSession(true)}}/> : null}
+    {rollout.crossUnitPresence && displaySession?.status==='open' && access ? <CrossUnitPresencePanel access={access} congregationId={congregationId} units={congregations} session={displaySession} checks={checks} locale={locale} onChanged={()=>refreshScope(access.organizationId,congregationId)}/> : null}
+
     <div className="presence-list-head" id="presence-people"><h2>{t.people} · {visiblePeople.length}</h2><span className="presence-badge"><ShieldCheck size={14} /> {t.sourceRule}</span></div>
     <section className="presence-grid">
       {visiblePeople.map((person) => {
         const current = latest.get(person.id)
         const present = current?.state === 'present_confirmed'
         const absent = current?.state === 'absent_confirmed'
+        const eligible = !displaySession?.eligiblePersonIds || displaySession.eligiblePersonIds.includes(person.id)
         const absenceUsable = Boolean(displaySession?.status === 'closed' && confirmedAbsences.includes(person.id))
         const contactAllowed = Boolean(person.consent && person.phone)
         const routedToCare = routedAbsenceIds.has(person.id)
@@ -385,16 +417,18 @@ export default function PresenceAssistPage() {
           <span className={`presence-state ${present ? 'confirmed' : absent ? 'absent' : ''}`}>{present ? t.present : absent ? t.absent : t.notVerified}{current?.correctedFromCheckId ? ` · ${t.correcting}` : ''}</span>
           <div className="presence-bond-row">
             <span className={`presence-bond-state ${person.bondHostRef ? 'assigned' : ''}`}><HeartHandshake size={14}/>{person.bondHostRef ? (person.bondHostRef === access.userId ? bond.mine : bond.assigned) : bond.none}</span>
-            {!person.bondHostRef && displaySession?.status === 'open' ? <button className="presence-bond-button" disabled={busy} onClick={() => void claimBond(person)}>{bond.claim}</button> : null}
+            {!person.bondHostRef && displaySession?.status === 'open' ? <button className="presence-bond-button" disabled={busy||!online} onClick={() => void claimBond(person)}>{bond.claim}</button> : null}
           </div>
           {absenceUsable ? <div className={`presence-absence-care ${contactAllowed ? '' : 'blocked'}`}>
             <HeartHandshake size={15}/>
             <div><strong>{routedToCare ? absenceCare.routed : contactAllowed ? absenceCare.route : absenceCare.noContact}</strong><p>{contactAllowed ? absenceCare.routeHint : absenceCare.noContactHint}</p></div>
-            {contactAllowed && !routedToCare ? <button className="presence-bond-button" disabled={busy} onClick={() => void routeAbsenceToCare(person)}>{absenceCare.route}</button> : null}
+            {contactAllowed && !routedToCare ? <button className="presence-bond-button" disabled={busy||!online} onClick={() => void routeAbsenceToCare(person)}>{absenceCare.route}</button> : null}
           </div> : null}
+          {!eligible?<p className="presence-eligibility-note">{locale==='en'?'Outside this event’s eligible roster: only a verified presence may be recorded.':locale==='es'?'Fuera de la lista elegible: solo se puede confirmar presencia.':'Fora do público elegível deste evento: somente presença real pode ser confirmada.'}</p>:null}
           <div className="presence-person-actions">
-            <button className={`presence-button ${present ? 'success' : 'primary'}`} disabled={busy || present || displaySession?.status !== 'open'} onClick={() => void markPresenceState(person, 'present_confirmed')}>{present ? <><Check size={17} /> {t.present}</> : t.markPresent}</button>
-            <button className={`presence-button ${absent ? 'absence' : ''}`} disabled={busy || absent || displaySession?.status !== 'open'} onClick={() => void markPresenceState(person, 'absent_confirmed')}>{absent ? <><X size={17} /> {t.absent}</> : t.markAbsent}</button>
+            <button className={`presence-button ${present ? 'success' : 'primary'}`} disabled={busy || !online || present || displaySession?.status !== 'open'} onClick={() => void markPresenceState(person, 'present_confirmed')}>{present ? <><Check size={17} /> {t.present}</> : t.markPresent}</button>
+            <button className={`presence-button ${absent ? 'absence' : ''}`} disabled={busy || !online || absent || !eligible || displaySession?.status !== 'open'} onClick={() => void markPresenceState(person, 'absent_confirmed')}>{absent ? <><X size={17} /> {t.absent}</> : t.markAbsent}</button>
+            <button className="presence-button" disabled={busy || !online || !current || current.state === 'unverified' || displaySession?.status !== 'open'} onClick={() => void markPresenceState(person, 'unverified')} aria-label={locale === 'en' ? `Undo check for ${person.name}` : locale === 'es' ? `Deshacer verificación de ${person.name}` : `Desfazer conferência de ${person.name}`}>{t.notVerified}</button>
           </div>
         </article>
       })}
@@ -403,22 +437,23 @@ export default function PresenceAssistPage() {
     <p className="presence-rule">{t.sourceRule}<br />{t.correctionRule}</p>
   </div>
 
-  {showSession ? <SessionModal close={() => setShowSession(false)} create={async (eventName, expected) => {
-    if (!access) return
+  {showSession ? <SessionModal preset={seriesPreset} close={() => {setShowSession(false);setSeriesPreset(null)}} create={async (eventName, expected, eventTypeId, eligiblePersonIds, eventSeriesId, requestId) => {
+    if (!access || !online) return
     setBusy(true); setError('')
     try {
-      await createPresenceSession({ organizationId: access.organizationId, congregationId, actorId: access.userId, eventName, expectedPeopleCount: expected, minimumCoveragePercent: 90 })
+      await createPresenceSession({ organizationId: access.organizationId, congregationId, actorId: access.userId, eventName, expectedPeopleCount: expected, minimumCoveragePercent: 90, eventTypeId, eligiblePersonIds, eventSeriesId, requestId })
       setShowSession(false)
+      setSeriesPreset(null)
       await refreshScope(access.organizationId, congregationId)
     } catch (cause) { console.error(cause); setError(t.error) }
     finally { setBusy(false) }
-  }} defaultExpected={people.length} locale={locale} /> : null}
+  }} eligiblePeople={people} locale={locale} online={online} /> : null}
 
-  {showVisitor ? <VisitorModal close={() => setShowVisitor(false)} save={async (name, phone, consent, preferredContactChannel, claimBond) => {
-    if (!access || !displaySession) return
+  {showVisitor ? <VisitorModal close={() => setShowVisitor(false)} save={async (name, phone, consent, preferredContactChannel, claimBond,requestId) => {
+    if (!access || !displaySession || !online) return
     setBusy(true); setError('')
     try {
-      const person = await createMinimalVisitor({ organizationId: access.organizationId, congregationId, actorId: access.userId, name, phone, consent, preferredContactChannel })
+      const person = await createMinimalVisitor({ organizationId: access.organizationId, congregationId, actorId: access.userId, name, phone, consent, preferredContactChannel, requestId })
       await recordPresenceCheck({ organizationId: access.organizationId, congregationId, sessionId: displaySession.id, personId: person.id, actorId: access.userId, state: 'present_confirmed' })
       let bondFailed = false
       if (claimBond) {
@@ -440,17 +475,36 @@ export default function PresenceAssistPage() {
   </main>
 }
 
-function SessionModal({ close, create, defaultExpected, locale }: { close: () => void; create: (name: string, expected: number) => Promise<void>; defaultExpected: number; locale: AppLocale }) {
+function SessionModal({ close, create, eligiblePeople, locale, preset, online }: { close: () => void; create: (name: string, expected: number, eventTypeId: string, eligiblePersonIds: string[], eventSeriesId?: string,requestId?:string) => Promise<void>; eligiblePeople: PresencePerson[]; locale: AppLocale; preset:JourneyEventSeries|null; online:boolean }) {
   const t = presenceAssistCopy[locale]
-  const [name, setName] = useState(`${t.todayEvent} · ${new Date().toLocaleDateString(locale)}`)
-  const expected = Math.max(0, defaultExpected)
+  const [requestId] = useState(()=>crypto.randomUUID())
+  const savingGuard=useRef(false)
+  const [saving,setSaving]=useState(false)
+  const [name, setName] = useState(`${preset?.title||t.todayEvent} · ${new Date().toLocaleDateString(locale)}`)
+  const [eventTypeId, setEventTypeId] = useState<string>(preset?.eventTypeId||'general')
+  const [eligibleSearch, setEligibleSearch] = useState('')
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set(preset?.eventTypeId==='youth'||preset?.eventTypeId==='special'?[]:eligiblePeople.map(person=>person.id)))
+  const requiresSelection = eventTypeId === 'youth' || eventTypeId === 'special'
+  const expected = selectedIds.size
+  const visibleEligiblePeople = eligiblePeople.filter(person=>person.name.toLocaleLowerCase(locale).includes(eligibleSearch.trim().toLocaleLowerCase(locale)))
+  const chooseEventType=(next:string)=>{
+    setEventTypeId(next)
+    setSelectedIds(new Set(next==='youth'||next==='special'?[]:eligiblePeople.map(person=>person.id)))
+  }
+  const submit=async()=>{
+    if(savingGuard.current||!online)return
+    savingGuard.current=true;setSaving(true)
+    try {await create(name,expected,eventTypeId,[...selectedIds],preset?.id,requestId)}
+    finally {savingGuard.current=false;setSaving(false)}
+  }
   const copy = locale === 'en'
     ? {
         title: 'Record attendance',
         subtitle: 'Confirm the service and start marking who is present.',
         event: 'Service or gathering',
         people: 'People to check',
-        peopleHint: 'This list is prepared automatically from the people in this campus.',
+        peopleHint: 'Eligible people are frozen when the session opens. Visitors added later cannot inflate its coverage.',
+        eventType: 'Gathering type',
         start: 'Start recording attendance',
       }
     : locale === 'es'
@@ -459,7 +513,8 @@ function SessionModal({ close, create, defaultExpected, locale }: { close: () =>
           subtitle: 'Confirma el culto y comienza a marcar quién está presente.',
           event: 'Culto o encuentro',
           people: 'Personas para revisar',
-          peopleHint: 'Esta lista se prepara automáticamente con las personas de esta sede.',
+          peopleHint: 'Las personas elegibles se fijan al abrir la sesión. Los visitantes nuevos no inflan su cobertura.',
+          eventType: 'Tipo de encuentro',
           start: 'Comenzar a registrar asistencia',
         }
       : {
@@ -467,48 +522,64 @@ function SessionModal({ close, create, defaultExpected, locale }: { close: () =>
           subtitle: 'Confirme o culto e comece a marcar quem está presente.',
           event: 'Culto ou encontro',
           people: 'Pessoas para conferir',
-          peopleHint: 'Essa lista é preparada automaticamente com as pessoas desta unidade.',
+          peopleHint: 'A lista elegível é congelada ao abrir a sessão. Visitantes incluídos depois não aumentam a cobertura.',
+          eventType: 'Tipo de culto ou encontro',
           start: 'Começar a registrar presença',
         }
 
-  return <div className="presence-modal-backdrop" onMouseDown={close}>
+  return <div className="presence-modal-backdrop" onMouseDown={()=>{if(!saving)close()}}>
     <section className="presence-panel presence-modal" role="dialog" aria-modal="true" aria-labelledby="presence-session-title" onMouseDown={(event) => event.stopPropagation()}>
       <div className="presence-modal-header">
         <div><h2 id="presence-session-title">{copy.title}</h2><p>{copy.subtitle}</p></div>
-        <button className="presence-modal-close" type="button" onClick={close} aria-label={t.cancel}><X size={20} /></button>
+        <button className="presence-modal-close" type="button" disabled={saving} onClick={close} aria-label={t.cancel}><X size={20} /></button>
       </div>
       <div className="presence-modal-grid">
         <label className="presence-field">
           <span>{copy.event}</span>
           <input value={name} onChange={(event) => setName(event.target.value)} autoFocus />
         </label>
+        <label className="presence-field"><span>{copy.eventType}</span><select value={eventTypeId} disabled={Boolean(preset)} onChange={event => chooseEventType(event.target.value)}><option value="general">{locale==='en'?'Regular gathering':locale==='es'?'Encuentro habitual':'Encontro habitual'}</option><option value="sunday">{locale==='en'?'Sunday service':locale==='es'?'Culto dominical':'Culto de domingo'}</option><option value="midweek">{locale==='en'?'Midweek service':locale==='es'?'Culto semanal':'Culto da semana'}</option><option value="youth">{locale==='en'?'Youth gathering':locale==='es'?'Encuentro juvenil':'Encontro de jovens'}</option><option value="special">{locale==='en'?'Special event':locale==='es'?'Evento especial':'Evento especial'}</option></select></label>
         <div className="presence-field presence-readonly-field">
           <span>{copy.people}</span>
           <strong>{expected}</strong>
-          <small>{copy.peopleHint}</small>
+          <small>{requiresSelection?(locale==='en'?'Select only the people expected at this special event.':locale==='es'?'Seleccione únicamente las personas elegibles de este evento.':'Selecione somente as pessoas elegíveis para este evento especial.'):copy.peopleHint}</small>
         </div>
       </div>
+      {requiresSelection?<div className="presence-eligible-picker">
+        <label className="presence-field"><span>{locale==='en'?'Search eligible people':locale==='es'?'Buscar personas elegibles':'Buscar pessoas elegíveis'}</span><input value={eligibleSearch} onChange={event=>setEligibleSearch(event.target.value)} placeholder={locale==='en'?'Search names':locale==='es'?'Buscar nombres':'Buscar nomes'}/></label>
+        <div className="presence-eligible-options" role="group" aria-label={locale==='en'?'Eligible attendees':locale==='es'?'Personas elegibles':'Pessoas elegíveis'}>{visibleEligiblePeople.map(person=><label key={person.id}><input type="checkbox" checked={selectedIds.has(person.id)} onChange={event=>setSelectedIds(current=>{const next=new Set(current);if(event.target.checked)next.add(person.id);else next.delete(person.id);return next})}/><span>{person.name}</span></label>)}</div>
+        <p>{locale==='en'?'Do not mark other people as absent in a special-event roster.':locale==='es'?'No marque como ausentes a personas fuera de este público.':'Não marque como ausentes pessoas fora do público deste evento.'}</p>
+      </div>:null}
       <div className="presence-modal-actions">
-        <button className="presence-button" onClick={close}>{t.cancel}</button>
-        <button className="presence-button primary" disabled={!name.trim()} onClick={() => void create(name, expected)}>{copy.start}</button>
+        <button className="presence-button" disabled={saving} onClick={close}>{t.cancel}</button>
+        <button className="presence-button primary" disabled={saving || !online || !name.trim() || (requiresSelection && expected === 0)} onClick={()=>void submit()}>{copy.start}</button>
       </div>
     </section>
   </div>
 }
 
-function VisitorModal({ close, save, locale }: { close: () => void; save: (name: string, phone: string, consent: boolean, preferredContactChannel: 'whatsapp' | 'phone' | undefined, claimBond: boolean) => Promise<void>; locale: AppLocale }) {
+function VisitorModal({ close, save, locale }: { close: () => void; save: (name: string, phone: string, consent: boolean, preferredContactChannel: 'whatsapp' | 'phone' | undefined, claimBond: boolean,requestId:string) => Promise<void>; locale: AppLocale }) {
   const t = presenceAssistCopy[locale]
   const bond = bondCopy(locale)
+  const [requestId] = useState(()=>crypto.randomUUID())
+  const [saving,setSaving] = useState(false)
+  const savingGuard=useRef(false)
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
   const [consent, setConsent] = useState(false)
   const [preferredContactChannel, setPreferredContactChannel] = useState<'whatsapp' | 'phone'>('whatsapp')
   const [claimBond, setClaimBond] = useState(true)
   const phoneValid = phone.replace(/\D/g, '').length >= 8
+  const submit=async()=>{
+    if(savingGuard.current)return
+    savingGuard.current=true;setSaving(true)
+    try{await save(name,phone,consent,consent?preferredContactChannel:undefined,claimBond,requestId)}
+    finally{savingGuard.current=false;setSaving(false)}
+  }
   const contactHint = locale === 'en'
     ? 'When contact is authorized, a valid number and preferred channel are required before creating the care task.'
     : locale === 'es'
       ? 'Cuando el contacto está autorizado, se exige un número válido y el canal preferido antes de crear la tarea de cuidado.'
       : 'Quando o contato é autorizado, informe um número válido e o canal preferido antes de criar a tarefa de cuidado.'
-  return <div className="presence-modal-backdrop" onMouseDown={close}><section className="presence-panel presence-modal visitor-form" role="dialog" aria-modal="true" aria-labelledby="presence-visitor-title" onMouseDown={(event) => event.stopPropagation()}><div className="presence-session-head"><h2 id="presence-visitor-title">{t.newVisitor}</h2><button className="presence-button" onClick={close} aria-label={t.cancel}><X size={17} /></button></div><div className="presence-modal-grid"><label className="presence-field"><span>{t.visitorName}</span><input value={name} onChange={(event) => setName(event.target.value)} autoFocus /></label><label className="presence-check"><input type="checkbox" checked={consent} onChange={(event) => { setConsent(event.target.checked); if (!event.target.checked) setPhone('') }} /><span>{t.consent}</span></label><label className="presence-field"><span>{t.phone}</span><input inputMode="tel" value={phone} onChange={(event) => setPhone(event.target.value)} disabled={!consent} aria-invalid={consent&&!phoneValid} /></label>{consent?<label className="presence-field"><span>{locale==='en'?'Preferred channel':locale==='es'?'Canal preferido':'Canal preferido'}</span><select value={preferredContactChannel} onChange={(event)=>setPreferredContactChannel(event.target.value as 'whatsapp'|'phone')}><option value="whatsapp">WhatsApp</option><option value="phone">{locale==='en'?'Phone call':locale==='es'?'Llamada':'Ligação'}</option></select></label>:null}{consent?<p className="coverage-note">{contactHint}</p>:null}<label className="presence-check"><input type="checkbox" checked={claimBond} onChange={(event) => setClaimBond(event.target.checked)} /><span>{bond.visitorClaim}</span></label></div><div className="presence-modal-actions"><button className="presence-button" onClick={close}>{t.cancel}</button><button className="presence-button primary" disabled={!name.trim() || (consent && !phoneValid)} onClick={() => void save(name, phone, consent, consent ? preferredContactChannel : undefined, claimBond)}>{t.saveVisitor}</button></div></section></div>
+  return <div className="presence-modal-backdrop" onMouseDown={()=>{if(!saving)close()}}><section className="presence-panel presence-modal visitor-form" role="dialog" aria-modal="true" aria-labelledby="presence-visitor-title" onMouseDown={(event) => event.stopPropagation()}><div className="presence-session-head"><h2 id="presence-visitor-title">{t.newVisitor}</h2><button className="presence-button" onClick={close} disabled={saving} aria-label={t.cancel}><X size={17} /></button></div><div className="presence-modal-grid"><label className="presence-field"><span>{t.visitorName}</span><input value={name} onChange={(event) => setName(event.target.value)} autoFocus /></label><label className="presence-check"><input type="checkbox" checked={consent} onChange={(event) => { setConsent(event.target.checked); if (!event.target.checked) setPhone('') }} /><span>{t.consent}</span></label><label className="presence-field"><span>{t.phone}</span><input inputMode="tel" value={phone} onChange={(event) => setPhone(event.target.value)} disabled={!consent} aria-invalid={consent&&!phoneValid} /></label>{consent?<label className="presence-field"><span>{locale==='en'?'Preferred channel':locale==='es'?'Canal preferido':'Canal preferido'}</span><select value={preferredContactChannel} onChange={(event)=>setPreferredContactChannel(event.target.value as 'whatsapp'|'phone')}><option value="whatsapp">WhatsApp</option><option value="phone">{locale==='en'?'Phone call':locale==='es'?'Llamada':'Ligação'}</option></select></label>:null}{consent?<p className="coverage-note">{contactHint}</p>:null}<label className="presence-check"><input type="checkbox" checked={claimBond} onChange={(event) => setClaimBond(event.target.checked)} /><span>{bond.visitorClaim}</span></label></div><div className="presence-modal-actions"><button className="presence-button" disabled={saving} onClick={close}>{t.cancel}</button><button className="presence-button primary" disabled={saving || !name.trim() || (consent && !phoneValid)} onClick={()=>void submit()}>{t.saveVisitor}</button></div></section></div>
 }

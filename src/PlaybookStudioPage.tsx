@@ -3,7 +3,6 @@ import { ArrowLeft, Check, CirclePlus, Copy, Route, Save, ShieldCheck, Sparkles,
 import { auth } from './firebase'
 import {
   canConfigureJourneyPlaybooks,
-  ensureDefaultJourneyPlaybook,
   getActiveJourneyOrganizationId,
   listJourneyPlaybooks,
   loadActiveJourneyPlaybook,
@@ -15,6 +14,7 @@ import {
 import {
   JOURNEY_PLAYBOOK_DEFAULT_ID,
   createRaizEMesaPlaybook,
+  createNeutralJourneyPlaybook,
   normalizeJourneyPlaybook,
   type JourneyImplementationPhaseDefinition,
   type JourneyPlaybookDefinition,
@@ -23,6 +23,8 @@ import {
 } from './playbookEngine'
 import { getInitialLocale, localeLabels, persistLocale, type AppLocale } from './i18n'
 import { AccessDeniedState } from './AccessDeniedState'
+import { OptionalProjectsPanel } from './OptionalProjectsPanel'
+import { loadJourneyRolloutFlags, DEFAULT_JOURNEY_ROLLOUT_FLAGS, type JourneyRolloutFlags } from './journeyReleaseFlags'
 import './JourneySectionPages.css'
 import './PlaybookStudioPage.css'
 
@@ -117,19 +119,21 @@ export default function PlaybookStudioPage(){
   const [locale,setLocale]=useState<AppLocale>(getInitialLocale)
   const t=copy[locale]
   const [access,setAccess]=useState<JourneyAccessContext|null>(null)
+  const [rollout,setRollout]=useState<JourneyRolloutFlags>(DEFAULT_JOURNEY_ROLLOUT_FLAGS)
   const [playbooks,setPlaybooks]=useState<JourneyPlaybookDefinition[]>([])
   const [activeId,setActiveId]=useState('')
   const [selectedId,setSelectedId]=useState('')
+  const [showTemplates,setShowTemplates]=useState(false)
   const [form,setForm]=useState<JourneyPlaybookDefinition|null>(null)
   const [loading,setLoading]=useState(true),[busy,setBusy]=useState(false),[message,setMessage]=useState(''),[error,setError]=useState('')
 
   const reload=useCallback(async(nextAccess:JourneyAccessContext)=>{
-    const fallback=createRaizEMesaPlaybook(nextAccess.organizationId)
+    const fallback=createNeutralJourneyPlaybook(nextAccess.organizationId)
+    const optionalTemplate=createRaizEMesaPlaybook(nextAccess.organizationId)
     try{
-      await ensureDefaultJourneyPlaybook(nextAccess)
       const [items,active]=await Promise.all([listJourneyPlaybooks(nextAccess),loadActiveJourneyPlaybook(nextAccess)])
-      const available=items.length?items:[fallback]
-      const resolvedActive=items.length?active:fallback
+      const available=items.length?items:[fallback,optionalTemplate]
+      const resolvedActive=active
       setPlaybooks(available)
       setActiveId(resolvedActive.id)
       setSelectedId(current=>available.some(item=>item.id===current)?current:resolvedActive.id)
@@ -157,6 +161,14 @@ export default function PlaybookStudioPage(){
     }catch(cause){console.error(cause);setError(t.error)}finally{setLoading(false)}
   },[reload,t.error])
   useEffect(()=>{void bootstrap()},[bootstrap])
+  useEffect(()=>{
+    if(!access){setRollout(DEFAULT_JOURNEY_ROLLOUT_FLAGS);return}
+    let active=true
+    void loadJourneyRolloutFlags(access)
+      .then(flags=>{if(active)setRollout(flags)})
+      .catch(()=>{if(active)setRollout(DEFAULT_JOURNEY_ROLLOUT_FLAGS)})
+    return()=>{active=false}
+  },[access])
 
   useEffect(()=>{
     if(!selectedId)return
@@ -164,7 +176,7 @@ export default function PlaybookStudioPage(){
     if(selected)setForm(selected)
   },[selectedId,playbooks])
 
-  const official=form?.id===JOURNEY_PLAYBOOK_DEFAULT_ID
+  const official=form?.id===JOURNEY_PLAYBOOK_DEFAULT_ID||form?.id==='nestjourney-universal'
   const kinds=Object.keys(kindLabels[locale]) as JourneyPlaybookStageKind[]
   const setArea=(key:keyof JourneyPlaybookDefinition['areaLabels'],value:string)=>setForm(current=>current?({...current,areaLabels:{...current.areaLabels,[key]:value}}):current)
   const setStage=(index:number,patch:Partial<JourneyPlaybookStage>)=>setForm(current=>current?({...current,stages:current.stages.map((stage,i)=>i===index?{...stage,...patch}:stage)}):current)
@@ -194,20 +206,22 @@ export default function PlaybookStudioPage(){
       <div className="playbook-header-actions"><a className="journey-primary-button" href="/more"><ArrowLeft size={16}/>{t.back}</a><select value={locale} onChange={e=>{const next=e.target.value as AppLocale;setLocale(next);persistLocale(next)}}>{(Object.keys(localeLabels) as AppLocale[]).map(id=><option key={id} value={id}>{localeLabels[id]}</option>)}</select></div>
     </header>
     {error?<div className="settings-error playbook-error"><span>{error}</span><button type="button" onClick={()=>void bootstrap()} disabled={busy}>{t.retry}</button></div>:null}{message?<div className="settings-success"><Check size={15}/>{message}</div>:null}
+    {rollout.optionalProjects?<OptionalProjectsPanel access={access} locale={locale}/>:null}
 
     <section className="journey-section-note"><ShieldCheck size={18}/><p>{t.safe}</p></section>
 
     <section className="playbook-layout">
       <aside className="journey-section-block playbook-list">
         <span className="journey-section-kicker">{t.select}</span>
-        {playbooks.map(item=><button key={item.id} className={selectedId===item.id?'active':''} onClick={()=>setSelectedId(item.id)}>
+        {playbooks.filter(item=>showTemplates||item.id!==JOURNEY_PLAYBOOK_DEFAULT_ID||item.id===activeId).map(item=><button key={item.id} className={selectedId===item.id?'active':''} onClick={()=>setSelectedId(item.id)}>
           <span><strong>{item.name}</strong><small>{item.id===activeId?t.active:item.status==='active'?t.activeStatus:t.draft}</small></span>{item.id===activeId?<Check size={16}/>:null}
         </button>)}
+        {playbooks.some(item=>item.id===JOURNEY_PLAYBOOK_DEFAULT_ID&&item.id!==activeId)?<button type="button" onClick={()=>setShowTemplates(value=>!value)} aria-expanded={showTemplates}>{showTemplates?(locale==='en'?'Hide optional templates':locale==='es'?'Ocultar modelos opcionales':'Ocultar modelos opcionais'):(locale==='en'?'Browse optional templates':locale==='es'?'Ver modelos opcionales':'Ver modelos opcionais')}</button>:null}
         {!playbooks.length?<p>{t.empty}</p>:null}
       </aside>
 
       {form?<section className="playbook-editor">
-        {official?<section className="journey-section-block playbook-official"><Sparkles size={20}/><div><span className="journey-section-kicker">{t.official}</span><h2>{form.name}</h2><p>{t.officialHelp}</p><button className="journey-primary-button" onClick={()=>{const next=draftVariation(access.organizationId,createRaizEMesaPlaybook(access.organizationId));setForm(next);setSelectedId(next.id)}}><Copy size={16}/>{t.clone}</button></div></section>:null}
+        {official?<section className="journey-section-block playbook-official"><Sparkles size={20}/><div><span className="journey-section-kicker">{t.official}</span><h2>{form.name}</h2><p>{form.id==='nestjourney-universal'?(locale==='en'?'The universal core works without a ministry project. Clone only if you want a customized program.':locale==='es'?'El núcleo universal funciona sin proyecto ministerial. Cree una copia solo para un programa opcional.':'O núcleo universal funciona sem projeto ministerial. Crie uma variação somente se desejar um programa opcional.'):t.officialHelp}</p><button className="journey-primary-button" onClick={()=>{const next=draftVariation(access.organizationId,form);setForm(next);setSelectedId(next.id)}}><Copy size={16}/>{t.clone}</button></div></section>:null}
 
         <section className="journey-section-block">
           <div className="playbook-grid two">
@@ -266,7 +280,7 @@ export default function PlaybookStudioPage(){
           </div>
         </section>
 
-        {!official?<div className="playbook-savebar"><button className="journey-primary-button secondary" disabled={busy} onClick={()=>void save('draft')}><Save size={16}/>{busy?t.saving:t.save}</button><button className="journey-primary-button" disabled={busy} onClick={()=>void save('active')}><Route size={16}/>{t.activate}</button></div>:activeId!==form.id?<div className="playbook-savebar"><button className="journey-primary-button" disabled={busy} onClick={async()=>{if(!access)return;setBusy(true);try{await setActiveJourneyPlaybook(access,form.id);await reload(access);setMessage(t.activated)}catch(cause){console.error(cause);setError(t.error)}finally{setBusy(false)}}}><Route size={16}/>{t.activate}</button></div>:null}
+        {!official?<div className="playbook-savebar"><button className="journey-primary-button secondary" disabled={busy} onClick={()=>void save('draft')}><Save size={16}/>{busy?t.saving:t.save}</button><button className="journey-primary-button" disabled={busy} onClick={()=>void save('active')}><Route size={16}/>{t.activate}</button></div>:activeId!==form.id?<div className="playbook-savebar"><button className="journey-primary-button" disabled={busy} onClick={async()=>{if(!access)return;setBusy(true);try{if(form.id===JOURNEY_PLAYBOOK_DEFAULT_ID){const stored=await listJourneyPlaybooks(access);if(!stored.some(item=>item.id===form.id))await saveJourneyPlaybook(access,form)}await setActiveJourneyPlaybook(access,form.id);await reload(access);setMessage(t.activated)}catch(cause){console.error(cause);setError(t.error)}finally{setBusy(false)}}}><Route size={16}/>{t.activate}</button></div>:null}
       </section>:null}
     </section>
   </div></main>
