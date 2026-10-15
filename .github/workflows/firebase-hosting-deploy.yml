@@ -11,6 +11,7 @@ on:
       - "package.json"
       - "package-lock.json"
       - "firebase.json"
+      - "ops/verify-connect-release.mjs"
       - "firestore.rules"
       - "firestore.indexes.json"
       - ".firebaserc"
@@ -215,7 +216,10 @@ jobs:
           VERSION="$(jq -er '.releases[0].version.name' /tmp/journey-hosting-before.json)"
           [[ "$VERSION" =~ ^sites/mn-nestjourney-555464791734/versions/[a-zA-Z0-9_-]+$ ]]
           echo "PREVIOUS_JOURNEY_HOSTING_VERSION=$VERSION" >> "$GITHUB_ENV"
-          node --input-type=module -e "import fs from 'node:fs';if(!/^[a-f0-9]{40}$/.test(process.env.GITHUB_SHA||''))process.exit(1);fs.writeFileSync('dist/connect-release.json',JSON.stringify({schemaVersion:1,product:'nestjourney',releaseSha:process.env.GITHUB_SHA}))"
+          node --input-type=module -e "import fs from 'node:fs';if(!/^[a-f0-9]{40}$/.test(process.env.GITHUB_SHA||''))process.exit(1);const body=JSON.stringify({schemaVersion:1,product:'nestjourney',releaseSha:process.env.GITHUB_SHA});fs.writeFileSync('dist/connect-release.json',body);fs.writeFileSync('dist/connect-release-'+process.env.GITHUB_SHA+'.json',body)"
+          node ops/verify-connect-release.mjs dist/connect-release.json
+          node ops/verify-connect-release.mjs "dist/connect-release-$GITHUB_SHA.json"
+          echo "NESTJOURNEY_CONNECT_ARTIFACT_READY_SHA=$GITHUB_SHA"
       - name: Deploy Hosting
         run: |
           echo JOURNEY_HOSTING_RELEASE_STARTED=true >> "$GITHUB_ENV"
@@ -253,8 +257,20 @@ jobs:
         run: |
           set -euo pipefail
           for BASE in https://mn-nestjourney-555464791734.web.app https://nestjourney.millionsnest.com; do
-            curl --fail --silent --show-error --retry 6 --retry-delay 2 --max-time 30 "$BASE/connect-release.json?sha=$GITHUB_SHA" > /tmp/journey-connect-release.json
-            node --input-type=module -e "import fs from 'node:fs';const d=JSON.parse(fs.readFileSync('/tmp/journey-connect-release.json'));if(d.product!=='nestjourney'||d.releaseSha!==process.env.GITHUB_SHA)process.exit(1)"
+            ready=0
+            for attempt in $(seq 1 20); do
+              if curl --fail --silent --show-error --connect-timeout 5 --max-time 10 -H 'Cache-Control: no-cache' "$BASE/connect-release.json?sha=$GITHUB_SHA-$attempt" > /tmp/journey-connect-release.json \
+                && curl --fail --silent --show-error --connect-timeout 5 --max-time 10 "$BASE/connect-release-$GITHUB_SHA.json?attempt=$attempt" > /tmp/journey-connect-proof.json \
+                && node ops/verify-connect-release.mjs /tmp/journey-connect-release.json \
+                && node ops/verify-connect-release.mjs /tmp/journey-connect-proof.json; then
+                ready=1
+                break
+              fi
+              echo "Waiting for exact NestJourney release at $BASE ($attempt/20)"
+              sleep 3
+            done
+            test "$ready" = 1
+            echo "NESTJOURNEY_CONNECT_DOMAIN_EXACT_SHA_OK=$BASE"
             STATUS="$(curl --silent --show-error --max-time 30 --output /tmp/journey-connect-auth.json --write-out '%{http_code}' -X POST "$BASE/api/core/support/draft" -H 'Content-Type: application/json' --data '{"product":"nestjourney","organizationId":"release-smoke-synthetic","locale":"pt-BR"}')"
             test "$STATUS" = 401
           done
