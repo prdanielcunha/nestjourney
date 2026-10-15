@@ -1,4 +1,4 @@
-export const NESTJOURNEY_VERSION = '0.9.0-beta.1' as const
+export const NESTJOURNEY_VERSION = '0.9.0-beta.2' as const
 
 export type ReleaseLocale = 'pt-BR' | 'en' | 'es'
 
@@ -12,6 +12,18 @@ export type NestJourneyReleaseNote = {
 }
 
 export const NESTJOURNEY_RELEASES: NestJourneyReleaseNote[] = [
+  {
+    version: '0.9.0-beta.2',
+    date: '2026-10-14',
+    kind: 'release',
+    title: { 'pt-BR': 'Suporte oficial MillionsNest', en: 'Official MillionsNest support', es: 'Soporte oficial MillionsNest' },
+    summary: { 'pt-BR': 'Ajuda com entrada segura para o WhatsApp oficial.', en: 'Help with secure access to official WhatsApp support.', es: 'Ayuda con acceso seguro al WhatsApp oficial.' },
+    items: {
+      'pt-BR': ['Rascunho de suporte do NestJourney aberto por sua ação, com envio manual.', 'Validação de acesso pelo Hub e proteção na troca de conta ou organização.'],
+      en: ['NestJourney support draft opened by your action, with manual sending.', 'Hub access validation and protection when switching account or organization.'],
+      es: ['Borrador de soporte de NestJourney abierto por tu acción, con envío manual.', 'Validación de acceso por el Hub y protección al cambiar cuenta u organización.'],
+    },
+  },
   {
     version: '0.9.0-beta.1',
     date: '2026-09-26',

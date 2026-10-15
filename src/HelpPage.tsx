@@ -7,6 +7,7 @@ import { getInitialLocale, localeLabels, persistLocale, type AppLocale } from '.
 import { useJourneyLabels } from './journeyLabels'
 import { NESTJOURNEY_IS_BETA, NESTJOURNEY_VERSION } from './releaseInfo'
 import './JourneySectionPages.css'
+import { ConnectSupportButton } from './ConnectSupportButton'
 
 const roleCopy:Record<AppLocale,Record<JourneyResponsibility,{title:string;focus:string}>>={
   'pt-BR':{
@@ -81,6 +82,7 @@ export default function HelpPage(){
   ].filter(Boolean) as Array<{title:string;desc:string;href:string;Icon:typeof UserCheck}>
   return <main className="journey-section-page"><div className="journey-section-shell">
     <header className="journey-section-header"><div><span className="journey-section-kicker">NestJourney / Help</span><h1>{t.title}</h1><p>{t.subtitle}</p></div><select value={locale} onChange={e=>{const next=e.target.value as AppLocale;setLocale(next);persistLocale(next)}}>{(Object.keys(localeLabels) as AppLocale[]).map(id=><option key={id} value={id}>{localeLabels[id]}</option>)}</select></header>
+    <ConnectSupportButton locale={locale}/>
     <section className="journey-section-note"><BookOpen size={18}/><p><strong>{t.yourRole}: {role.title}.</strong> {role.focus}</p></section>
     <section className="journey-section-block"><header><div><span className="journey-section-kicker">{t.flow}</span><h2>{t.flow}</h2></div></header><div className="journey-card-grid">{cards.map(item=>{const Icon=item.Icon;return <a className="journey-card" href={item.href} key={item.title}><span className="journey-card-icon"><Icon size={19}/></span><span className="journey-card-copy"><strong>{item.title}</strong><p>{item.desc}</p></span><ArrowRight size={16}/></a>})}</div></section>
     <div className="journey-section-note"><ShieldCheck size={18}/><p>{t.principle}</p></div>
