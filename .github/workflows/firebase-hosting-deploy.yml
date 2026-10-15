@@ -23,7 +23,7 @@ permissions:
 
 concurrency:
   group: nestjourney-firebase-hosting-production
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   deploy:
@@ -201,8 +201,25 @@ jobs:
           fi
 
           echo "FIRESTORE_RULES_DEPLOY_OK=rest"
+      - name: Capture Hosting recovery and verify existing Connect boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          STATUS="$(curl --silent --show-error --max-time 30 --output /tmp/journey-core-auth.json --write-out '%{http_code}' -X POST 'https://connect.millionsnest.com/api/core/support/draft' -H 'Content-Type: application/json' --data '{"product":"nestjourney","organizationId":"release-smoke-synthetic","locale":"pt-BR"}')"
+          test "$STATUS" = 401
+          echo NESTJOURNEY_CONNECT_CORE_AUTH_BOUNDARY_OK
+          gcloud run services get-iam-policy connect-api --project millionsnest --region us-central1 --format=json | jq -S . > /tmp/journey-core-iam-before.json
+          ACCESS_TOKEN="$(gcloud auth print-access-token)"
+          echo "::add-mask::$ACCESS_TOKEN"
+          curl --fail --silent --show-error --max-time 30 -H "Authorization: Bearer $ACCESS_TOKEN" 'https://firebasehosting.googleapis.com/v1beta1/sites/mn-nestjourney-555464791734/releases?pageSize=1' > /tmp/journey-hosting-before.json
+          VERSION="$(jq -er '.releases[0].version.name' /tmp/journey-hosting-before.json)"
+          [[ "$VERSION" =~ ^sites/mn-nestjourney-555464791734/versions/[a-zA-Z0-9_-]+$ ]]
+          echo "PREVIOUS_JOURNEY_HOSTING_VERSION=$VERSION" >> "$GITHUB_ENV"
+          node --input-type=module -e "import fs from 'node:fs';if(!/^[a-f0-9]{40}$/.test(process.env.GITHUB_SHA||''))process.exit(1);fs.writeFileSync('dist/connect-release.json',JSON.stringify({schemaVersion:1,product:'nestjourney',releaseSha:process.env.GITHUB_SHA}))"
       - name: Deploy Hosting
-        run: npx -y firebase-tools@15.30.2 deploy --only hosting:nestjourney --project millionsnest --non-interactive
+        run: |
+          echo JOURNEY_HOSTING_RELEASE_STARTED=true >> "$GITHUB_ENV"
+          npx -y firebase-tools@15.30.2 deploy --only hosting:nestjourney --project millionsnest --non-interactive
       - name: Smoke test Firebase Hosting
         shell: bash
         run: |
@@ -231,3 +248,26 @@ jobs:
           done
           test "$custom_ready" = "1"
           echo "FIREBASE_HOSTING_SMOKE_OK=NestJourney"
+      - name: Verify support authority and exact published release
+        shell: bash
+        run: |
+          set -euo pipefail
+          for BASE in https://mn-nestjourney-555464791734.web.app https://nestjourney.millionsnest.com; do
+            curl --fail --silent --show-error --retry 6 --retry-delay 2 --max-time 30 "$BASE/connect-release.json?sha=$GITHUB_SHA" > /tmp/journey-connect-release.json
+            node --input-type=module -e "import fs from 'node:fs';const d=JSON.parse(fs.readFileSync('/tmp/journey-connect-release.json'));if(d.product!=='nestjourney'||d.releaseSha!==process.env.GITHUB_SHA)process.exit(1)"
+            STATUS="$(curl --silent --show-error --max-time 30 --output /tmp/journey-connect-auth.json --write-out '%{http_code}' -X POST "$BASE/api/core/support/draft" -H 'Content-Type: application/json' --data '{"product":"nestjourney","organizationId":"release-smoke-synthetic","locale":"pt-BR"}')"
+            test "$STATUS" = 401
+          done
+          gcloud run services get-iam-policy connect-api --project millionsnest --region us-central1 --format=json | jq -S . > /tmp/journey-core-iam-after.json
+          cmp --silent /tmp/journey-core-iam-before.json /tmp/journey-core-iam-after.json
+          echo NESTJOURNEY_CONNECT_CORE_IAM_UNCHANGED
+          echo NESTJOURNEY_CONNECT_SUPPORT_AUTHORITY_OK
+          echo "NESTJOURNEY_CONNECT_EXACT_RELEASE_SHA=$GITHUB_SHA"
+      - name: Restore captured Hosting version on failure
+        if: (failure() || cancelled()) && env.JOURNEY_HOSTING_RELEASE_STARTED == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$PREVIOUS_JOURNEY_HOSTING_VERSION" =~ ^sites/mn-nestjourney-555464791734/versions/[a-zA-Z0-9_-]+$ ]]
+          npx -y firebase-tools@15.30.2 hosting:clone "mn-nestjourney-555464791734@${PREVIOUS_JOURNEY_HOSTING_VERSION##*/}" 'mn-nestjourney-555464791734:live' --project millionsnest --non-interactive
+          echo NESTJOURNEY_CONNECT_HOSTING_RESTORED
