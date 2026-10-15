@@ -23,7 +23,7 @@ permissions:
 
 concurrency:
   group: nestjourney-firebase-hosting-production
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   deploy:
@@ -264,7 +264,7 @@ jobs:
           echo NESTJOURNEY_CONNECT_SUPPORT_AUTHORITY_OK
           echo "NESTJOURNEY_CONNECT_EXACT_RELEASE_SHA=$GITHUB_SHA"
       - name: Restore captured Hosting version on failure
-        if: failure() && env.JOURNEY_HOSTING_RELEASE_STARTED == 'true'
+        if: (failure() || cancelled()) && env.JOURNEY_HOSTING_RELEASE_STARTED == 'true'
         shell: bash
         run: |
           set -euo pipefail
