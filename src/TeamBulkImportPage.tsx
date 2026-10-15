@@ -166,6 +166,12 @@ export default function TeamBulkImportPage() {
   async function changeCongregation(nextId: string) {
     if (!access) return
     setCongregationId(nextId)
+    // Never carry an imported preview over to a different congregation.
+    setPreview([])
+    setSourceText('')
+    setIgnoredLines(0)
+    setHeaderDetected(false)
+    setNotice('')
     setActiveJourneyCongregationId(access.organizationId, nextId)
     setBusy(true)
     setError('')
@@ -186,7 +192,11 @@ export default function TeamBulkImportPage() {
   }
 
   async function readImage(file: File) {
-    if (!file.type.startsWith('image/')) return
+    if (!file.type.startsWith('image/') || ocrBusy) return
+    // A failed OCR must not leave a previously approved list importable.
+    setPreview([])
+    setIgnoredLines(0)
+    setHeaderDetected(false)
     setOcrBusy(true)
     setOcrProgress(5)
     setError('')
@@ -348,13 +358,13 @@ export default function TeamBulkImportPage() {
       <section className="team-import-panel">
         <div className="team-import-panel-head">
           <div><span className="team-import-kicker">{t.sourceTitle}</span><p>{t.sourceHint}</p></div>
-          {congregations.length > 1 ? <label className="team-import-unit"><span>{t.congregation}</span><select value={congregationId} disabled={busy} onChange={(event) => void changeCongregation(event.target.value)}>{congregations.map((unit) => <option value={unit.id} key={unit.id}>{unit.name}{unit.city ? ` · ${unit.city}` : ''}</option>)}</select></label> : null}
+          {congregations.length > 1 ? <label className="team-import-unit"><span>{t.congregation}</span><select value={congregationId} disabled={busy || ocrBusy} onChange={(event) => void changeCongregation(event.target.value)}>{congregations.map((unit) => <option value={unit.id} key={unit.id}>{unit.name}{unit.city ? ` · ${unit.city}` : ''}</option>)}</select></label> : null}
         </div>
 
         <div className="team-import-source-grid">
           <div className="team-import-text-source">
             <div className="team-import-source-title"><ClipboardPaste size={17}/><strong>{t.paste}</strong></div>
-            <textarea value={sourceText} onChange={(event) => { setSourceText(event.target.value); setSourceKind('paste') }} placeholder={t.placeholder}/>
+            <textarea value={sourceText} disabled={busy || ocrBusy} onChange={(event) => { setSourceText(event.target.value); setSourceKind('paste'); setPreview([]); setIgnoredLines(0); setHeaderDetected(false); setNotice('') }} placeholder={t.placeholder}/>
             <button className="team-import-primary" disabled={!sourceText.trim() || busy || ocrBusy} onClick={() => analyze()}>
               <Sparkles size={16}/>{t.analyze}
             </button>
