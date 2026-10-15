@@ -1,0 +1,13 @@
+# Manual official WhatsApp support
+
+Help exposes a PT/EN/ES explicit-click action for technical support about NestJourney. The user reviews and sends the draft in WhatsApp. No visitor, contact, follow-up, pastoral record, file, phone or financial data is loaded or appended by the action. No automatic message or consent-based follow-up is activated.
+
+The app remains a static PWA. One exact Firebase Hosting rewrite, `/api/core/support/draft`, reaches the **existing** `connect-api` service in `us-central1` in the shared `millionsnest` project, before the unchanged SPA fallback. It does not create a service, wildcard API proxy, Cloud Run deployment, IAM grant, database access or second identity store.
+
+The action supplies only a transient Firebase identity header and `{product:'nestjourney', organizationId, locale}`. Organization selection in existing Journey session storage is an untrusted request scope. The published Core support issuer revalidates the current user, tenant and app access against the Hub before creating a short-lived signed origin hint, and resolves the existing official number. Client roles, display profiles or CEO status are not authority. The alternate identity header handles Hosting transport consistently with the published Core contract.
+
+Only a future bounded manual NestJourney draft on exact HTTPS wa.me with one text parameter is accepted. Duplicate pending clicks, logout, account/organization switches, unmount, popup closure, invalid URLs, expired drafts and timeouts cannot navigate stale results. Pending authentication/network work is bounded; generic localized errors do not expose backend bodies. Tokens are not stored, logged or put in links.
+
+The official Hosting workflow validates the existing Core401 boundary before mutation, captures the current live Hosting version, publishes release-SHA metadata with no-store caching, and checks exact SHA plus support401 on both public domains. It compares the existing Core IAM policy before/after. Failed publication/smoke restores the captured version through official same-site Firebase exact-version clone; failures before Hosting publication do not touch Hosting. Rules and indexes are unchanged.
+
+Automated tests use synthetic identities, scopes and draft URLs; they do not certify positive real-account Core/Meta metadata permissions, a real WhatsApp conversation, actual cloud rollback or physical installed-iPhone push. Those remain pending. Existing follow-up launch, consent prerequisites and domain API contracts remain separate; no Journey integration is simulated as complete.
