@@ -12,6 +12,7 @@ on:
       - "package-lock.json"
       - "firebase.json"
       - "ops/verify-connect-release.mjs"
+      - "ops/verify-shared-hub-rules.mjs"
       - "firestore.rules"
       - "firestore.indexes.json"
       - ".firebaserc"
@@ -39,23 +40,6 @@ jobs:
       VITE_FIREBASE_APP_ID: "1:555464791734:web:3059e8ac2b8089a1767817"
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
-      - name: Detect Firestore Rules changes
-        id: rules_changes
-        shell: bash
-        run: |
-          set -euo pipefail
-          changed=true
-          if [ "${{ github.event_name }}" = "push" ]; then
-            before="${{ github.event.before }}"
-            if [ -n "$before" ] && ! [[ "$before" =~ ^0+$ ]]; then
-              git fetch --no-tags --depth=1 origin "$before"
-              if git diff --quiet "$before" "${GITHUB_SHA}" -- firestore.rules; then
-                changed=false
-              fi
-            fi
-          fi
-          echo "changed=$changed" >> "$GITHUB_OUTPUT"
-          echo "FIRESTORE_RULES_CHANGED=$changed"
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: 22
@@ -78,130 +62,27 @@ jobs:
           echo "NESTJOURNEY_FIREBASE_WEB_CONFIG_OK"
       - name: Validate
         run: npm run check
-      - name: Deploy Firestore Rules
-        if: steps.rules_changes.outputs.changed == 'true'
+      # Shared project policy belongs exclusively to the canonical Hub pipeline.
+      # Local NestJourney Rules are fixtures, never production deployment source.
+      - name: Verify canonical Hub Rules (read-only, fail-closed)
         shell: bash
         run: |
-          set -uo pipefail
-
-          # Prefer the supported Firebase CLI. The Rules service has returned
-          # transient 503/409 responses in production, so retry before using
-          # the documented Rules REST management API as a fail-closed fallback.
-          for attempt in 1 2 3; do
-            echo "Firestore Rules CLI attempt $attempt/3"
-            if npx -y firebase-tools@15.30.2 deploy --only firestore:rules --project millionsnest --non-interactive; then
-              echo "FIRESTORE_RULES_DEPLOY_OK=cli"
-              exit 0
-            fi
-            sleep $((attempt * 10))
-          done
-
-          echo "CLI retries exhausted; trying Firebase Rules REST management API."
-          python - <<'PY'
-          import json
-          from pathlib import Path
-          payload = {
-              "source": {
-                  "files": [{
-                      "name": "firestore.rules",
-                      "content": Path("firestore.rules").read_text(encoding="utf-8"),
-                  }]
-              }
-          }
-          Path("/tmp/ruleset-request.json").write_text(json.dumps(payload), encoding="utf-8")
-          PY
-
-          RULESET_NAME=""
-          for attempt in 1 2 3 4 5; do
-            TOKEN="$(gcloud auth print-access-token)"
-            HTTP_CODE="$(curl --silent --show-error --output /tmp/ruleset-response.json --write-out '%{http_code}' \
-              --request POST \
-              --header "Authorization: Bearer $TOKEN" \
-              --header "Content-Type: application/json" \
-              --data-binary @/tmp/ruleset-request.json \
-              "https://firebaserules.googleapis.com/v1/projects/millionsnest/rulesets" || true)"
-            if [[ "$HTTP_CODE" =~ ^2 ]]; then
-              RULESET_NAME="$(python - <<'PY'
-          import json
-          print(json.load(open("/tmp/ruleset-response.json")).get("name", ""))
-          PY
-              )"
-              if [ -n "$RULESET_NAME" ]; then
-                break
-              fi
-            fi
-            echo "Rules REST ruleset attempt $attempt/5 returned HTTP $HTTP_CODE" >&2
-            sleep $((attempt * 10))
-          done
-
-          if [ -z "$RULESET_NAME" ]; then
-            echo "FIRESTORE_RULESET_CREATE_FAILED" >&2
-            cat /tmp/ruleset-response.json >&2 || true
-            exit 1
-          fi
-
-          RULESET_NAME="$RULESET_NAME" python - <<'PY'
-          import json, os
-          from pathlib import Path
-          name = "projects/millionsnest/releases/cloud.firestore"
-          payload = {
-              "release": {
-                  "name": name,
-                  "rulesetName": os.environ["RULESET_NAME"],
-              },
-              "updateMask": "rulesetName",
-          }
-          Path("/tmp/release-request.json").write_text(json.dumps(payload), encoding="utf-8")
-          PY
-
-          RELEASE_OK=""
-          for attempt in 1 2 3 4 5; do
-            TOKEN="$(gcloud auth print-access-token)"
-            HTTP_CODE="$(curl --silent --show-error --output /tmp/release-response.json --write-out '%{http_code}' \
-              --request PATCH \
-              --header "Authorization: Bearer $TOKEN" \
-              --header "Content-Type: application/json" \
-              --data-binary @/tmp/release-request.json \
-              "https://firebaserules.googleapis.com/v1/projects/millionsnest/releases/cloud.firestore" || true)"
-            if [[ "$HTTP_CODE" =~ ^2 ]]; then
-              RELEASE_OK="yes"
-              break
-            fi
-            echo "Rules REST release attempt $attempt/5 returned HTTP $HTTP_CODE" >&2
-            sleep $((attempt * 10))
-          done
-
-          if [ "$RELEASE_OK" != "yes" ]; then
-            echo "FIRESTORE_RULES_RELEASE_FAILED" >&2
-            cat /tmp/release-response.json >&2 || true
-            exit 1
-          fi
-
-          VERIFY_OK=""
-          for attempt in 1 2 3 4 5; do
-            TOKEN="$(gcloud auth print-access-token)"
-            HTTP_CODE="$(curl --silent --show-error --output /tmp/release-verify.json --write-out '%{http_code}' \
-              --header "Authorization: Bearer $TOKEN" \
-              "https://firebaserules.googleapis.com/v1/projects/millionsnest/releases/cloud.firestore" || true)"
-            if [[ "$HTTP_CODE" =~ ^2 ]] && RULESET_NAME="$RULESET_NAME" python - <<'PY'
-          import json, os, sys
-          data = json.load(open("/tmp/release-verify.json"))
-          sys.exit(0 if data.get("rulesetName") == os.environ["RULESET_NAME"] else 1)
-          PY
-            then
-              VERIFY_OK="yes"
-              break
-            fi
-            echo "Rules REST verify attempt $attempt/5 returned HTTP $HTTP_CODE" >&2
-            sleep $((attempt * 10))
-          done
-
-          if [ "$VERIFY_OK" != "yes" ]; then
-            echo "FIRESTORE_RULES_VERIFY_FAILED" >&2
-            exit 1
-          fi
-
-          echo "FIRESTORE_RULES_DEPLOY_OK=rest"
+          set -euo pipefail
+          ACCESS_TOKEN="$(gcloud auth print-access-token)"
+          echo "::add-mask::$ACCESS_TOKEN"
+          curl --fail --silent --show-error --max-time 20 \
+            -H "Authorization: Bearer $ACCESS_TOKEN" \
+            'https://firebaserules.googleapis.com/v1/projects/millionsnest/releases/cloud.firestore' \
+            -o /tmp/journey-hub-rules-release.json
+          RULESET_NAME="$(jq -er '.rulesetName' /tmp/journey-hub-rules-release.json)"
+          [[ "$RULESET_NAME" =~ ^projects/millionsnest/rulesets/[a-zA-Z0-9-]+$ ]]
+          curl --fail --silent --show-error --max-time 20 \
+            -H "Authorization: Bearer $ACCESS_TOKEN" \
+            "https://firebaserules.googleapis.com/v1/$RULESET_NAME" \
+            -o /tmp/journey-hub-rules-source.json
+          node ops/verify-shared-hub-rules.mjs /tmp/journey-hub-rules-source.json
+          rm /tmp/journey-hub-rules-release.json /tmp/journey-hub-rules-source.json
+          unset ACCESS_TOKEN
       - name: Capture Hosting recovery and verify existing Connect boundary
         shell: bash
         run: |
