@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { detectTeamInterestAreas, normalizeTeamInterestName, parseTeamBulkImport } from './teamBulkImport'
+import { detectTeamInterestAreas, normalizeTeamInterestName, parseTeamBulkImport, reviewEditedTeamImportCandidate, validateTeamImportPreview } from './teamBulkImport'
 
 describe('team bulk import parser', () => {
   it('reads a spreadsheet matrix and distributes checked areas', () => {
@@ -49,4 +49,32 @@ describe('team bulk import parser', () => {
     expect(normalizeTeamInterestName('  Andréa de Oliveira ')).toBe('andrea de oliveira')
     expect(detectTeamInterestAreas('Presença / Cuidado & Conexão / Casa de Paz')).toEqual(['presence', 'care', 'house'])
   })
+  it('prevents invalid or duplicated names after manual preview edits', () => {
+    const rows = parseTeamBulkImport(['Beatriz - Mesa Aberta', 'Lucas - Apoio'].join('\n')).rows
+    const revised = rows.map((row) => row.name === 'Lucas'
+      ? reviewEditedTeamImportCandidate({ ...row, name: '  BEATRIZ  ' })
+      : row)
+    expect(validateTeamImportPreview(revised).duplicateNameIds).toEqual([revised[1].id])
+    expect(validateTeamImportPreview(rows)).toEqual({
+      invalidNameIds: [], duplicateNameIds: [], tooMany: false,
+    })
+    const erased = reviewEditedTeamImportCandidate({ ...rows[0], name: ' ' })
+    expect(validateTeamImportPreview([erased]).invalidNameIds).toEqual([erased.id])
+    expect(validateTeamImportPreview([{ ...rows[0], name: 'A'.repeat(121) }]).invalidNameIds).toEqual([rows[0].id])
+  })
+
+  it('updates review warnings when the volunteer corrects a parsed name or chooses an area', () => {
+    const row = parseTeamBulkImport('Pessoa 123').rows[0]
+    expect(row.needsReview).toBe(true)
+    const fixed = reviewEditedTeamImportCandidate({ ...row, name: 'Pessoa Corrigida', areas: ['presence'] })
+    expect(fixed.needsReview).toBe(false)
+    expect(fixed.warnings).toEqual([])
+  })
+
+  it('requires batches of 200 or fewer entries', () => {
+    const row = parseTeamBulkImport('Pessoa Única - Apoio').rows[0]
+    const many = Array.from({ length: 201 }, (_, i) => ({ ...row, id: String(i), name: `Pessoa ${i}` }))
+    expect(validateTeamImportPreview(many).tooMany).toBe(true)
+  })
+
 })
