@@ -312,3 +312,34 @@ export function parseTeamBulkImport(text: string): TeamImportParseResult {
     headerDetected: false,
   }
 }
+
+/**
+ * Recheck edited preview rows before they can be persisted. The original
+ * parser cannot know if a volunteer later deletes or duplicates a name.
+ * No personal data is transmitted by these checks.
+ */
+export function validateTeamImportPreview(rows: TeamImportCandidate[]) {
+  const invalidNameIds: string[] = []
+  const duplicateNameIds: string[] = []
+  const seen = new Set<string>()
+  for (const row of rows) {
+    const name = row.name.trim()
+    const normalized = normalizeTeamInterestName(name)
+    if (name.length > 120 || normalized.length < 2 || /[0-9]/.test(name) || !/[a-z]/i.test(normalized)) {
+      invalidNameIds.push(row.id)
+      continue
+    }
+    if (seen.has(normalized)) duplicateNameIds.push(row.id)
+    seen.add(normalized)
+  }
+  return {
+    invalidNameIds,
+    duplicateNameIds,
+    tooMany: rows.length > 200,
+  }
+}
+
+export function reviewEditedTeamImportCandidate(row: TeamImportCandidate): TeamImportCandidate {
+  const warnings = candidateWarnings(row.name.trim(), row.areas)
+  return { ...row, name: row.name, warnings, needsReview: warnings.length > 0 }
+}
