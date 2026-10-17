@@ -142,7 +142,8 @@ export default function TeamBulkImportPage() {
   const fileRef = useRef<HTMLInputElement>(null)
   const imageGuard = useRef(createScopedAsyncGuard())
   const recordsGuard = useRef(createScopedAsyncGuard())
-  useEffect(() => () => { imageGuard.current.dispose(); recordsGuard.current.dispose() }, [])
+  // Invalidate on unmount; React StrictMode may replay effect cleanup in development.
+  useEffect(() => () => { imageGuard.current.invalidate(); recordsGuard.current.invalidate() }, [])
 
   const canManage = Boolean(access?.canManageImplementation)
 
