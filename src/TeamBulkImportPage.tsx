@@ -29,6 +29,7 @@ import {
 } from './teamBulkImport'
 import { getInitialLocale, localeLabels, persistLocale, type AppLocale } from './i18n'
 import { AccessDeniedState } from './AccessDeniedState'
+import { createScopedAsyncGuard } from './scopedAsyncGuard'
 import './TeamBulkImportPage.css'
 
 const OCR_MODULE_URL = 'https://cdn.jsdelivr.net/npm/tesseract.js@6.0.1/dist/tesseract.esm.min.js'
@@ -139,15 +140,23 @@ export default function TeamBulkImportPage() {
   const [editName, setEditName] = useState('')
   const [editAreas, setEditAreas] = useState<TeamInterestArea[]>([])
   const fileRef = useRef<HTMLInputElement>(null)
+  const imageGuard = useRef(createScopedAsyncGuard())
+  const recordsGuard = useRef(createScopedAsyncGuard())
+  // Invalidate on unmount; React StrictMode may replay effect cleanup in development.
+  useEffect(() => () => { imageGuard.current.invalidate(); recordsGuard.current.invalidate() }, [])
 
   const canManage = Boolean(access?.canManageImplementation)
 
   const refreshRecords = useCallback(async (nextAccess: JourneyAccessContext, unitId: string) => {
     if (!unitId || !nextAccess.canManageImplementation) {
+      recordsGuard.current.invalidate()
       setRecords([])
       return
     }
-    setRecords((await listJourneyTeamInterests(nextAccess, unitId)).filter((record) => record.active))
+    const scope = `${nextAccess.organizationId}/${unitId}`
+    const token = recordsGuard.current.start(scope)
+    const loaded = await listJourneyTeamInterests(nextAccess, unitId)
+    if (recordsGuard.current.isCurrent(token, scope)) setRecords(loaded.filter((record) => record.active))
   }, [])
 
   const bootstrap = useCallback(async () => {
@@ -177,6 +186,8 @@ export default function TeamBulkImportPage() {
 
   async function changeCongregation(nextId: string) {
     if (!access) return
+    imageGuard.current.invalidate()
+    setOcrBusy(false)
     setCongregationId(nextId)
     // Never carry an imported preview over to a different congregation.
     setPreview([])
@@ -207,6 +218,11 @@ export default function TeamBulkImportPage() {
 
   async function readImage(file: File) {
     if (!file.type.startsWith('image/') || ocrBusy) return
+    if (file.size > 10 * 1024 * 1024) { setError(t.ocrFailed); return }
+    if (!access?.organizationId || !congregationId) { setError(t.error); return }
+    const scope = `${access.organizationId}/${congregationId}`
+    const token = imageGuard.current.start(scope)
+    const isCurrent = () => imageGuard.current.isCurrent(token, scope)
     // A failed OCR must not leave a previously approved list importable.
     setPreview([])
     setReviewConfirmed(false)
@@ -224,6 +240,7 @@ export default function TeamBulkImportPage() {
         congregationId,
         locale,
       })
+      if (!isCurrent()) return
       setOcrProgress(90)
       const text = journeyExtractionToReviewText(extraction).trim()
       if (!text) throw new Error('NESTJOURNEY_EMPTY_FORM_EXTRACTION')
@@ -231,6 +248,7 @@ export default function TeamBulkImportPage() {
       analyze(text, 'image')
       setOcrProgress(100)
     } catch (nestAiCause) {
+      if (!isCurrent()) return
       // Graceful zero-cost fallback: OCR remains local in the browser. It never
       // registers or persists a person; the deterministic parser + human review
       // remain the authority before commit.
@@ -243,20 +261,24 @@ export default function TeamBulkImportPage() {
             options?: { logger?: (message: { status?: string; progress?: number }) => void },
           ) => Promise<{ data: { text: string } }>
         }
+        if (!isCurrent()) return
         const result = await module.recognize(file, 'por', {
           logger: (message) => {
-            if (typeof message.progress === 'number') setOcrProgress(Math.round(message.progress * 100))
+            if (isCurrent() && typeof message.progress === 'number') setOcrProgress(Math.round(message.progress * 100))
           },
         })
+        if (!isCurrent()) return
         const text = result.data.text.trim()
         setSourceText(text)
         analyze(text, 'image')
       } catch (fallbackCause) {
-        console.error('Image OCR failed', fallbackCause)
-        setError(t.ocrFailed)
+        if (isCurrent()) {
+          console.error('Image OCR failed', fallbackCause)
+          setError(t.ocrFailed)
+        }
       }
     } finally {
-      setOcrBusy(false)
+      if (isCurrent()) setOcrBusy(false)
     }
   }
 
