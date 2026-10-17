@@ -69,6 +69,7 @@ const copy={
     back:'Início',loading:'Carregando equipe…',yourAccess:'Seu acesso no NestJourney',role:'Função no NestJourney',invite:'Convidar pessoa',
     full:'Acesso amplo',yes:'Permitido',no:'Sem acesso',members:'Membros & Convites',roles:'Cargos da organização',
     hubNote:'Identidade, convites e cargos da organização continuam no MillionsNest Hub. Aqui você define a responsabilidade operacional específica do NestJourney.',
+    bulkIntake:'Organizar voluntários',bulkIntakeDesc:'Tem uma lista de nomes e escolhas? Importe por texto, planilha ou imagem, revise e distribua por área antes de convidar cada pessoa.',bulkIntakeAction:'Importar inscrições',
     fronts:'Frentes do projeto',frontsDesc:'Estrutura inicial baseada nos manuais do Raiz e Mesa. Comece pequeno e aumente conforme a cultura amadurecer.',
     pastor:'Pastor guardião',pastorDesc:'Guarda visão, doutrina, segurança, correção e casos sensíveis.',pastorSize:'1 pastor + 1 auxiliar de referência',
     presence:'Equipe Presença',presenceDesc:'Recebe, nota, conecta e acompanha sem transformar pessoas em números.',presenceSize:'Ideal inicial: 4–6 pessoas',
@@ -89,6 +90,7 @@ const copy={
     back:'Home',loading:'Loading team…',yourAccess:'Your NestJourney access',role:'NestJourney responsibility',invite:'Invite person',
     full:'Broad access',yes:'Allowed',no:'No access',members:'Members & Invites',roles:'Organization roles',
     hubNote:'Identity, invitations, and organization roles stay in MillionsNest Hub. Here you define each person’s NestJourney operational responsibility.',
+    bulkIntake:'Organize volunteers',bulkIntakeDesc:'Have a sign-up list? Import from text, a spreadsheet or an image, review it, and distribute each area before inviting members.',bulkIntakeAction:'Import sign-ups',
     fronts:'Ministry fronts',frontsDesc:'Initial structure based on the Raiz e Mesa manuals. Start small and expand as the culture matures.',
     pastor:'Pastoral guardian',pastorDesc:'Protects vision, doctrine, safety, correction, and sensitive cases.',pastorSize:'1 pastor + 1 reference assistant',
     presence:'Presence Team',presenceDesc:'Welcomes, notices, connects, and follows people without turning them into numbers.',presenceSize:'Initial ideal: 4–6 people',
@@ -109,6 +111,7 @@ const copy={
     back:'Inicio',loading:'Cargando equipo…',yourAccess:'Tu acceso en NestJourney',role:'Función en NestJourney',invite:'Invitar persona',
     full:'Acceso amplio',yes:'Permitido',no:'Sin acceso',members:'Miembros & Invitaciones',roles:'Cargos de la organización',
     hubNote:'Identidad, invitaciones y cargos siguen en MillionsNest Hub. Aquí defines la responsabilidad operativa específica de NestJourney.',
+    bulkIntake:'Organizar voluntarios',bulkIntakeDesc:'¿Tienes una lista de inscripciones? Importa texto, hoja de cálculo o imagen, revisa las áreas antes de invitar a cada persona.',bulkIntakeAction:'Importar inscripciones',
     fronts:'Frentes del proyecto',frontsDesc:'Estructura inicial basada en los manuales de Raiz e Mesa. Empieza pequeño y crece con la cultura.',
     pastor:'Pastor guardián',pastorDesc:'Guarda visión, doctrina, seguridad, corrección y casos sensibles.',pastorSize:'1 pastor + 1 auxiliar de referencia',
     presence:'Equipo Presencia',presenceDesc:'Recibe, observa, conecta y acompaña sin convertir personas en números.',presenceSize:'Ideal inicial: 4–6 personas',
@@ -286,6 +289,11 @@ export default function TeamSetupPage(){
       ]:[{label:t.members,href:HUB_MEMBERS_URL,primary:true}]}
     />
 
+    {access?.canManageImplementation?<section className="team-guidance">
+      <ClipboardCheck size={20}/>
+      <div><strong>{t.bulkIntake}</strong><p>{t.bulkIntakeDesc}</p></div>
+      <a href="/team-import">{t.bulkIntakeAction}<ArrowUpRight size={14}/></a>
+    </section>:null}
     {canAssign?<section className="team-section team-responsibility-section" id="team-responsibilities">
       <div className="team-section-heading"><span className="team-kicker">{t.responsibilities}</span><h2>{t.responsibilities}</h2><p>{t.responsibilitiesDesc}</p></div>
       <div className="team-member-list">
