@@ -67,3 +67,5 @@ Consulte:
 - [Auditoria de produto e roadmap](docs/ROADMAP_AUDIT.md)
 
 O repositório é público. Credenciais e dados reais de pessoas nunca devem ser versionados.
+
+A publicação de Rules/índices no Firebase compartilhado é responsabilidade exclusiva do repositório canônico MillionsNest Hub. Rules locais são usadas somente em testes. O deploy do NestJourney verifica a policy real por leitura e fingerprint estrito antes de publicar Hosting, preservando rollback e os gates de autoridade/versão do Connect. O produtor durável de `followup.due` e sua revalidação de consentimento também residem no backend canônico Hub; a PWA não recebe HMAC nem cria uma segunda fila de envio.
