@@ -22,6 +22,8 @@ import {
   TEAM_INTEREST_AREAS,
   TEAM_INTEREST_AREA_LABELS,
   parseTeamBulkImport,
+  validateTeamImportPreview,
+  reviewEditedTeamImportCandidate,
   type TeamImportCandidate,
   type TeamInterestArea,
 } from './teamBulkImport'
@@ -52,6 +54,9 @@ const copy = {
     empty: 'Ainda não há inscrições importadas nesta unidade.', error: 'Não foi possível concluir a operação.',
     noRows: 'Não encontrei pessoas nessa lista. Confira o formato e tente novamente.',
     headerDetected: 'Cabeçalho de planilha reconhecido.', needsReview: 'Confira este registro antes de importar.',
+    invalidPreview: 'Corrija nomes inválidos, nomes repetidos ou divida a lista em lotes de até 200 pessoas.',
+    reviewConfirm: 'Revisei os registros sinalizados e confirmo que os nomes e as áreas estão corretos.',
+    reviewRequired: 'Confirme a revisão dos registros sinalizados para continuar.',
   },
   en: {
     title: 'Bulk import list',
@@ -73,6 +78,9 @@ const copy = {
     empty: 'There are no imported sign-ups for this campus yet.', error: 'The operation could not be completed.',
     noRows: 'I could not find people in this list. Check the format and try again.',
     headerDetected: 'Spreadsheet header recognized.', needsReview: 'Review this record before importing.',
+    invalidPreview: 'Fix invalid names, duplicate names, or split the list into batches of 200 people or fewer.',
+    reviewConfirm: 'I reviewed the flagged entries and confirm the names and areas are correct.',
+    reviewRequired: 'Confirm that the flagged entries were reviewed to continue.',
   },
   es: {
     title: 'Importar lista en masa',
@@ -94,6 +102,9 @@ const copy = {
     empty: 'Todavía no hay inscripciones importadas en esta sede.', error: 'No se pudo completar la operación.',
     noRows: 'No encontré personas en esta lista. Revisa el formato e inténtalo de nuevo.',
     headerDetected: 'Encabezado de hoja reconocido.', needsReview: 'Revisa este registro antes de importar.',
+    invalidPreview: 'Corrige nombres inválidos, nombres duplicados o divide la lista en lotes de máximo 200 personas.',
+    reviewConfirm: 'Revisé los registros marcados y confirmo que los nombres y áreas son correctos.',
+    reviewRequired: 'Confirma la revisión de los registros señalados para continuar.',
   },
 } as const
 
@@ -117,6 +128,7 @@ export default function TeamBulkImportPage() {
   const [preview, setPreview] = useState<TeamImportCandidate[]>([])
   const [ignoredLines, setIgnoredLines] = useState(0)
   const [headerDetected, setHeaderDetected] = useState(false)
+  const [reviewConfirmed, setReviewConfirmed] = useState(false)
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [ocrBusy, setOcrBusy] = useState(false)
@@ -168,6 +180,7 @@ export default function TeamBulkImportPage() {
     setCongregationId(nextId)
     // Never carry an imported preview over to a different congregation.
     setPreview([])
+    setReviewConfirmed(false)
     setSourceText('')
     setIgnoredLines(0)
     setHeaderDetected(false)
@@ -184,6 +197,7 @@ export default function TeamBulkImportPage() {
     setError('')
     setNotice('')
     setSourceKind(kind)
+    setReviewConfirmed(false)
     const result = parseTeamBulkImport(text)
     setPreview(result.rows)
     setIgnoredLines(result.ignoredLines)
@@ -195,6 +209,7 @@ export default function TeamBulkImportPage() {
     if (!file.type.startsWith('image/') || ocrBusy) return
     // A failed OCR must not leave a previously approved list importable.
     setPreview([])
+    setReviewConfirmed(false)
     setIgnoredLines(0)
     setHeaderDetected(false)
     setOcrBusy(true)
@@ -255,15 +270,24 @@ export default function TeamBulkImportPage() {
   }
 
   function patchPreview(id: string, patch: Partial<TeamImportCandidate>) {
+    setReviewConfirmed(false)
     setPreview((current) => current.map((row) => {
       if (row.id !== id) return row
-      const next = { ...row, ...patch }
-      return { ...next, needsReview: next.areas.length === 0 || next.warnings.includes('check_name') }
+      return reviewEditedTeamImportCandidate({ ...row, ...patch })
     }))
   }
 
   async function commitImport() {
-    if (!access || !congregationId || !preview.length) return
+    if (!access || !congregationId || !preview.length || busy || ocrBusy) return
+    const issues = validateTeamImportPreview(preview)
+    if (issues.tooMany || issues.invalidNameIds.length || issues.duplicateNameIds.length) {
+      setError(t.invalidPreview)
+      return
+    }
+    if (preview.some((row) => row.needsReview) && !reviewConfirmed) {
+      setError(t.reviewRequired)
+      return
+    }
     setBusy(true)
     setError('')
     setNotice('')
@@ -317,6 +341,8 @@ export default function TeamBulkImportPage() {
   }
 
   const reviewCount = preview.filter((row) => row.needsReview).length
+  const previewIssues = useMemo(() => validateTeamImportPreview(preview), [preview])
+  const previewHasErrors = previewIssues.tooMany || previewIssues.invalidNameIds.length > 0 || previewIssues.duplicateNameIds.length > 0
   const grouped = useMemo(() => {
     const map = new Map<TeamInterestArea | 'unassigned', JourneyTeamInterestRecord[]>()
     TEAM_INTEREST_AREAS.forEach((area) => map.set(area, []))
@@ -364,7 +390,7 @@ export default function TeamBulkImportPage() {
         <div className="team-import-source-grid">
           <div className="team-import-text-source">
             <div className="team-import-source-title"><ClipboardPaste size={17}/><strong>{t.paste}</strong></div>
-            <textarea value={sourceText} disabled={busy || ocrBusy} onChange={(event) => { setSourceText(event.target.value); setSourceKind('paste'); setPreview([]); setIgnoredLines(0); setHeaderDetected(false); setNotice('') }} placeholder={t.placeholder}/>
+            <textarea value={sourceText} disabled={busy || ocrBusy} onChange={(event) => { setSourceText(event.target.value); setSourceKind('paste'); setPreview([]); setReviewConfirmed(false); setIgnoredLines(0); setHeaderDetected(false); setNotice('') }} placeholder={t.placeholder}/>
             <button className="team-import-primary" disabled={!sourceText.trim() || busy || ocrBusy} onClick={() => analyze()}>
               <Sparkles size={16}/>{t.analyze}
             </button>
@@ -396,7 +422,7 @@ export default function TeamBulkImportPage() {
             <div className="team-import-row-main">
               <span className="team-import-row-number">{row.sourceLine}</span>
               <input value={row.name} aria-label="Name" onChange={(event) => patchPreview(row.id, { name: event.target.value })}/>
-              <button className="team-import-remove" title={t.remove} onClick={() => setPreview((current) => current.filter((item) => item.id !== row.id))}><X size={15}/></button>
+              <button className="team-import-remove" title={t.remove} onClick={() => { setReviewConfirmed(false); setPreview((current) => current.filter((item) => item.id !== row.id)) }}><X size={15}/></button>
             </div>
             <div className="team-import-area-pills">
               {TEAM_INTEREST_AREAS.map((area) => <button className={row.areas.includes(area) ? 'active' : ''} key={area} onClick={() => patchPreview(row.id, { areas: toggleArea(row.areas, area) })}>{areaLabel(area, locale)}</button>)}
@@ -404,9 +430,14 @@ export default function TeamBulkImportPage() {
             {row.needsReview ? <small className="team-import-review-note"><AlertTriangle size={13}/>{t.needsReview}</small> : null}
           </article>)}
         </div>
+        {previewHasErrors ? <div className="team-import-alert error" role="alert"><AlertTriangle size={17}/><span>{t.invalidPreview}</span></div> : null}
+        {reviewCount > 0 ? <label className="team-import-review-confirm">
+          <input type="checkbox" checked={reviewConfirmed} disabled={busy || ocrBusy} onChange={(event) => setReviewConfirmed(event.target.checked)}/>
+          <span>{t.reviewConfirm}</span>
+        </label> : null}
         <div className="team-import-commit">
           <span>{reviewCount ? `${reviewCount} · ${t.review}` : ''}</span>
-          <button className="team-import-primary" disabled={busy} onClick={() => void commitImport()}>
+          <button className="team-import-primary" disabled={busy || ocrBusy || !congregationId || previewHasErrors || (reviewCount > 0 && !reviewConfirmed)} onClick={() => void commitImport()}>
             {busy ? <LoaderCircle className="spin" size={16}/> : <UserRoundCheck size={16}/>}
             {busy ? t.importing : `${t.import} · ${preview.length}`}
           </button>
