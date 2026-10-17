@@ -50,7 +50,7 @@ describe('team bulk import parser', () => {
     expect(detectTeamInterestAreas('Presença / Cuidado & Conexão / Casa de Paz')).toEqual(['presence', 'care', 'house'])
   })
   it('prevents invalid or duplicated names after manual preview edits', () => {
-    const rows = parseTeamBulkImport('Beatriz - Mesa Aberta\\nLucas - Apoio').rows
+    const rows = parseTeamBulkImport(['Beatriz - Mesa Aberta', 'Lucas - Apoio'].join('\n')).rows
     const revised = rows.map((row) => row.name === 'Lucas'
       ? reviewEditedTeamImportCandidate({ ...row, name: '  BEATRIZ  ' })
       : row)
