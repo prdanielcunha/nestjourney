@@ -62,6 +62,18 @@ export function JourneyIntakeAdminPanel({access,congregationId,people,locale,onI
       setUrl(String(data.url||''))
     }catch{setError(t.failure)}finally{setBusy(false)}
   }
+  const reject=async(row:Intake)=>{
+    const confirmation=locale==='en'?'Reject and erase this submission?':locale==='es'?'¿Rechazar y borrar esta solicitud?':'Rejeitar e apagar nome e telefone desta solicitação?'
+    if(!window.confirm(confirmation))return
+    setBusy(true);setError('');setInfo('')
+    try{
+      await call('/api/v1/organizations/'+encodeURIComponent(access.organizationId)+'/nestjourney/intakes/'+encodeURIComponent(row.id)+'/reject',{
+        method:'POST',body:JSON.stringify({}),
+      })
+      await reload()
+      setInfo(locale==='en'?'Submission rejected and contact erased.':locale==='es'?'Solicitud rechazada y datos eliminados.':'Solicitação rejeitada e dados de contato apagados.')
+    }catch{setError(t.failure)}finally{setBusy(false)}
+  }
   const revoke=async()=>{
     if(!url||!window.confirm(locale==='en'?'Revoke this link?':locale==='es'?'¿Revocar este enlace?':'Revogar este link?'))return
     setBusy(true);setError('');setInfo('')
@@ -98,7 +110,7 @@ export function JourneyIntakeAdminPanel({access,congregationId,people,locale,onI
         <option value="">{t.new}</option>
         {people.map(person=><option value={person.id} key={person.id}>{person.preferredName||person.name}</option>)}
       </select>
-      <button type="button" disabled={busy} onClick={()=>void integrate(row)}>{t.approve}</button>
+      <button type="button" disabled={busy} onClick={()=>void integrate(row)}>{t.approve}</button><button type="button" disabled={busy} onClick={()=>void reject(row)}>{locale==='en'?'Reject':locale==='es'?'Rechazar':'Rejeitar'}</button>
     </article>)}</div>
     <div className="intake-admin-notice"><ShieldCheck size={15}/><small>{t.notice}</small></div>
   </section>
