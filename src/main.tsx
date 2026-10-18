@@ -21,6 +21,7 @@ import PresenceAssistPage from './PresenceAssistPage.tsx'
 import CareIntegrityPage from './CareIntegrityPage.tsx'
 import FollowupRuntimePage from './FollowupRuntimePage.tsx'
 import JourneyProfilePage from './JourneyProfilePage.tsx'
+import BirthdayCalendarPage from './BirthdayCalendarPage.tsx'
 import MyTodayPage from './MyTodayPage.tsx'
 import GroupsRuntimePage from './GroupsRuntimePage.tsx'
 import DiscipleshipRuntimePage from './DiscipleshipRuntimePage.tsx'
@@ -105,6 +106,8 @@ function JourneyRoute() {
       return <FollowupRuntimePage />
     case 'profile':
       return <JourneyProfilePage />
+    case 'birthdays':
+      return <BirthdayCalendarPage />
     case 'today':
       return <MyTodayPage />
     case 'groups':
