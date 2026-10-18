@@ -35,38 +35,35 @@ const icsEscape=(s:string)=>s.replace(/\\/g,'\\\\').replace(/\r?\n/g,'\\n').repl
 const addDay=(d:Date)=>new Date(d.getTime()+86400000)
 /** Single-person opt-in local export; never includes phone, church name, affiliation or hidden notes. */
 export function birthdayIcs(person:{personId:string;name:string;month:number;day:number},now=new Date()):string {
-  const start=nextBirthday(person.month,person.day,now).date
-  const next=addDay(start)
+  const first=nextBirthday(person.month,person.day,now).date
   const title=icsEscape('Aniversário de '+person.name)
   const uid=encodeURIComponent(person.personId).replace(/%/g,'')+'@nestjourney.millionsnest.com'
-  const rules=['RRULE:FREQ=YEARLY']
-  // Native YEARLY skips non-leap years for Feb 29. Add explicit Feb 28 dates for those years.
-  if(person.month===2 && person.day===29){
-    const extra:string[]=[]
-    for(let year=start.getUTCFullYear();year<start.getUTCFullYear()+40;year++){
-      const date=birthdayDateInYear(2,29,year)
-      if(date.getUTCDate()===28 && date.getTime()!==start.getTime())extra.push(isoDay(date))
-    }
-    if(extra.length)rules.push('RDATE;VALUE=DATE:'+extra.join(','))
-  }
-  const parts=[
-    'BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//MillionsNest//NestJourney Birthdays//PT-BR',
-    'CALSCALE:GREGORIAN','METHOD:PUBLISH','BEGIN:VEVENT',
-    'UID:'+uid,'DTSTAMP:'+isoDay(new Date())+'T000000Z',
-    'DTSTART;VALUE=DATE:'+isoDay(start),'DTEND;VALUE=DATE:'+isoDay(next),
-    ...rules,'SUMMARY:'+title,'CLASS:PRIVATE','TRANSP:TRANSPARENT',
+  const event=(date:Date,suffix:string,repeat:boolean)=>[
+    'BEGIN:VEVENT','UID:'+suffix+uid,'DTSTAMP:'+isoDay(new Date())+'T000000Z',
+    'DTSTART;VALUE=DATE:'+isoDay(date),'DTEND;VALUE=DATE:'+isoDay(addDay(date)),
+    ...(repeat?['RRULE:FREQ=YEARLY']:[]),
+    'SUMMARY:'+title,'CLASS:PRIVATE','TRANSP:TRANSPARENT',
     'DESCRIPTION:Aniversário adicionado individualmente pelo usuário no NestJourney.',
     'BEGIN:VALARM','TRIGGER:-P1D','ACTION:DISPLAY','DESCRIPTION:'+title,'END:VALARM',
-    'END:VEVENT','END:VCALENDAR',''
+    'END:VEVENT'
   ]
-  return parts.join('\r\n')
+  // Feb 29 is represented by 40 separate all-day events, observing Feb 28
+  // in non-leap years; a naive annual RRULE would silently miss those years.
+  const events=person.month===2&&person.day===29
+    ?Array.from({length:40},(_,i)=>birthdayDateInYear(2,29,first.getUTCFullYear()+i))
+      .filter(date=>date.getTime()>=first.getTime())
+      .flatMap(date=>event(date,isoDay(date)+'-',false))
+    :event(first,'',true)
+  return ['BEGIN:VCALENDAR','VERSION:2.0',
+    'PRODID:-//MillionsNest//NestJourney Birthdays//PT-BR',
+    'CALSCALE:GREGORIAN','METHOD:PUBLISH',...events,'END:VCALENDAR',''].join('\r\n')
 }
 export function googleBirthdayUrl(person:{name:string;month:number;day:number},now=new Date()):string {
   const start=nextBirthday(person.month,person.day,now).date
   const params=new URLSearchParams({
     action:'TEMPLATE',text:'Aniversário de '+person.name,
     dates:isoDay(start)+'/'+isoDay(addDay(start)),
-    recur:'RRULE:FREQ=YEARLY',
+    ...(person.month===2&&person.day===29?{}:{recur:'RRULE:FREQ=YEARLY'}),
     details:'Aniversário adicionado individualmente pelo usuário a partir do NestJourney.'
   })
   return 'https://calendar.google.com/calendar/render?'+params.toString()
