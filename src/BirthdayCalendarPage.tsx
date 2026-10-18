@@ -222,7 +222,7 @@ export default function BirthdayCalendarPage(){
           <div className="bd-grid">
             {weekNames[locale].map((name,i)=><div className="bd-weekday" key={i}>{name}</div>)}
             {days.map((number,i)=>{
-              const events=thisMonth.filter(p=>p.day===number)
+              const events=thisMonth.filter(p=>p.day===number||(p.month===2&&p.day===29&&cursor.getFullYear()%4!==0&&number===28))
               const today=new Date(),isToday=number===today.getDate()&&cursor.getMonth()===today.getMonth()&&cursor.getFullYear()===today.getFullYear()
               return <div key={i} className={'bd-day '+(!number?'inactive ':'')+(isToday?'today ':'')+(events.length?'has-event':'')}>
                 {number?<><span>{number}</span><div className="bd-day-names">{events.slice(0,2).map(e=><button type="button" key={e.personId} title={e.name} onClick={()=>canEdit&&openEditor(e.personId)}>{e.name.split(' ')[0]}</button>)}{events.length>2?<small>+{events.length-2}</small>:null}</div></>:null}
@@ -234,7 +234,7 @@ export default function BirthdayCalendarPage(){
           <div className="bd-upcoming-title"><div className="bd-mini-label"><CalendarDays size={16}/>{t.upcoming}</div><span>{searched.length}</span></div>
           <div className="bd-upcoming-list">{searched.length===0?<p className="bd-empty">{filter?t.noMatch:t.empty}</p>:searched.slice(0,60).map(person=><article className="bd-person" key={person.personId}>
             <span className="bd-avatar">{initials(person.name)}</span>
-            <div className="bd-person-detail"><strong>{person.name}</strong><small>{new Intl.DateTimeFormat(locale,{day:'numeric',month:'long'}).format(person.nextDate)} · {person.daysUntil===0?t.today:person.daysUntil===1?'1 dia':person.daysUntil+' dias'}</small><span className="bd-visibility"><ShieldCheck size={12}/>{person.shareWithTeam?t.shared:t.private}</span></div>
+            <div className="bd-person-detail"><strong>{person.name}</strong><small>{new Intl.DateTimeFormat(locale,{day:'numeric',month:'long',timeZone:'UTC'}).format(person.nextDate)} · {person.daysUntil===0?t.today:person.daysUntil===1?'1 dia':person.daysUntil+' dias'}</small><span className="bd-visibility"><ShieldCheck size={12}/>{person.shareWithTeam?t.shared:t.private}</span></div>
             <div className="bd-person-actions">
               <button type="button" title={t.ics} aria-label={t.ics+' — '+person.name} onClick={()=>downloadBirthdayIcs(person)}><Download size={17}/></button>
               <a href={googleBirthdayUrl(person)} target="_blank" rel="noopener noreferrer" aria-label={t.google+' — '+person.name} title={t.google}><ExternalLink size={16}/></a>
