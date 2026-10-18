@@ -32,6 +32,7 @@ describe('birthdays',()=>{
   })
   it('includes non-leap years for Feb 29 exports',()=>{
     const ics=birthdayIcs({personId:'leap',name:'Lia',day:29,month:2},new Date(2028,1,1))
-    expect(ics).toContain('RDATE;VALUE=DATE:20290228')
+    expect(ics).toContain('DTSTART;VALUE=DATE:20290228')
+    expect(ics).toContain('DTSTART;VALUE=DATE:20280229')
   })
 })
