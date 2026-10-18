@@ -222,7 +222,7 @@ export default function BirthdayCalendarPage(){
           <div className="bd-grid">
             {weekNames[locale].map((name,i)=><div className="bd-weekday" key={i}>{name}</div>)}
             {days.map((number,i)=>{
-              const events=thisMonth.filter(p=>p.day===number||(p.month===2&&p.day===29&&cursor.getFullYear()%4!==0&&number===28))
+              const events=thisMonth.filter(p=>p.day===number||(p.month===2&&p.day===29&&new Date(cursor.getFullYear(),2,0).getDate()===28&&number===28))
               const today=new Date(),isToday=number===today.getDate()&&cursor.getMonth()===today.getMonth()&&cursor.getFullYear()===today.getFullYear()
               return <div key={i} className={'bd-day '+(!number?'inactive ':'')+(isToday?'today ':'')+(events.length?'has-event':'')}>
                 {number?<><span>{number}</span><div className="bd-day-names">{events.slice(0,2).map(e=><button type="button" key={e.personId} title={e.name} onClick={()=>canEdit&&openEditor(e.personId)}>{e.name.split(' ')[0]}</button>)}{events.length>2?<small>+{events.length-2}</small>:null}</div></>:null}
