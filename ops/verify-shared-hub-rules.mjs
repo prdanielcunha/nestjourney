@@ -1,8 +1,8 @@
 import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { pathToFileURL } from 'node:url'
-// Reviewed production candidate from Hub PR #402, SHA256 checked against exact main and production source difference. This app must never publish local Rules/indexes.
-export const APPROVED_HUB_RULES_SHA256 = '03107a9367c9bb268ba39e13ad88a92092d1bd9bb6fcd59f0c7c680f1fe2f149'
+// Canonical Hub birthday/RBAC candidate from production release PR #411; publish and verify exact live SHA before NestJourney deploy. This app must never publish local Rules/indexes.
+export const APPROVED_HUB_RULES_SHA256 = '3e13dbc593090f830c95d88749efe787dcf22699cc027bbc0736a857b5c66ee1'
 export function verifyPublishedHubRulesSource(value, expected = APPROVED_HUB_RULES_SHA256) {
   const files = value?.source?.files
   if (!Array.isArray(files) || files.length !== 1 || files[0]?.name !== 'firestore.rules' ||

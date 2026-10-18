@@ -13,6 +13,7 @@ export type JourneyRoute =
   | 'care'
   | 'followup'
   | 'profile'
+  | 'birthdays'
   | 'groups'
   | 'discipleship'
   | 'milestones'
@@ -59,6 +60,8 @@ export function resolveJourneyRoute(pathname: string): JourneyRoute {
       return 'followup'
     case '/journey-profile':
       return 'profile'
+    case '/birthdays':
+      return 'birthdays'
     case '/my-today':
       return 'today'
     case '/groups-runtime':

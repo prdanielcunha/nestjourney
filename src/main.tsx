@@ -21,6 +21,7 @@ import PresenceAssistPage from './PresenceAssistPage.tsx'
 import CareIntegrityPage from './CareIntegrityPage.tsx'
 import FollowupRuntimePage from './FollowupRuntimePage.tsx'
 import JourneyProfilePage from './JourneyProfilePage.tsx'
+import BirthdayCalendarPage from './BirthdayCalendarPage.tsx'
 import MyTodayPage from './MyTodayPage.tsx'
 import GroupsRuntimePage from './GroupsRuntimePage.tsx'
 import DiscipleshipRuntimePage from './DiscipleshipRuntimePage.tsx'
@@ -31,6 +32,7 @@ import TeamSetupPage from './TeamSetupPage.tsx'
 import SupportPage from './SupportPage.tsx'
 import TeamBulkImportPage from './TeamBulkImportPage.tsx'
 import JourneyJoinPage from './JourneyJoinPage.tsx'
+import JourneyPublicIntakePage from './JourneyPublicIntakePage.tsx'
 import JourneySettingsPage from './JourneySettingsPage.tsx'
 import GovernanceRuntimePage from './GovernanceRuntimePage.tsx'
 import PastoralHandoffPage from './PastoralHandoffPage.tsx'
@@ -105,6 +107,8 @@ function JourneyRoute() {
       return <FollowupRuntimePage />
     case 'profile':
       return <JourneyProfilePage />
+    case 'birthdays':
+      return <BirthdayCalendarPage />
     case 'today':
       return <MyTodayPage />
     case 'groups':
@@ -134,7 +138,9 @@ function JourneyRoute() {
   }
 }
 
+const publicIntakePath=/^\/cadastro\/[A-Za-z0-9_-]{32,80}\/?$/.test(window.location.pathname)
 createRoot(document.getElementById('root')!).render(
+  publicIntakePath?<StrictMode><JourneyPublicIntakePage/></StrictMode>:
   <StrictMode>
     <EcosystemSessionGate>
       <JourneyLabelsProvider>
