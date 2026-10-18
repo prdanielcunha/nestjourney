@@ -8,6 +8,7 @@ import './JourneyIntakeAdminPanel.css'
 
 const API=(import.meta.env.VITE_MILLIONSNEST_URL||'https://www.millionsnest.com').replace(/\/$/,'')
 type Intake={id:string;name:string;phone:string;congregationId:string;consentContact:boolean;createdAtMs:number|null}
+type IntakeLink={id:string;congregationId:string;congregationName:string;expiresAtMs:number;submissionsCount:number;maxSubmissions:number}
 export function JourneyIntakeAdminPanel({access,congregationId,people,locale,onIntegrated}:{
   access:JourneyAccessContext
   congregationId:string
@@ -16,6 +17,8 @@ export function JourneyIntakeAdminPanel({access,congregationId,people,locale,onI
   onIntegrated:()=>Promise<void>
 }){
   const [requests,setRequests]=useState<Intake[]>([])
+  const [links,setLinks]=useState<IntakeLink[]>([])
+  const [nextCursor,setNextCursor]=useState<string|null>(null)
   const [url,setUrl]=useState('')
   const [busy,setBusy]=useState(false)
   const [error,setError]=useState('')
@@ -48,10 +51,22 @@ export function JourneyIntakeAdminPanel({access,congregationId,people,locale,onI
     if(!response.ok||data.success!==true)throw Error(data.reasonCode||'API_FAILED')
     return data
   },[])
+  const base='/api/v1/organizations/'+encodeURIComponent(access.organizationId)+'/nestjourney'
   const reload=useCallback(async()=>{
-    const result=await call('/api/v1/organizations/'+encodeURIComponent(access.organizationId)+'/nestjourney/intakes')
+    const [result,linkData]=await Promise.all([call(base+'/intakes'),call(base+'/intake-links')])
     setRequests(result.requests||[])
-  },[access.organizationId,call])
+    setNextCursor(typeof result.nextCursor==='string'?result.nextCursor:null)
+    setLinks(linkData.links||[])
+  },[base,call])
+  const loadMore=async()=>{
+    if(!nextCursor||busy)return
+    setBusy(true);setError('')
+    try{
+      const result=await call(base+'/intakes?cursor='+encodeURIComponent(nextCursor))
+      setRequests(v=>[...v,...(result.requests||[]).filter((row:Intake)=>!v.some(old=>old.id===row.id))])
+      setNextCursor(typeof result.nextCursor==='string'?result.nextCursor:null)
+    }catch{setError(t.failure)}finally{setBusy(false)}
+  }
   useEffect(()=>{if(!canManage)return;let current=true;void reload().catch(()=>{if(current)setRequests([])});return()=>{current=false}},[canManage,reload])
   const link=async()=>{
     setBusy(true);setError('');setInfo('')
@@ -60,6 +75,7 @@ export function JourneyIntakeAdminPanel({access,congregationId,people,locale,onI
         method:'POST',body:JSON.stringify({congregationId}),
       })
       setUrl(String(data.url||''))
+      await reload()
     }catch{setError(t.failure)}finally{setBusy(false)}
   }
   const reject=async(row:Intake)=>{
@@ -74,15 +90,15 @@ export function JourneyIntakeAdminPanel({access,congregationId,people,locale,onI
       setInfo(locale==='en'?'Submission rejected and contact erased.':locale==='es'?'Solicitud rechazada y datos eliminados.':'Solicitação rejeitada e dados de contato apagados.')
     }catch{setError(t.failure)}finally{setBusy(false)}
   }
-  const revoke=async()=>{
-    if(!url||!window.confirm(locale==='en'?'Revoke this link?':locale==='es'?'¿Revocar este enlace?':'Revogar este link?'))return
+  const revoke=async(linkId?:string)=>{
+    if((!linkId&&!url)||!window.confirm(locale==='en'?'Revoke this link?':locale==='es'?'¿Revocar este enlace?':'Revogar este link?'))return
     setBusy(true);setError('');setInfo('')
     try{
-      const token=url.split('/').pop()||''
-      await call('/api/v1/organizations/'+encodeURIComponent(access.organizationId)+'/nestjourney/intake-links/revoke',{
-        method:'POST',body:JSON.stringify({token}),
+      const token=linkId?'':url.split('/').pop()||''
+      await call(base+'/intake-links/revoke',{
+        method:'POST',body:JSON.stringify(linkId?{linkId}:{token}),
       })
-      setUrl('');setInfo(locale==='en'?'Link revoked.':locale==='es'?'Enlace revocado.':'Link revogado.')
+      setUrl('');await reload();setInfo(locale==='en'?'Link revoked.':locale==='es'?'Enlace revocado.':'Link revogado.')
     }catch{setError(t.failure)}finally{setBusy(false)}
   }
   const integrate=async(row:Intake)=>{
@@ -101,6 +117,15 @@ export function JourneyIntakeAdminPanel({access,congregationId,people,locale,onI
   return <section className="intake-admin-panel">
     <div className="intake-admin-head"><div><span><UserRoundPlus size={16}/>NestJourney</span><h2>{t.title}</h2><p>{t.about}</p></div><button onClick={()=>void link()} disabled={busy}><Link2 size={16}/>{t.create}</button></div>
     {url?<div className="intake-admin-link"><input aria-label="Registration link" readOnly value={url}/><button onClick={()=>{void navigator.clipboard?.writeText(url).then(()=>setInfo(t.copy))}}><ClipboardCopy size={15}/>{t.copy}</button><button type="button" disabled={busy} onClick={()=>void revoke()}>{locale==='en'?'Revoke':locale==='es'?'Revocar':'Revogar'}</button></div>:null}
+    {links.filter(l=>l.congregationId===congregationId).length>0?<div className="intake-admin-requests">
+      <h3>{locale==='en'?'Active registration links':locale==='es'?'Enlaces de registro activos':'Links de cadastro ativos'}</h3>
+      {links.filter(l=>l.congregationId===congregationId).map(l=><article key={l.id}>
+        <div className="intake-admin-person"><strong>{l.congregationName}</strong>
+          <span>{locale==='en'?'Expires':locale==='es'?'Caduca':'Expira'} {new Intl.DateTimeFormat(locale,{day:'2-digit',month:'short'}).format(l.expiresAtMs)} · {l.submissionsCount}/{l.maxSubmissions}</span>
+        </div>
+        <button type="button" disabled={busy} onClick={()=>void revoke(l.id)}>{locale==='en'?'Revoke':locale==='es'?'Revocar':'Revogar'}</button>
+      </article>)}
+    </div>:null}
     {info?<p role="status" className="intake-admin-info">{info}</p>:null}
     {error?<p role="alert" className="intake-admin-error">{error}</p>:null}
     <h3>{t.requests} · {scoped.length}</h3>
@@ -112,6 +137,7 @@ export function JourneyIntakeAdminPanel({access,congregationId,people,locale,onI
       </select>
       <button type="button" disabled={busy} onClick={()=>void integrate(row)}>{t.approve}</button><button type="button" disabled={busy} onClick={()=>void reject(row)}>{locale==='en'?'Reject':locale==='es'?'Rechazar':'Rejeitar'}</button>
     </article>)}</div>
+    {nextCursor?<button type="button" disabled={busy} onClick={()=>void loadMore()}>{locale==='en'?'Load more pending registrations':locale==='es'?'Cargar más solicitudes':'Carregar mais solicitações pendentes'}</button>:null}
     <div className="intake-admin-notice"><ShieldCheck size={15}/><small>{t.notice}</small></div>
   </section>
 }

@@ -264,7 +264,7 @@ export default function JourneyProfilePage() {
       </form>
     </section> : null}
 
-    {access && congregationId && canRegisterMember ? <JourneyIntakeAdminPanel access={access} congregationId={congregationId} people={people} locale={locale} onIntegrated={()=>refreshScope(access,congregationId)}/> : null}
+    {access && congregationId && canRegisterMember ? <JourneyIntakeAdminPanel key={access.organizationId+':'+congregationId} access={access} congregationId={congregationId} people={people} locale={locale} onIntegrated={()=>refreshScope(access,congregationId)}/> : null}
 
     {rollout.memberBulkImport && access && congregationId && canRegisterMember?<MemberImportPanel key={access.organizationId+':'+congregationId} access={access} congregationId={congregationId} people={people} locale={locale} onCompleted={()=>refreshScope(access,congregationId)}/>:null}
 
