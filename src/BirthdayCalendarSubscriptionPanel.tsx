@@ -42,6 +42,7 @@ export function BirthdayCalendarSubscriptionPanel({access,congregationId,locale}
  const [disclosure,setDisclosure]=useState(false)
  const [url,setUrl]=useState('')
  const [feeds,setFeeds]=useState<Feed[]>([])
+ const [nextCursor,setNextCursor]=useState<string|null>(null)
  const [busy,setBusy]=useState(false)
  const [error,setError]=useState('')
  const [info,setInfo]=useState('')
@@ -60,7 +61,17 @@ export function BirthdayCalendarSubscriptionPanel({access,congregationId,locale}
  const refresh=useCallback(async()=>{
    const data=await call(base+'/calendar-feeds')
    setFeeds((data.feeds||[]) as Feed[])
+   setNextCursor(typeof data.nextCursor==='string'?data.nextCursor:null)
  },[base,call])
+ const loadMore=async()=>{
+   if(!nextCursor||busy)return
+   setBusy(true);setError('')
+   try{
+     const data=await call(base+'/calendar-feeds?cursor='+encodeURIComponent(nextCursor))
+     setFeeds(previous=>[...previous,...((data.feeds||[]) as Feed[]).filter(row=>!previous.some(p=>p.id===row.id))])
+     setNextCursor(typeof data.nextCursor==='string'?data.nextCursor:null)
+   }catch{setError(t.error)}finally{setBusy(false)}
+ }
  useEffect(()=>{
    let active=true
    void refresh().catch(()=>{if(active)setFeeds([])})
@@ -97,6 +108,7 @@ export function BirthdayCalendarSubscriptionPanel({access,congregationId,locale}
      <span>{f.createdAtMs?new Intl.DateTimeFormat(locale,{day:'numeric',month:'short',year:'numeric'}).format(f.createdAtMs):'—'}</span>
      <button type="button" disabled={busy} onClick={()=>void revoke(f)}><Trash2 size={14}/>{t.revoke}</button>
    </div>):<p>{t.none}</p>}</div>
+   {nextCursor?<button type="button" disabled={busy} onClick={()=>void loadMore()}>{locale==='en'?'Load more subscriptions':locale==='es'?'Cargar más suscripciones':'Carregar mais assinaturas'}</button>:null}
    <footer><ShieldCheck size={16}/><span>{t.note}</span></footer>
  </section>
 }
