@@ -19,6 +19,7 @@ export function JourneyIntakeAdminPanel({access,congregationId,people,locale,onI
   const [requests,setRequests]=useState<Intake[]>([])
   const [links,setLinks]=useState<IntakeLink[]>([])
   const [nextCursor,setNextCursor]=useState<string|null>(null)
+  const [nextLinkCursor,setNextLinkCursor]=useState<string|null>(null)
   const [url,setUrl]=useState('')
   const [busy,setBusy]=useState(false)
   const [error,setError]=useState('')
@@ -57,6 +58,7 @@ export function JourneyIntakeAdminPanel({access,congregationId,people,locale,onI
     setRequests(result.requests||[])
     setNextCursor(typeof result.nextCursor==='string'?result.nextCursor:null)
     setLinks(linkData.links||[])
+    setNextLinkCursor(typeof linkData.nextCursor==='string'?linkData.nextCursor:null)
   },[base,call])
   const loadMore=async()=>{
     if(!nextCursor||busy)return
@@ -65,6 +67,15 @@ export function JourneyIntakeAdminPanel({access,congregationId,people,locale,onI
       const result=await call(base+'/intakes?cursor='+encodeURIComponent(nextCursor))
       setRequests(v=>[...v,...(result.requests||[]).filter((row:Intake)=>!v.some(old=>old.id===row.id))])
       setNextCursor(typeof result.nextCursor==='string'?result.nextCursor:null)
+    }catch{setError(t.failure)}finally{setBusy(false)}
+  }
+  const loadMoreLinks=async()=>{
+    if(!nextLinkCursor||busy)return
+    setBusy(true);setError('')
+    try{
+      const data=await call(base+'/intake-links?cursor='+encodeURIComponent(nextLinkCursor))
+      setLinks(v=>[...v,...((data.links||[]) as IntakeLink[]).filter(row=>!v.some(old=>old.id===row.id))])
+      setNextLinkCursor(typeof data.nextCursor==='string'?data.nextCursor:null)
     }catch{setError(t.failure)}finally{setBusy(false)}
   }
   useEffect(()=>{if(!canManage)return;let current=true;void reload().catch(()=>{if(current)setRequests([])});return()=>{current=false}},[canManage,reload])
@@ -126,6 +137,7 @@ export function JourneyIntakeAdminPanel({access,congregationId,people,locale,onI
         <button type="button" disabled={busy} onClick={()=>void revoke(l.id)}>{locale==='en'?'Revoke':locale==='es'?'Revocar':'Revogar'}</button>
       </article>)}
     </div>:null}
+    {nextLinkCursor?<button type="button" disabled={busy} onClick={()=>void loadMoreLinks()}>{locale==='en'?'Load more registration links':locale==='es'?'Cargar más enlaces':'Carregar mais links de cadastro'}</button>:null}
     {info?<p role="status" className="intake-admin-info">{info}</p>:null}
     {error?<p role="alert" className="intake-admin-error">{error}</p>:null}
     <h3>{t.requests} · {scoped.length}</h3>
