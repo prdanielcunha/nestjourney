@@ -1,4 +1,4 @@
-import {useCallback,useEffect,useMemo,useState} from 'react'
+import {useCallback,useEffect,useMemo,useState,type FormEvent} from 'react'
 import {
   CalendarDays,ChevronLeft,ChevronRight,Download,ExternalLink,Gift,Plus,
   Search,ShieldCheck,Trash2,Users,
@@ -141,8 +141,7 @@ export default function BirthdayCalendarPage(){
     return person?{...record,name:person.preferredName||person.name,phone:person.phone||'',consent:person.consent===true}:null
   }).filter((x):x is NonNullable<typeof x>=>Boolean(x)),[records,people])
   const upcoming=useMemo(()=>upcomingBirthdays(merged),[merged])
-  const thisMonth=useMemo(()=>merged.filter(p=>p.month===cursor.getMonth()+1&&!filter.trim()?
-    true: p.month===cursor.getMonth()+1&&(p.name.toLowerCase().includes(filter.trim().toLowerCase()))),[merged,cursor,filter])
+  const thisMonth=useMemo(()=>merged.filter(p=>p.month===cursor.getMonth()+1&&p.name.toLocaleLowerCase(locale).includes(filter.trim().toLocaleLowerCase(locale))),[merged,cursor,filter,locale])
   const searched=useMemo(()=>upcoming.filter(p=>p.name.toLocaleLowerCase(locale).includes(filter.trim().toLocaleLowerCase(locale))),[upcoming,filter,locale])
   const days=useMemo(()=>monthGrid(cursor.getFullYear(),cursor.getMonth()),[cursor])
   const picker=people.find(p=>p.id===personId)
@@ -162,7 +161,7 @@ export default function BirthdayCalendarPage(){
     setShareWithTeam(current?.shareWithTeam??false)
     setPermissionConfirmed(false)
   }
-  async function save(e:React.FormEvent){
+  async function save(e:FormEvent){
     e.preventDefault()
     if(!access||!picker)return
     setBusy(true);setError('')
