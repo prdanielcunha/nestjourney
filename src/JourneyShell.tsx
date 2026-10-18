@@ -14,6 +14,7 @@ import {
   type JourneyAccessContext,
   type JourneyViewAsRole,
 } from './journeyRepository'
+import { canSeeSharedBirthdays } from './birthdayRepository'
 import { canOpenJourneyArea, canViewJourneyPeople, canViewJourneyVision, resolveJourneyResponsibility } from './journeyExperience'
 import { getInitialLocale, localeLabels, persistLocale, type AppLocale } from './i18n'
 import { useJourneyLabels } from './journeyLabels'
@@ -168,7 +169,7 @@ export function JourneyShell({children}:{children:ReactNode}){
   const primary:NavItem[]=[
     {href:'/my-today',label:t.today,description:t.todayDesc,icon:ListTodo},
     {href:'/journey-profile',label:t.people,description:t.peopleDesc,icon:Users,enabled:a=>canViewJourneyPeople(a)},
-    {href:'/birthdays',label:t.birthdays,description:t.birthdaysDesc,icon:CalendarDays,enabled:a=>canViewJourneyPeople(a)},
+    {href:'/birthdays',label:t.birthdays,description:t.birthdaysDesc,icon:CalendarDays,enabled:a=>canSeeSharedBirthdays(a)},
     {href:'/areas',label:t.journey,description:t.journeyDesc,icon:Workflow},
     {href:'/vision',label:t.vision,description:t.visionDesc,icon:Eye,enabled:a=>canViewJourneyVision(a)},
   ]
