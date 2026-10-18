@@ -38,6 +38,7 @@ import { canImportJourneyMembers } from './memberBulkImportRepository'
 import { canSeeSharedBirthdays } from './birthdayRepository'
 import { JourneyIntakeAdminPanel } from './JourneyIntakeAdminPanel'
 import { PersonAddressPanel } from './PersonAddressPanel'
+import { BirthdayWhatsAppConsentPanel } from './BirthdayWhatsAppConsentPanel'
 import { PersonAdminPanel } from './PersonAdminPanel'
 import { CrossUnitVisitsPanel } from './CrossUnitVisitsPanel'
 import { PersonAliasPanel } from './PersonAliasPanel'
@@ -329,6 +330,7 @@ export default function JourneyProfilePage() {
             <a className="journey-button primary" href={'/birthdays?person='+encodeURIComponent(selected.id)}><CalendarDays size={15}/>{locale==='en'?'Birthday':locale==='es'?'Cumpleaños':'Informar aniversário'}</a>
           </div>:null}
           {access && selected && canRegisterMember ? <PersonAddressPanel key={'addr:'+selected.id} access={access} person={selected} locale={locale}/> : null}
+          {access && selected && canRegisterMember ? <BirthdayWhatsAppConsentPanel key={'wa-birthday:'+selected.id} access={access} person={selected} locale={locale}/> : null}
           {rollout.personProfileEdit && access && selected ? <PersonAdminPanel key={selected.id+':'+(selected.profileRevision??0)} access={access} person={selected} locale={locale} onSaved={()=>refreshScope(access,congregationId)}/> : null}
           {rollout.familyLinks && access && selected ? <FamilyPanel access={access} person={selected} people={people} locale={locale}/> : null}
           {rollout.personAvailability && access && selected ? <PersonAvailabilityPanel key={selected.id} access={access} person={selected} locale={locale}/> : null}
