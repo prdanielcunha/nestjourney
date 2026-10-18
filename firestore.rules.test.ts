@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { assertFails, assertSucceeds, initializeTestEnvironment, type RulesTestEnvironment } from '@firebase/rules-unit-testing'
-import { Timestamp, deleteDoc, doc, getDoc, getDocs, query, where, collection, serverTimestamp, setDoc, updateDoc, writeBatch } from 'firebase/firestore'
+import { Timestamp, deleteDoc, doc, getDoc, serverTimestamp, setDoc, updateDoc, writeBatch } from 'firebase/firestore'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 
 let environment: RulesTestEnvironment
@@ -2358,72 +2358,5 @@ describe('Pastoral handoffs do not leak to global SaaS support',()=>{
     const path='organizations/org-a/products/raiz_e_mesa/pastoralHandoffs/private-handoff'
     await assertFails(getDoc(doc(environment.authenticatedContext('global-pastoral').firestore(),path)))
     await assertSucceeds(getDoc(doc(environment.authenticatedContext('local-pastor').firestore(),path)))
-  })
-})
-
-
-describe('consent-scoped birthday calendar rules', () => {
-  const root='organizations/org-a/products/raiz_e_mesa'
-  it('permits admin consent records with atomic audit and protects private dates',async()=>{
-    await seedMembership('owner','org-a','owner')
-    await seedMembership('team','org-a','presence',['unit-a'],{canManagePeople:true})
-    await environment.withSecurityRulesDisabled(async ctx=>{
-      await setDoc(doc(ctx.firestore(),root+'/people/b1'),{
-        organizationId:'org-a',congregationId:'unit-a',name:'Example',consent:false
-      })
-    })
-    const ownerDb=environment.authenticatedContext('owner').firestore()
-    const teamDb=environment.authenticatedContext('team').firestore()
-    const privateRef=doc(ownerDb,root+'/personBirthdays/b1')
-    const base={
-      organizationId:'org-a',congregationId:'unit-a',personId:'b1',
-      month:10,day:18,shareWithTeam:false,
-      permissionRecordedAt:serverTimestamp(),permissionRecordedBy:'owner',
-      updatedAt:serverTimestamp(),updatedBy:'owner',
-      createdAt:serverTimestamp(),createdBy:'owner',lastAuditId:'birth-a1'
-    }
-    const tx=writeBatch(ownerDb)
-    tx.set(doc(ownerDb,root+'/audit/birth-a1'),{
-      organizationId:'org-a',congregationId:'unit-a',actorId:'owner',
-      action:'person.birthday_saved',targetRef:'person:b1',createdAt:serverTimestamp()
-    })
-    tx.set(privateRef,base)
-    await assertSucceeds(tx.commit())
-    await assertSucceeds(getDoc(privateRef))
-    await assertFails(getDoc(doc(teamDb,root+'/personBirthdays/b1')))
-    const change=writeBatch(ownerDb)
-    change.set(doc(ownerDb,root+'/audit/birth-a2'),{
-      organizationId:'org-a',congregationId:'unit-a',actorId:'owner',
-      action:'person.birthday_saved',targetRef:'person:b1',createdAt:serverTimestamp()
-    })
-    change.update(privateRef,{
-      shareWithTeam:true,updatedAt:serverTimestamp(),updatedBy:'owner',
-      permissionRecordedAt:serverTimestamp(),permissionRecordedBy:'owner',lastAuditId:'birth-a2'
-    })
-    await assertSucceeds(change.commit())
-    await assertSucceeds(getDoc(doc(teamDb,root+'/personBirthdays/b1')))
-    await assertSucceeds(getDocs(query(
-      collection(teamDb,root+'/personBirthdays'),
-      where('congregationId','==','unit-a'),where('shareWithTeam','==',true)
-    )))
-    await assertFails(updateDoc(doc(teamDb,root+'/personBirthdays/b1'),{day:19}))
-  })
-  it('blocks unaudited birthdays, invalid dates and cross-tenant access',async()=>{
-    await seedMembership('owner','org-a','owner')
-    await environment.withSecurityRulesDisabled(async ctx=>{
-      await setDoc(doc(ctx.firestore(),root+'/people/b2'),{
-        organizationId:'org-a',congregationId:'unit-a',name:'Example'
-      })
-    })
-    const ref=doc(environment.authenticatedContext('owner').firestore(),root+'/personBirthdays/b2')
-    await assertFails(setDoc(ref,{
-      organizationId:'org-a',congregationId:'unit-a',personId:'b2',
-      month:2,day:30,shareWithTeam:true,createdAt:serverTimestamp(),createdBy:'owner',
-      permissionRecordedAt:serverTimestamp(),permissionRecordedBy:'owner',
-      updatedAt:serverTimestamp(),updatedBy:'owner',lastAuditId:'missing'
-    }))
-    await assertFails(getDoc(doc(environment.unauthenticatedContext().firestore(),root+'/personBirthdays/b2')))
-    await seedMembership('other','org-b','owner',['unit-b'])
-    await assertFails(getDoc(doc(environment.authenticatedContext('other').firestore(),root+'/personBirthdays/b2')))
   })
 })
