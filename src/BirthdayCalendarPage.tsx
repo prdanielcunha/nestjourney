@@ -150,8 +150,9 @@ export default function BirthdayCalendarPage(){
   const already=records.find(r=>r.personId===personId)
   const selectedName=picker?.preferredName||picker?.name||''
   function openEditor(id=''){
-    const current=records.find(r=>r.personId===id)
-    setPersonId(id||people[0]?.id||'')
+    const chosenId=id||people.find(p=>!records.some(r=>r.personId===p.id))?.id||''
+    const current=records.find(r=>r.personId===chosenId)
+    setPersonId(chosenId)
     setDay(current?.day||1);setMonth(current?.month||1)
     setShareWithTeam(current?.shareWithTeam??false)
     setPermissionConfirmed(false);setError('');setMessage('');setEditing(true)
@@ -209,7 +210,7 @@ export default function BirthdayCalendarPage(){
           <select aria-label="Language" value={locale} onChange={e=>{const id=e.target.value as AppLocale;setLocale(id);persistLocale(id)}}>
             {(Object.keys(localeLabels) as AppLocale[]).map(id=><option key={id} value={id}>{localeLabels[id]}</option>)}
           </select>
-          {canEdit&&people.length>0?<button className="bd-primary" onClick={()=>openEditor()}><Plus size={16}/>{t.add}</button>:null}
+          {canEdit&&people.some(p=>!records.some(r=>r.personId===p.id))?<button className="bd-primary" onClick={()=>openEditor()}><Plus size={16}/>{t.add}</button>:null}
         </div>
       </header>
       {message?<p role="status" className="bd-confirmation">{message}</p>:null}
