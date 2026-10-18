@@ -1,4 +1,4 @@
-import {useCallback,useEffect,useMemo,useState,type FormEvent} from 'react'
+import {useCallback,useEffect,useMemo,useRef,useState,type FormEvent} from 'react'
 import {
   CalendarDays,ChevronLeft,ChevronRight,Download,ExternalLink,Gift,Plus,
   Search,ShieldCheck,Trash2,Users,
@@ -84,6 +84,7 @@ function monthGrid(year:number,month:number){
   })
 }
 export default function BirthdayCalendarPage(){
+  const requestedPerson=useRef(new URLSearchParams(window.location.search).get('person')||'')
   const [locale,setLocale]=useState<AppLocale>(getInitialLocale)
   const t=words[locale]
   const [access,setAccess]=useState<JourneyAccessContext|null>(null)
@@ -161,6 +162,13 @@ export default function BirthdayCalendarPage(){
     setShareWithTeam(current?.shareWithTeam??false)
     setPermissionConfirmed(false)
   }
+  useEffect(()=>{
+    if(!loading&&canEdit&&requestedPerson.current&&people.some(p=>p.id===requestedPerson.current)){
+      const id=requestedPerson.current
+      requestedPerson.current=''
+      openEditor(id)
+    }
+  },[loading,canEdit,people])
   async function save(e:FormEvent){
     e.preventDefault()
     if(!access||!picker)return
