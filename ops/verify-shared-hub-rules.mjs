@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { pathToFileURL } from 'node:url'
 // Canonical Hub birthday/RBAC candidate from production release PR #411; publish and verify exact live SHA before NestJourney deploy. This app must never publish local Rules/indexes.
-export const APPROVED_HUB_RULES_SHA256 = '4ed34e6b52d6ddca952cfa8d129057eecfc92ed41c2cb32536695ced0be83fd1'
+export const APPROVED_HUB_RULES_SHA256 = 'ab56bc078be365862668038b4562cf01f4dc12befeb1fc0c8d40d30fb2a2ebc1'
 export function verifyPublishedHubRulesSource(value, expected = APPROVED_HUB_RULES_SHA256) {
   const files = value?.source?.files
   if (!Array.isArray(files) || files.length !== 1 || files[0]?.name !== 'firestore.rules' ||
