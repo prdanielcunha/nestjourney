@@ -36,6 +36,7 @@ import { VerifiedFrequencyPanel } from './VerifiedFrequencyPanel'
 import { MemberImportPanel } from './MemberImportPanel'
 import { canImportJourneyMembers } from './memberBulkImportRepository'
 import { canSeeSharedBirthdays } from './birthdayRepository'
+import { JourneyIntakeAdminPanel } from './JourneyIntakeAdminPanel'
 import { PersonAdminPanel } from './PersonAdminPanel'
 import { CrossUnitVisitsPanel } from './CrossUnitVisitsPanel'
 import { PersonAliasPanel } from './PersonAliasPanel'
@@ -260,6 +261,8 @@ export default function JourneyProfilePage() {
         </div>
       </form>
     </section> : null}
+
+    {access && congregationId && canRegisterMember ? <JourneyIntakeAdminPanel access={access} congregationId={congregationId} people={people} locale={locale} onIntegrated={()=>refreshScope(access,congregationId)}/> : null}
 
     {rollout.memberBulkImport && access && congregationId && canRegisterMember?<MemberImportPanel key={access.organizationId+':'+congregationId} access={access} congregationId={congregationId} people={people} locale={locale} onCompleted={()=>refreshScope(access,congregationId)}/>:null}
 
