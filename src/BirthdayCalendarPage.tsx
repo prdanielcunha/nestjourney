@@ -20,6 +20,7 @@ import {
 } from './birthdayCalendar'
 import {getInitialLocale,localeLabels,persistLocale,type AppLocale} from './i18n'
 import {AccessDeniedState} from './AccessDeniedState'
+import {BirthdayCalendarSubscriptionPanel} from './BirthdayCalendarSubscriptionPanel'
 import './BirthdayCalendarPage.css'
 
 const words={
@@ -218,6 +219,7 @@ export default function BirthdayCalendarPage(){
         <article><span>{t.week}</span><strong>{upcoming.filter(x=>x.daysUntil<=7).length}</strong><small>{upcoming.find(x=>x.daysUntil>0&&x.daysUntil<=7)?.name||'—'}</small></article>
         <article><span>{t.known}</span><strong>{records.length}</strong><small>{units.find(u=>u.id===unitId)?.name||'—'}</small></article>
       </section>
+      {canEdit&&access&&unitId?<BirthdayCalendarSubscriptionPanel access={access} congregationId={unitId} locale={locale}/>:null}
       <div className="bd-toolbar">
         {units.length>1?<label><span>{t.unit}</span><select value={unitId} disabled={busy} onChange={e=>void changeUnit(e.target.value)}>{units.map(unit=><option value={unit.id} key={unit.id}>{unit.name}</option>)}</select></label>:null}
         <label className="bd-search"><span>{t.search}</span><div><Search size={16}/><input type="search" value={filter} onChange={e=>setFilter(e.target.value)} placeholder={t.search}/></div></label>
