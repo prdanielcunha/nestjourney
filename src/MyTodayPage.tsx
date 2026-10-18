@@ -3,6 +3,7 @@ import {
   AlertTriangle, ArrowRight, Building2, CheckCircle2, Clock3, HeartHandshake, House, Leaf,
   ShieldAlert, ShieldCheck, UserCheck, UserRound, UsersRound,
 } from 'lucide-react'
+import { BirthdayTodayStrip } from './BirthdayTodayStrip'
 import { auth } from './firebase'
 import { buildMyTodayItems, type MyTodayKind } from './myToday'
 import { buildTodayPrimaryAction } from './todayActionCenter'
@@ -324,6 +325,8 @@ export default function MyTodayPage(){
       <div><span className="today-section-label">{ui.currentContext}</span><strong>{focus.title}</strong><p>{focus.body}</p></div>
       <div className="today-context-meta"><span><Building2 size={14}/>{activeUnit?.name||ui.unit}</span><span><UserRound size={14}/>{people.length} {ui.people}</span></div>
     </section>
+
+    <BirthdayTodayStrip access={access} congregationId={congregationId} people={people} locale={locale}/>
 
     {access?.nestJourneyTeam?<section className="today-service-team" aria-label={locale==='en'?'My service team':locale==='es'?'Mi equipo de servicio':'Meu serviço'}>
       <div><span className="today-section-label">{locale==='en'?'My service':locale==='es'?'Mi servicio':'Meu serviço'}</span>

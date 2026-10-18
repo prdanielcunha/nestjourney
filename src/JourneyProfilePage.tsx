@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { ChevronLeft, Clock3, HeartHandshake, House, Leaf, Search, ShieldCheck, UserRound } from 'lucide-react'
+import { CalendarDays, ChevronLeft, Clock3, HeartHandshake, House, Leaf, Search, ShieldCheck, UserRound } from 'lucide-react'
 import { auth } from './firebase'
 import { buildJourneyProfileSnapshot } from './journeyProfile'
 import {
@@ -35,6 +35,10 @@ import { FamilyPanel } from './FamilyPanel'
 import { VerifiedFrequencyPanel } from './VerifiedFrequencyPanel'
 import { MemberImportPanel } from './MemberImportPanel'
 import { canImportJourneyMembers } from './memberBulkImportRepository'
+import { canSeeSharedBirthdays } from './birthdayRepository'
+import { JourneyIntakeAdminPanel } from './JourneyIntakeAdminPanel'
+import { PersonAddressPanel } from './PersonAddressPanel'
+import { BirthdayWhatsAppConsentPanel } from './BirthdayWhatsAppConsentPanel'
 import { PersonAdminPanel } from './PersonAdminPanel'
 import { CrossUnitVisitsPanel } from './CrossUnitVisitsPanel'
 import { PersonAliasPanel } from './PersonAliasPanel'
@@ -195,6 +199,7 @@ export default function JourneyProfilePage() {
 
   const empty = emptyGuidance(locale,'people_none')
   const shortcuts = [
+    access && canSeeSharedBirthdays(access) ? {href:'/birthdays',label:locale==='en'?'Birthdays':locale==='es'?'Cumpleaños':'Aniversários',Icon:CalendarDays} : null,
     access?.canManagePresence ? {href:'/presence-assist',label:t.openPresence,Icon:UserRound} : null,
     access?.canManageCare ? {href:'/care-integrity',label:t.openCarePage,Icon:HeartHandshake} : null,
   ].filter(Boolean) as Array<{href:string;label:string;Icon:typeof UserRound}>
@@ -259,6 +264,8 @@ export default function JourneyProfilePage() {
       </form>
     </section> : null}
 
+    {access && congregationId && canRegisterMember ? <JourneyIntakeAdminPanel access={access} congregationId={congregationId} people={people} locale={locale} onIntegrated={()=>refreshScope(access,congregationId)}/> : null}
+
     {rollout.memberBulkImport && access && congregationId && canRegisterMember?<MemberImportPanel key={access.organizationId+':'+congregationId} access={access} congregationId={congregationId} people={people} locale={locale} onCompleted={()=>refreshScope(access,congregationId)}/>:null}
 
     <section className="journey-area-toolbar">
@@ -317,6 +324,13 @@ export default function JourneyProfilePage() {
               {!canReadDiscipleship ? <p className="journey-muted">{t.restrictedDiscipleship}</p> : snapshot.discipleship ? <div className="journey-discipleship"><div><span>{t.status}</span><strong>{snapshot.discipleship.status === 'completed' ? t.completed : snapshot.discipleship.status === 'paused' ? t.paused : t.active}</strong></div><div><span>{t.meeting}</span><strong>{snapshot.discipleship.meeting}/{activePlaybook?.discipleshipMeetingCount??7}</strong></div><div><span>{t.discipler}</span><strong>{snapshot.discipleship.disciplerName || snapshot.discipleship.disciplerId}</strong></div></div> : <p className="journey-muted">{t.noDiscipleship}</p>}
             </article>
           </div>
+          {access && canImportJourneyMembers(access) && selected ? <div className="journey-panel" style={{padding:18,display:'flex',justifyContent:'space-between',alignItems:'center',gap:12,flexWrap:'wrap'}}>
+            <div><strong style={{display:'block',fontSize:14,marginBottom:5}}>{locale==='en'?'Complete profile after the first visit':locale==='es'?'Completa el registro después de la primera visita':'Complete o cadastro depois do primeiro contato'}</strong>
+            <small style={{color:'var(--nj-text-muted)'}}>{locale==='en'?'Birthday is optional; only day and month are needed.':locale==='es'?'El cumpleaños es opcional; solo se requiere día y mes.':'Aniversário é opcional; basta informar dia e mês, com autorização.'}</small></div>
+            <a className="journey-button primary" href={'/birthdays?person='+encodeURIComponent(selected.id)}><CalendarDays size={15}/>{locale==='en'?'Birthday':locale==='es'?'Cumpleaños':'Informar aniversário'}</a>
+          </div>:null}
+          {access && selected && canRegisterMember ? <PersonAddressPanel key={'addr:'+selected.id} access={access} person={selected} locale={locale}/> : null}
+          {access && selected && canRegisterMember ? <BirthdayWhatsAppConsentPanel key={'wa-birthday:'+selected.id} access={access} person={selected} locale={locale}/> : null}
           {rollout.personProfileEdit && access && selected ? <PersonAdminPanel key={selected.id+':'+(selected.profileRevision??0)} access={access} person={selected} locale={locale} onSaved={()=>refreshScope(access,congregationId)}/> : null}
           {rollout.familyLinks && access && selected ? <FamilyPanel access={access} person={selected} people={people} locale={locale}/> : null}
           {rollout.personAvailability && access && selected ? <PersonAvailabilityPanel key={selected.id} access={access} person={selected} locale={locale}/> : null}

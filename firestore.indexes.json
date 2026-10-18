@@ -55,6 +55,20 @@
           "order": "ASCENDING"
         }
       ]
+    },
+    {
+      "collectionGroup": "personBirthdays",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "congregationId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "shareWithTeam",
+          "order": "ASCENDING"
+        }
+      ]
     }
   ],
   "fieldOverrides": []
