@@ -37,6 +37,7 @@ import { MemberImportPanel } from './MemberImportPanel'
 import { canImportJourneyMembers } from './memberBulkImportRepository'
 import { canSeeSharedBirthdays } from './birthdayRepository'
 import { JourneyIntakeAdminPanel } from './JourneyIntakeAdminPanel'
+import { PersonAddressPanel } from './PersonAddressPanel'
 import { PersonAdminPanel } from './PersonAdminPanel'
 import { CrossUnitVisitsPanel } from './CrossUnitVisitsPanel'
 import { PersonAliasPanel } from './PersonAliasPanel'
@@ -327,6 +328,7 @@ export default function JourneyProfilePage() {
             <small style={{color:'var(--nj-text-muted)'}}>{locale==='en'?'Birthday is optional; only day and month are needed.':locale==='es'?'El cumpleaños es opcional; solo se requiere día y mes.':'Aniversário é opcional; basta informar dia e mês, com autorização.'}</small></div>
             <a className="journey-button primary" href={'/birthdays?person='+encodeURIComponent(selected.id)}><CalendarDays size={15}/>{locale==='en'?'Birthday':locale==='es'?'Cumpleaños':'Informar aniversário'}</a>
           </div>:null}
+          {access && selected && canRegisterMember ? <PersonAddressPanel key={'addr:'+selected.id} access={access} person={selected} locale={locale}/> : null}
           {rollout.personProfileEdit && access && selected ? <PersonAdminPanel key={selected.id+':'+(selected.profileRevision??0)} access={access} person={selected} locale={locale} onSaved={()=>refreshScope(access,congregationId)}/> : null}
           {rollout.familyLinks && access && selected ? <FamilyPanel access={access} person={selected} people={people} locale={locale}/> : null}
           {rollout.personAvailability && access && selected ? <PersonAvailabilityPanel key={selected.id} access={access} person={selected} locale={locale}/> : null}
