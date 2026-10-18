@@ -2134,10 +2134,22 @@ service cloud.firestore {
               && audit.targetRef == 'person:' + personId
               && audit.createdAt == request.time;
           }
-          allow read: if birthdayAdmin()
-            || (membershipIsActive(orgId) && canManagePeople(orgId)
-                && resource.data.get('shareWithTeam',false) == true
-                && canAccessCongregation(orgId, resource.data.get('congregationId','')));
+          function birthdayReadable() {
+            let active = membershipIsActive(orgId);
+            let member = active ? membership(orgId) : {};
+            let roleName = active ? member.get('organizationRole',member.get('role','')) : '';
+            let permissions = active ? member.get('permissions',{}) : {};
+            return hasProductAccess(orgId) && (
+              (active && roleName in ['owner','admin','pastor','data_admin'])
+              || isOwner(orgId)
+              || (
+                active && resource.data.get('shareWithTeam',false) == true
+                && permissions.get('canManagePeople',false) == true
+                && resource.data.get('congregationId','') in member.get('congregationIds',[])
+              )
+            );
+          }
+          allow read: if birthdayReadable();
           allow create: if birthdayAdmin()
             && request.resource.data.createdBy == request.auth.uid
             && request.resource.data.createdAt == request.time
