@@ -105,13 +105,20 @@ export default function BirthdayCalendarPage(){
   const [month,setMonth]=useState(1)
   const [shareWithTeam,setShareWithTeam]=useState(false)
   const [permissionConfirmed,setPermissionConfirmed]=useState(false)
+  const currentScopeRef=useRef('')
+  const loadGenerationRef=useRef(0)
   const canRead=Boolean(access&&canSeeSharedBirthdays(access))
   const canEdit=Boolean(access&&canManageBirthdays(access))
   const loadUnit=useCallback(async (ctx:JourneyAccessContext,id:string)=>{
+    // A slower response for a prior congregation must never replace this scope's PII.
+    const generation=++loadGenerationRef.current
+    currentScopeRef.current=ctx.organizationId+':'+id
     const [p,b]=await Promise.all([
       listJourneyPeople(ctx.organizationId,id),
       listPersonBirthdays(ctx,id),
     ])
+    if(generation!==loadGenerationRef.current||
+       currentScopeRef.current!==ctx.organizationId+':'+id)return
     setPeople(p);setRecords(b)
   },[])
   const bootstrap=useCallback(async()=>{
@@ -132,8 +139,9 @@ export default function BirthdayCalendarPage(){
   },[loadUnit,locale])
   useEffect(()=>{void bootstrap()},[bootstrap])
   useEffect(()=>{
-    const onScope=()=>{const current=access&&getActiveJourneyCongregationId(access.organizationId);if(current&&current!==unitId&&units.some(u=>u.id===current)){
-      setUnitId(current);void loadUnit(access!,current)
+    const onScope=()=>{const current=access&&getActiveJourneyCongregationId(access.organizationId);if(current&&currentScopeRef.current!==access!.organizationId+':'+current&&units.some(u=>u.id===current)){
+      setUnitId(current);setPeople([]);setRecords([]);setEditing(false);setPersonId('')
+      void loadUnit(access!,current).catch(()=>setError(words[locale].error))
     }}
     window.addEventListener('nestjourney:unit',onScope)
     return()=>window.removeEventListener('nestjourney:unit',onScope)
@@ -194,7 +202,11 @@ export default function BirthdayCalendarPage(){
   }
   async function changeUnit(id:string){
     if(!access)return
-    setUnitId(id);setPeople([]);setRecords([]);setActiveJourneyCongregationId(access.organizationId,id)
+    // Prevent the synchronous global scope event from starting a duplicate request.
+    currentScopeRef.current=access.organizationId+':'+id
+    ++loadGenerationRef.current
+    setUnitId(id);setPeople([]);setRecords([]);setEditing(false);setPersonId('')
+    setActiveJourneyCongregationId(access.organizationId,id)
     setBusy(true);setError('')
     try{await loadUnit(access,id)}catch{setError(t.error)}finally{setBusy(false)}
   }
