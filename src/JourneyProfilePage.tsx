@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { ChevronLeft, Clock3, HeartHandshake, House, Leaf, Search, ShieldCheck, UserRound } from 'lucide-react'
+import { CalendarDays, ChevronLeft, Clock3, HeartHandshake, House, Leaf, Search, ShieldCheck, UserRound } from 'lucide-react'
 import { auth } from './firebase'
 import { buildJourneyProfileSnapshot } from './journeyProfile'
 import {
@@ -195,6 +195,7 @@ export default function JourneyProfilePage() {
 
   const empty = emptyGuidance(locale,'people_none')
   const shortcuts = [
+    access && canViewJourneyPeople(access) ? {href:'/birthdays',label:locale==='en'?'Birthdays':locale==='es'?'Cumpleaños':'Aniversários',Icon:CalendarDays} : null,
     access?.canManagePresence ? {href:'/presence-assist',label:t.openPresence,Icon:UserRound} : null,
     access?.canManageCare ? {href:'/care-integrity',label:t.openCarePage,Icon:HeartHandshake} : null,
   ].filter(Boolean) as Array<{href:string;label:string;Icon:typeof UserRound}>
