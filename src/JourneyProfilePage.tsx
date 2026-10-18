@@ -319,6 +319,11 @@ export default function JourneyProfilePage() {
               {!canReadDiscipleship ? <p className="journey-muted">{t.restrictedDiscipleship}</p> : snapshot.discipleship ? <div className="journey-discipleship"><div><span>{t.status}</span><strong>{snapshot.discipleship.status === 'completed' ? t.completed : snapshot.discipleship.status === 'paused' ? t.paused : t.active}</strong></div><div><span>{t.meeting}</span><strong>{snapshot.discipleship.meeting}/{activePlaybook?.discipleshipMeetingCount??7}</strong></div><div><span>{t.discipler}</span><strong>{snapshot.discipleship.disciplerName || snapshot.discipleship.disciplerId}</strong></div></div> : <p className="journey-muted">{t.noDiscipleship}</p>}
             </article>
           </div>
+          {access && canImportJourneyMembers(access) && selected ? <div className="journey-panel" style={{padding:18,display:'flex',justifyContent:'space-between',alignItems:'center',gap:12,flexWrap:'wrap'}}>
+            <div><strong style={{display:'block',fontSize:14,marginBottom:5}}>{locale==='en'?'Complete profile after the first visit':locale==='es'?'Completa el registro después de la primera visita':'Complete o cadastro depois do primeiro contato'}</strong>
+            <small style={{color:'var(--nj-text-muted)'}}>{locale==='en'?'Birthday is optional; only day and month are needed.':locale==='es'?'El cumpleaños es opcional; solo se requiere día y mes.':'Aniversário é opcional; basta informar dia e mês, com autorização.'}</small></div>
+            <a className="journey-button primary" href={'/birthdays?person='+encodeURIComponent(selected.id)}><CalendarDays size={15}/>{locale==='en'?'Birthday':locale==='es'?'Cumpleaños':'Informar aniversário'}</a>
+          </div>:null}
           {rollout.personProfileEdit && access && selected ? <PersonAdminPanel key={selected.id+':'+(selected.profileRevision??0)} access={access} person={selected} locale={locale} onSaved={()=>refreshScope(access,congregationId)}/> : null}
           {rollout.familyLinks && access && selected ? <FamilyPanel access={access} person={selected} people={people} locale={locale}/> : null}
           {rollout.personAvailability && access && selected ? <PersonAvailabilityPanel key={selected.id} access={access} person={selected} locale={locale}/> : null}
