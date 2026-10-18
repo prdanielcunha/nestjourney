@@ -35,6 +35,7 @@ import { FamilyPanel } from './FamilyPanel'
 import { VerifiedFrequencyPanel } from './VerifiedFrequencyPanel'
 import { MemberImportPanel } from './MemberImportPanel'
 import { canImportJourneyMembers } from './memberBulkImportRepository'
+import { canSeeSharedBirthdays } from './birthdayRepository'
 import { PersonAdminPanel } from './PersonAdminPanel'
 import { CrossUnitVisitsPanel } from './CrossUnitVisitsPanel'
 import { PersonAliasPanel } from './PersonAliasPanel'
@@ -195,7 +196,7 @@ export default function JourneyProfilePage() {
 
   const empty = emptyGuidance(locale,'people_none')
   const shortcuts = [
-    access && canViewJourneyPeople(access) ? {href:'/birthdays',label:locale==='en'?'Birthdays':locale==='es'?'Cumpleaños':'Aniversários',Icon:CalendarDays} : null,
+    access && canSeeSharedBirthdays(access) ? {href:'/birthdays',label:locale==='en'?'Birthdays':locale==='es'?'Cumpleaños':'Aniversários',Icon:CalendarDays} : null,
     access?.canManagePresence ? {href:'/presence-assist',label:t.openPresence,Icon:UserRound} : null,
     access?.canManageCare ? {href:'/care-integrity',label:t.openCarePage,Icon:HeartHandshake} : null,
   ].filter(Boolean) as Array<{href:string;label:string;Icon:typeof UserRound}>
