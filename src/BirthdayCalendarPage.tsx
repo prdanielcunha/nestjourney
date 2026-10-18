@@ -145,7 +145,7 @@ export default function BirthdayCalendarPage(){
     }}
     window.addEventListener('nestjourney:unit',onScope)
     return()=>window.removeEventListener('nestjourney:unit',onScope)
-  },[access,unitId,units,loadUnit])
+  },[access,unitId,units,loadUnit,locale])
   const merged=useMemo(()=>records.map(record=>{
     const person=people.find(p=>p.id===record.personId)
     return person?{...record,name:person.preferredName||person.name,phone:person.phone||'',consent:person.consent===true}:null
