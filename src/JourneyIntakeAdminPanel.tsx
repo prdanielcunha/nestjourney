@@ -62,6 +62,17 @@ export function JourneyIntakeAdminPanel({access,congregationId,people,locale,onI
       setUrl(String(data.url||''))
     }catch{setError(t.failure)}finally{setBusy(false)}
   }
+  const revoke=async()=>{
+    if(!url||!window.confirm(locale==='en'?'Revoke this link?':locale==='es'?'¿Revocar este enlace?':'Revogar este link?'))return
+    setBusy(true);setError('');setInfo('')
+    try{
+      const token=url.split('/').pop()||''
+      await call('/api/v1/organizations/'+encodeURIComponent(access.organizationId)+'/nestjourney/intake-links/revoke',{
+        method:'POST',body:JSON.stringify({token}),
+      })
+      setUrl('');setInfo(locale==='en'?'Link revoked.':locale==='es'?'Enlace revocado.':'Link revogado.')
+    }catch{setError(t.failure)}finally{setBusy(false)}
+  }
   const integrate=async(row:Intake)=>{
     if(!window.confirm(t.approve+' — '+row.name+'?'))return
     setBusy(true);setError('');setInfo('')
@@ -77,7 +88,7 @@ export function JourneyIntakeAdminPanel({access,congregationId,people,locale,onI
   const scoped=requests.filter(row=>row.congregationId===congregationId)
   return <section className="intake-admin-panel">
     <div className="intake-admin-head"><div><span><UserRoundPlus size={16}/>NestJourney</span><h2>{t.title}</h2><p>{t.about}</p></div><button onClick={()=>void link()} disabled={busy}><Link2 size={16}/>{t.create}</button></div>
-    {url?<div className="intake-admin-link"><input aria-label="Registration link" readOnly value={url}/><button onClick={()=>{void navigator.clipboard?.writeText(url).then(()=>setInfo(t.copy))}}><ClipboardCopy size={15}/>{t.copy}</button></div>:null}
+    {url?<div className="intake-admin-link"><input aria-label="Registration link" readOnly value={url}/><button onClick={()=>{void navigator.clipboard?.writeText(url).then(()=>setInfo(t.copy))}}><ClipboardCopy size={15}/>{t.copy}</button><button type="button" disabled={busy} onClick={()=>void revoke()}>{locale==='en'?'Revoke':locale==='es'?'Revocar':'Revogar'}</button></div>:null}
     {info?<p role="status" className="intake-admin-info">{info}</p>:null}
     {error?<p role="alert" className="intake-admin-error">{error}</p>:null}
     <h3>{t.requests} · {scoped.length}</h3>
