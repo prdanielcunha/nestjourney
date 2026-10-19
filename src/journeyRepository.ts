@@ -3,6 +3,7 @@ import {
   type Firestore,
 } from 'firebase/firestore'
 import { db } from './firebase'
+import {registerCentralPeople,type DirectorySelection} from './peopleDirectoryClient'
 import { presenceIntentCheckId } from './presenceIntent'
 import { journeyCollectionPath } from './productIdentity'
 import { createRaizEMesaPlaybook, createNeutralJourneyPlaybook, JOURNEY_PLAYBOOK_DEFAULT_ID, normalizeJourneyPlaybook, type JourneyPlaybookDefinition } from './playbookEngine'
@@ -484,6 +485,7 @@ export interface JourneyModuleLabels {
 }
 
 export interface MinimalVisitorInput {
+  selection?: DirectorySelection
   organizationId: string
   congregationId: string
   actorId: string
@@ -2736,130 +2738,29 @@ export async function closePresenceSession(
 }
 
 
-/** Create a church person (without Hub login, invented visits, or implicit consent). */
-export async function createJourneyMember(input: { access: JourneyAccessContext; congregationId: string; name: string; preferredName?: string }): Promise<string> {
+/** All new participation records go through the organization directory gateway. */
+export async function createJourneyMember(input: { access: JourneyAccessContext; congregationId: string; name: string; preferredName?: string; requestId?: string; selection?: DirectorySelection }): Promise<string> {
   assertSensitiveJourneyWriteIsOnline()
-  const { access } = input
-  if (!(access.isOwner || ['owner', 'admin', 'pastor', 'data_admin'].includes(access.organizationRole))) throw new Error('member_registration_forbidden')
-  if (!access.broadJourneyAccess && !access.congregationIds.includes(input.congregationId)) throw new Error('member_unit_forbidden')
-  const name = input.name.trim().replace(/\s+/g, ' ')
-  const preferredName = String(input.preferredName ?? '').trim().replace(/\s+/g, ' ')
-  if (name.length < 2 || name.length > 160 || preferredName.length > 120) throw new Error('member_name_invalid')
-  const firestore = requireDb()
-  const normalize = (value: string) => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR').trim().replace(/\s+/g, ' ')
-  const existing = await getDocs(collection(firestore, journeyCollectionPath(access.organizationId, 'people')))
-  if (existing.docs.some(item => normalize(asString(item.data().name)) === normalize(name))) throw new Error('person_possible_duplicate')
-  const ref = doc(collection(firestore, journeyCollectionPath(access.organizationId, 'people')))
-  await setDoc(ref, { organizationId: access.organizationId, congregationId: input.congregationId,
-    name, preferredName, communityStatus: 'member', consent: false, phone: '', preferredContactChannel: '',
-    visits: 0, stage: 'new', createdAt: serverTimestamp(), createdBy: access.userId, dataSource: 'manual_member_registration' })
-  return ref.id
+  const result=await registerCentralPeople(input.access.organizationId,input.congregationId,input.requestId||crypto.randomUUID(),[
+    {name:input.name,preferredName:input.preferredName||'',...input.selection},
+  ])
+  return result.people[0].id
 }
 
-export async function createMinimalVisitor(input: MinimalVisitorInput) {
+export async function createMinimalVisitor(input: MinimalVisitorInput):Promise<PresencePerson> {
   assertSensitiveJourneyWriteIsOnline()
-  if(input.requestId && !/^[A-Za-z0-9_-]{8,120}$/.test(input.requestId))
-    throw new Error('visitor_request_id_invalid')
-  const firestore = requireDb()
-  const name = input.name.trim()
-  if (!name) throw new Error('visitor_name_required')
-  const consent = Boolean(input.consent)
-  const phone = String(input.phone ?? '').trim()
-  const readiness = evaluateAuthorizedContact({ consent, phone, preferredContactChannel: input.preferredContactChannel })
-  if (!readiness.ok) throw new Error('visitor_contact_required')
-  const preferredContactChannel = readiness.preferredContactChannel
-  const personRef = input.requestId
-    ? doc(firestore,journeyCollectionPath(input.organizationId,'people')+'/req_'+input.requestId)
-    : doc(collection(firestore, journeyCollectionPath(input.organizationId, 'people')))
-  const factRef = doc(firestore, `${journeyCollectionPath(input.organizationId, 'facts')}/visitor-${personRef.id}`)
-  const careRef = input.consent ? doc(collection(firestore, journeyCollectionPath(input.organizationId, 'careRequests'))) : null
-  const careRequestedFactRef = careRef
-    ? doc(firestore, `${journeyCollectionPath(input.organizationId, 'facts')}/care-requested-${careRef.id}`)
-    : null
-  const batch = writeBatch(firestore)
-  const today = new Date().toISOString().slice(0, 10)
-
-  batch.set(personRef, {
-    organizationId: input.organizationId,
-    congregationId: input.congregationId,
-    name,
-    phone: consent ? phone : '',
-    preferredContactChannel: consent ? preferredContactChannel : '',
-    firstVisit: today,
-    consent,
-    stage: consent ? 'contact_authorized' : 'new',
-    nextActionCode: consent ? 'FIRST_CONTACT' : 'WELCOME_ON_NEXT_VISIT',
-    ownerRef: null,
-    visits: 1,
-    contactStatus: consent ? 'pending' : 'closed',
-    consentGrantedAt: consent ? serverTimestamp() : null,
-    createdAt: serverTimestamp(),
-    createdBy: input.actorId,
-  })
-  batch.set(factRef, {
-    eventId: factRef.id, eventType: 'VISITOR_REGISTERED', occurredAt: serverTimestamp(), recordedAt: serverTimestamp(),
-    organizationId: input.organizationId, actorId: input.actorId, subjectRef: `person:${personRef.id}`, sourceApp: 'nestjourney',
-    scope: `congregation:${input.congregationId}`, evidenceRef: `person:${personRef.id}`, sensitivity: 'confidential', version: 1,
-    payload: { personId: personRef.id, consent },
-  })
-
-  if (careRef && careRequestedFactRef) {
-    const promiseHours = 48
-    batch.set(careRef, {
-      organizationId: input.organizationId, congregationId: input.congregationId, personId: personRef.id,
-      careType: 'first_contact', source: 'visitor_registration', summary: '', status: 'open',
-      requestedAt: serverTimestamp(), requestedBy: input.actorId, promiseHours,
-      dueAt: Timestamp.fromMillis(Date.now() + promiseHours * 60 * 60 * 1000),
-      ownerRef: '', assignedAt: null, assignedBy: '', resolvedAt: null, resolvedBy: '', resolutionCode: '', resolutionNote: '',
-    })
-    batch.set(careRequestedFactRef, {
-      eventId: careRequestedFactRef.id,
-      eventType: 'CARE_REQUESTED',
-      occurredAt: serverTimestamp(),
-      recordedAt: serverTimestamp(),
-      organizationId: input.organizationId,
-      actorId: input.actorId,
-      subjectRef: `person:${personRef.id}`,
-      sourceApp: 'nestjourney',
-      scope: `congregation:${input.congregationId}`,
-      evidenceRef: `careRequest:${careRef.id}`,
-      sensitivity: 'confidential',
-      version: 1,
-      payload: {
-        careRequestId: careRef.id,
-        personId: personRef.id,
-        careType: 'first_contact',
-        source: 'visitor_registration',
-      },
-    })
-  }
-
-  try {
-    await batch.commit()
-  } catch (cause) {
-    if(input.requestId){
-      // If the server committed but the acknowledgement was lost, return only
-      // a verified matching registration; do not recreate a second care task.
-      try{
-        const prior=await getDocFromServer(personRef)
-        const value=prior.data()
-        if(prior.exists()
-          && value?.organizationId===input.organizationId
-          && value.congregationId===input.congregationId
-          && value.createdBy===input.actorId
-          && value.name===name
-          && value.consent===consent
-          && (value.phone||'')===(consent?phone:'')
-          && (value.preferredContactChannel||'')===(consent?preferredContactChannel:''))
-          return {id:personRef.id,organizationId:input.organizationId,congregationId:input.congregationId,
-            name,phone:consent?phone:undefined,consent,preferredContactChannel,visits:1} satisfies PresencePerson
-      }catch{
-        // Server verification unavailable: preserve original error.
-      }
-    }
-    throw cause
-  }
-  return { id: personRef.id, organizationId: input.organizationId, congregationId: input.congregationId, name, phone: consent ? phone : undefined, consent, preferredContactChannel, visits: 1 } satisfies PresencePerson
+  const readiness=evaluateAuthorizedContact({consent:input.consent,phone:input.phone,preferredContactChannel:input.preferredContactChannel})
+  if(!readiness.ok)throw new Error('visitor_contact_required')
+  const result=await registerCentralPeople(input.organizationId,input.congregationId,input.requestId||crypto.randomUUID(),[
+    {name:input.name,phone:input.phone||'',consent:input.consent,channel:readiness.preferredContactChannel||'',...input.selection},
+  ],'visitor')
+  // Reused participation must retain its own consent, visits and identity details.
+  const snap=await getDocFromServer(doc(requireDb(),journeyCollectionPath(input.organizationId,'people')+'/'+result.people[0].id))
+  if(!snap.exists())throw new Error('visitor_registration_readback_failed')
+  const data=snap.data()
+  return {id:snap.id,organizationId:input.organizationId,congregationId:input.congregationId,
+    name:asString(data.name),phone:data.consent===true?asString(data.phone):undefined,
+    consent:data.consent===true,preferredContactChannel:data.preferredContactChannel||undefined,visits:Number(data.visits||0)}
 }
 
 export function careRequestToPromise(request: CareRequestRecord): CarePromise {

@@ -20,6 +20,7 @@ export function MemberImportPanel({access,congregationId,people,locale,onComplet
   const [error,setError]=useState('')
   const [feedback,setFeedback]=useState('')
   const [busy,setBusy]=useState(false)
+  const [requestId,setRequestId]=useState(()=>crypto.randomUUID())
   const permitted=canImportJourneyMembers(access)
   const ready=useMemo(()=>rows.filter(row=>row.status==='ready'||row.status==='review'),[rows])
   const copy=locale==='en'?{
@@ -61,7 +62,8 @@ export function MemberImportPanel({access,congregationId,people,locale,onComplet
     if(!window.confirm(copy.confirm))return
     setBusy(true);setError('');setFeedback('')
     try{
-      const result=await importApprovedJourneyMembers({access,congregationId,approved})
+      const result=await importApprovedJourneyMembers({access,congregationId,approved,requestId})
+      setRequestId(crypto.randomUUID())
       setRows([]);setSource('');setSelected([])
       await onCompleted()
       setFeedback(copy.done+' '+result.created)
