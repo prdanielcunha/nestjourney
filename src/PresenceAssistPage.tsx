@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Check, ChevronLeft, HeartHandshake, ShieldCheck, UserCheck, X } from 'lucide-react'
 import { auth } from './firebase'
+import {DirectoryPersonPicker} from './PeopleDirectoryPanel'
+import {PeopleDirectoryError,type DirectorySelection} from './peopleDirectoryClient'
 import { withTimeout } from './asyncGuard'
 import { calculatePresenceCoverage, confirmedAbsencePersonIds, type PresenceCheck, type PresenceVerificationState } from './intelligence'
 import {
@@ -449,11 +451,11 @@ export default function PresenceAssistPage() {
     finally { setBusy(false) }
   }} eligiblePeople={people} locale={locale} online={online} /> : null}
 
-  {showVisitor ? <VisitorModal close={() => setShowVisitor(false)} save={async (name, phone, consent, preferredContactChannel, claimBond,requestId) => {
+  {showVisitor&&access ? <VisitorModal org={access.organizationId} canPick={access.isOwner||['owner','admin','pastor','data_admin'].includes(access.organizationRole)} close={() => setShowVisitor(false)} save={async (name, phone, consent, preferredContactChannel, claimBond,requestId,selection) => {
     if (!access || !displaySession || !online) return
     setBusy(true); setError('')
     try {
-      const person = await createMinimalVisitor({ organizationId: access.organizationId, congregationId, actorId: access.userId, name, phone, consent, preferredContactChannel, requestId })
+      const person = await createMinimalVisitor({ organizationId: access.organizationId, congregationId, actorId: access.userId, name, phone, consent, preferredContactChannel, requestId,selection })
       await recordPresenceCheck({ organizationId: access.organizationId, congregationId, sessionId: displaySession.id, personId: person.id, actorId: access.userId, state: 'present_confirmed' })
       let bondFailed = false
       if (claimBond) {
@@ -469,7 +471,7 @@ export default function PresenceAssistPage() {
       setShowVisitor(false)
       await refreshScope(access.organizationId, congregationId)
       if (bondFailed) setError(bond.claimError)
-    } catch (cause) { console.error(cause); setError(t.error) }
+    } catch (cause) { console.error(cause); setError(cause instanceof PeopleDirectoryError&&cause.code==='POSSIBLE_DUPLICATE'?(locale==='en'?'Possible existing person. Ask an administrator to select the central record.':locale==='es'?'Posible registro existente. Pida al administrador que seleccione el registro central.':'Possível cadastro existente. Peça ao administrador para selecionar a pessoa no cadastro central.'):t.error) }
     finally { setBusy(false) }
   }} locale={locale} /> : null}
   </main>
@@ -558,7 +560,7 @@ function SessionModal({ close, create, eligiblePeople, locale, preset, online }:
   </div>
 }
 
-function VisitorModal({ close, save, locale }: { close: () => void; save: (name: string, phone: string, consent: boolean, preferredContactChannel: 'whatsapp' | 'phone' | undefined, claimBond: boolean,requestId:string) => Promise<void>; locale: AppLocale }) {
+function VisitorModal({ close, save, locale,org,canPick }: { close: () => void; save: (name: string, phone: string, consent: boolean, preferredContactChannel: 'whatsapp' | 'phone' | undefined, claimBond: boolean,requestId:string,selection:DirectorySelection) => Promise<void>; locale: AppLocale;org:string;canPick:boolean }) {
   const t = presenceAssistCopy[locale]
   const bond = bondCopy(locale)
   const [requestId] = useState(()=>crypto.randomUUID())
@@ -566,6 +568,7 @@ function VisitorModal({ close, save, locale }: { close: () => void; save: (name:
   const savingGuard=useRef(false)
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
+  const [selection,setSelection]=useState<DirectorySelection>({})
   const [consent, setConsent] = useState(false)
   const [preferredContactChannel, setPreferredContactChannel] = useState<'whatsapp' | 'phone'>('whatsapp')
   const [claimBond, setClaimBond] = useState(true)
@@ -573,7 +576,7 @@ function VisitorModal({ close, save, locale }: { close: () => void; save: (name:
   const submit=async()=>{
     if(savingGuard.current)return
     savingGuard.current=true;setSaving(true)
-    try{await save(name,phone,consent,consent?preferredContactChannel:undefined,claimBond,requestId)}
+    try{await save(name,phone,consent,consent?preferredContactChannel:undefined,claimBond,requestId,selection)}
     finally{savingGuard.current=false;setSaving(false)}
   }
   const contactHint = locale === 'en'
@@ -581,5 +584,5 @@ function VisitorModal({ close, save, locale }: { close: () => void; save: (name:
     : locale === 'es'
       ? 'Cuando el contacto está autorizado, se exige un número válido y el canal preferido antes de crear la tarea de cuidado.'
       : 'Quando o contato é autorizado, informe um número válido e o canal preferido antes de criar a tarefa de cuidado.'
-  return <div className="presence-modal-backdrop" onMouseDown={()=>{if(!saving)close()}}><section className="presence-panel presence-modal visitor-form" role="dialog" aria-modal="true" aria-labelledby="presence-visitor-title" onMouseDown={(event) => event.stopPropagation()}><div className="presence-session-head"><h2 id="presence-visitor-title">{t.newVisitor}</h2><button className="presence-button" onClick={close} disabled={saving} aria-label={t.cancel}><X size={17} /></button></div><div className="presence-modal-grid"><label className="presence-field"><span>{t.visitorName}</span><input value={name} onChange={(event) => setName(event.target.value)} autoFocus /></label><label className="presence-check"><input type="checkbox" checked={consent} onChange={(event) => { setConsent(event.target.checked); if (!event.target.checked) setPhone('') }} /><span>{t.consent}</span></label><label className="presence-field"><span>{t.phone}</span><input inputMode="tel" value={phone} onChange={(event) => setPhone(event.target.value)} disabled={!consent} aria-invalid={consent&&!phoneValid} /></label>{consent?<label className="presence-field"><span>{locale==='en'?'Preferred channel':locale==='es'?'Canal preferido':'Canal preferido'}</span><select value={preferredContactChannel} onChange={(event)=>setPreferredContactChannel(event.target.value as 'whatsapp'|'phone')}><option value="whatsapp">WhatsApp</option><option value="phone">{locale==='en'?'Phone call':locale==='es'?'Llamada':'Ligação'}</option></select></label>:null}{consent?<p className="coverage-note">{contactHint}</p>:null}<label className="presence-check"><input type="checkbox" checked={claimBond} onChange={(event) => setClaimBond(event.target.checked)} /><span>{bond.visitorClaim}</span></label></div><div className="presence-modal-actions"><button className="presence-button" disabled={saving} onClick={close}>{t.cancel}</button><button className="presence-button primary" disabled={saving || !name.trim() || (consent && !phoneValid)} onClick={()=>void submit()}>{t.saveVisitor}</button></div></section></div>
+  return <div className="presence-modal-backdrop" onMouseDown={()=>{if(!saving)close()}}><section className="presence-panel presence-modal visitor-form" role="dialog" aria-modal="true" aria-labelledby="presence-visitor-title" onMouseDown={(event) => event.stopPropagation()}><div className="presence-session-head"><h2 id="presence-visitor-title">{t.newVisitor}</h2><button className="presence-button" onClick={close} disabled={saving} aria-label={t.cancel}><X size={17} /></button></div><div className="presence-modal-grid"><label className="presence-field"><span>{t.visitorName}</span><input value={name} onChange={(event) => {setName(event.target.value);setSelection({})}} autoFocus /></label>{canPick?<DirectoryPersonPicker org={org} locale={locale} name={name} value={selection} onChange={setSelection}/>:null}<label className="presence-check"><input type="checkbox" checked={consent} onChange={(event) => { setConsent(event.target.checked); if (!event.target.checked) setPhone('') }} /><span>{t.consent}</span></label><label className="presence-field"><span>{t.phone}</span><input inputMode="tel" value={phone} onChange={(event) => setPhone(event.target.value)} disabled={!consent} aria-invalid={consent&&!phoneValid} /></label>{consent?<label className="presence-field"><span>{locale==='en'?'Preferred channel':locale==='es'?'Canal preferido':'Canal preferido'}</span><select value={preferredContactChannel} onChange={(event)=>setPreferredContactChannel(event.target.value as 'whatsapp'|'phone')}><option value="whatsapp">WhatsApp</option><option value="phone">{locale==='en'?'Phone call':locale==='es'?'Llamada':'Ligação'}</option></select></label>:null}{consent?<p className="coverage-note">{contactHint}</p>:null}<label className="presence-check"><input type="checkbox" checked={claimBond} onChange={(event) => setClaimBond(event.target.checked)} /><span>{bond.visitorClaim}</span></label></div><div className="presence-modal-actions"><button className="presence-button" disabled={saving} onClick={close}>{t.cancel}</button><button className="presence-button primary" disabled={saving || !name.trim() || (consent && !phoneValid)} onClick={()=>void submit()}>{t.saveVisitor}</button></div></section></div>
 }

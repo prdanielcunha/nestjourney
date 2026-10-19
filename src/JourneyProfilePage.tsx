@@ -34,6 +34,8 @@ import { JourneyAreaFocus } from './JourneyAreaFocus'
 import { FamilyPanel } from './FamilyPanel'
 import { VerifiedFrequencyPanel } from './VerifiedFrequencyPanel'
 import { MemberImportPanel } from './MemberImportPanel'
+import {DirectoryPersonPicker,PeopleDirectoryPanel} from './PeopleDirectoryPanel'
+import {PeopleDirectoryError,type DirectorySelection} from './peopleDirectoryClient'
 import { canImportJourneyMembers } from './memberBulkImportRepository'
 import { canSeeSharedBirthdays } from './birthdayRepository'
 import { JourneyIntakeAdminPanel } from './JourneyIntakeAdminPanel'
@@ -67,6 +69,8 @@ export default function JourneyProfilePage() {
   const [showMemberForm, setShowMemberForm] = useState(false)
   const [memberName, setMemberName] = useState('')
   const [memberPreferredName, setMemberPreferredName] = useState('')
+  const [memberSelection,setMemberSelection]=useState<DirectorySelection>({})
+  const [memberRequestId,setMemberRequestId]=useState(()=>crypto.randomUUID())
   const [care, setCare] = useState<CareRequestRecord[]>([])
   const [groups, setGroups] = useState<JourneyGroupRecord[]>([])
   const [memberships, setMemberships] = useState<JourneyGroupMembership[]>([])
@@ -93,7 +97,8 @@ export default function JourneyProfilePage() {
     if (!access || !canRegisterMember || !congregationId) return
     setBusy(true); setError('')
     try {
-      const id = await createJourneyMember({ access, congregationId, name: memberName, preferredName: memberPreferredName })
+      const id = await createJourneyMember({ access, congregationId, name: memberName, preferredName: memberPreferredName,selection:memberSelection,requestId:memberRequestId })
+      setMemberRequestId(crypto.randomUUID());setMemberSelection({})
       await refreshScope(access, congregationId)
       setSelectedId(id)
       setMemberName('')
@@ -101,7 +106,7 @@ export default function JourneyProfilePage() {
       setShowMemberForm(false)
     } catch (cause) {
       console.error('Member registration failed', cause)
-      setError(cause instanceof Error && cause.message === 'person_possible_duplicate'
+      setError(cause instanceof PeopleDirectoryError && cause.code === 'POSSIBLE_DUPLICATE'
         ? (locale === 'en' ? 'A person with this name is already registered. Check the existing profile first.' : locale === 'es' ? 'Ya existe una persona con este nombre. Revise su ficha antes de crear otro registro.' : 'Já existe uma pessoa com esse nome. Confira o cadastro existente antes de criar outro.')
         : t.error)
     } finally { setBusy(false) }
@@ -250,12 +255,14 @@ export default function JourneyProfilePage() {
     </section>
 
     {error ? <div className="journey-error" role="alert">{error}</div> : null}
+    {access&&canRegisterMember?<PeopleDirectoryPanel key={access.organizationId} org={access.organizationId} locale={locale} units={congregations}/>:null}
 
     {showMemberForm && canRegisterMember ? <section className="journey-panel journey-member-entry" aria-label={locale==='en'?'Member registration':locale==='es'?'Registro de miembro':'Cadastro de membro'}>
       <h2>{locale==='en'?'New member':locale==='es'?'Nuevo miembro':'Novo membro'}</h2>
       <p>{locale==='en'?'A member does not need a MillionsNest login. Attendance and messaging are not assumed.' : locale==='es'?'El miembro no necesita acceso a MillionsNest. La asistencia y los mensajes no se presumen.' : 'O membro não precisa de login no MillionsNest. Presença e autorização de contato não são presumidas.'}</p>
       <form onSubmit={event => {event.preventDefault();void registerMember()}}>
-        <label><span>{locale==='en'?'Full name':locale==='es'?'Nombre completo':'Nome completo'}</span><input required minLength={2} maxLength={160} autoComplete="name" value={memberName} onChange={e=>setMemberName(e.target.value)} /></label>
+        <label><span>{locale==='en'?'Full name':locale==='es'?'Nombre completo':'Nome completo'}</span><input required minLength={2} maxLength={160} autoComplete="name" value={memberName} onChange={e=>{setMemberName(e.target.value);setMemberSelection({})}} /></label>
+        {access?<DirectoryPersonPicker key={access.organizationId+':'+congregationId} org={access.organizationId} locale={locale} name={memberName} value={memberSelection} onChange={setMemberSelection}/>:null}
         <label><span>{locale==='en'?'Preferred name (optional)':locale==='es'?'Nombre preferido (opcional)':'Nome preferido (opcional)'}</span><input maxLength={120} value={memberPreferredName} onChange={e=>setMemberPreferredName(e.target.value)}/></label>
         <div className="journey-member-entry-actions">
           <button type="button" className="journey-button" onClick={()=>setShowMemberForm(false)}>{locale==='en'?'Cancel':locale==='es'?'Cancelar':'Cancelar'}</button>
