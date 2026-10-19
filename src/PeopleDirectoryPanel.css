@@ -1,0 +1,5 @@
+.people-directory-panel,.people-directory-picker{display:grid;gap:14px;margin-bottom:20px;min-width:0}
+.people-directory-picker{border:1px solid #ffffff25;border-radius:12px;padding:14px}
+:is(.people-directory-panel,.people-directory-picker) label{display:grid;gap:6px;min-width:0;font-size:14px}
+:is(.people-directory-panel,.people-directory-picker) input:not([type=checkbox]),:is(.people-directory-panel,.people-directory-picker) textarea,:is(.people-directory-panel,.people-directory-picker) select{width:100%;min-height:44px;padding:10px;border:1px solid #ffffff25;background:#111827;color:#f5f7fa;border-radius:10px;max-width:100%}
+:is(.people-directory-panel,.people-directory-picker) p{font-size:14px;line-height:1.5;color:#a0a7b5}
