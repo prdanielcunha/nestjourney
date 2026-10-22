@@ -300,7 +300,7 @@ export function JourneyShell({children}:{children:ReactNode}){
         </section>
       </nav>
 
-      <div className="journey-side-footer">
+      <div className="journey-side-footer"><a href="https://www.millionsnest.com" style={{display:"inline-flex",alignItems:"center",gap:2,padding:"8px 0",fontSize:12,fontWeight:600,color:"inherit",textDecoration:"none"}}><img src="/brand/millionsnest/v1/mark-192.png" alt="" aria-hidden="true" width={20} height={20} style={{display:"inline-block",width:20,height:20,objectFit:"contain",verticalAlign:"middle",marginRight:8,flexShrink:0}} />MillionsNest</a>
         {access?<div className="journey-access-wrap">
           {isRealCeo?<button className={'journey-access-chip interactive '+(accessOpen?'open':'')} onClick={()=>setAccessOpen(value=>!value)} aria-expanded={accessOpen}>
             <span><small>{t.role}</small><strong>{displayRole}</strong></span><ChevronDown size={15}/>
