@@ -387,7 +387,7 @@ export function EcosystemSessionGate({ children }: { children: ReactNode }) {
             <p style={{ margin: 0, color: 'var(--nj-text-muted)', lineHeight: 1.6, fontSize: 14 }}>{message}</p>
             {(slow || !online) ? <div style={{ display: 'grid', gap: 9, marginTop: 20 }}>
               <button type="button" onClick={() => void retry()} style={primary} disabled={!online}>{c.retry}</button>
-              {online ? <button type="button" onClick={() => openHub()} style={secondary}>{c.hub}</button> : null}
+              {online ? <button type="button" onClick={() => openHub()} style={secondary}><img src="/brand/millionsnest/v1/mark-192.png" alt="" aria-hidden="true" width={20} height={20} style={{display:"inline-block",width:20,height:20,objectFit:"contain",verticalAlign:"middle",marginRight:8,flexShrink:0}} />{c.hub}</button> : null}
             </div> : null}
           </div>
         ) : state === 'choose' ? (
@@ -418,7 +418,7 @@ export function EcosystemSessionGate({ children }: { children: ReactNode }) {
             <p style={{ margin: '10px 0 22px', color: 'var(--nj-text-muted)', lineHeight: 1.55, fontSize: 14 }}>{c.noAccessHelp}</p>
             <div style={{ display: 'grid', gap: 9 }}>
               <button type="button" onClick={switchAccount} style={primary}>{c.another}</button>
-              <button type="button" onClick={() => openHub()} style={secondary}>{c.hub}</button>
+              <button type="button" onClick={() => openHub()} style={secondary}><img src="/brand/millionsnest/v1/mark-192.png" alt="" aria-hidden="true" width={20} height={20} style={{display:"inline-block",width:20,height:20,objectFit:"contain",verticalAlign:"middle",marginRight:8,flexShrink:0}} />{c.hub}</button>
             </div>
           </>
         ) : state === 'error' ? (
@@ -427,7 +427,7 @@ export function EcosystemSessionGate({ children }: { children: ReactNode }) {
             <p style={{ margin: '10px 0 22px', color: 'var(--nj-text-muted)', lineHeight: 1.55, fontSize: 14 }}>{message}</p>
             <div style={{ display: 'grid', gap: 9 }}>
               <button type="button" onClick={() => void retry()} style={primary} disabled={!online}>{c.retry}</button>
-              <button type="button" onClick={() => openHub()} style={secondary}>{c.hub}</button>
+              <button type="button" onClick={() => openHub()} style={secondary}><img src="/brand/millionsnest/v1/mark-192.png" alt="" aria-hidden="true" width={20} height={20} style={{display:"inline-block",width:20,height:20,objectFit:"contain",verticalAlign:"middle",marginRight:8,flexShrink:0}} />{c.hub}</button>
             </div>
           </>
         ) : (
@@ -436,7 +436,7 @@ export function EcosystemSessionGate({ children }: { children: ReactNode }) {
             <p style={{ margin: '9px auto 24px', maxWidth: 350, textAlign: 'center', color: 'var(--nj-text-muted)', lineHeight: 1.6, fontSize: 14 }}>{c.subtitle}</p>
             <div style={{ display: 'grid', gap: 9 }}>
               <button type="button" onClick={signInGoogle} style={primary}>{c.google}</button>
-              <button type="button" onClick={() => openHub()} style={secondary}>{c.hub}</button>
+              <button type="button" onClick={() => openHub()} style={secondary}><img src="/brand/millionsnest/v1/mark-192.png" alt="" aria-hidden="true" width={20} height={20} style={{display:"inline-block",width:20,height:20,objectFit:"contain",verticalAlign:"middle",marginRight:8,flexShrink:0}} />{c.hub}</button>
             </div>
             <p style={{ margin: '18px 0 0', color: 'var(--nj-text-subtle)', lineHeight: 1.55, fontSize: 11, textAlign: 'center' }}>{c.security}</p>
           </>
