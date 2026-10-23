@@ -21,6 +21,7 @@ describe('NestJourney route resolver', () => {
     expect(resolveJourneyRoute('/care-integrity')).toBe('care')
     expect(resolveJourneyRoute('/followup-runtime')).toBe('followup')
     expect(resolveJourneyRoute('/journey-profile')).toBe('profile')
+    expect(resolveJourneyRoute('/birthdays')).toBe('birthdays')
     expect(resolveJourneyRoute('/')).toBe('today')
     expect(resolveJourneyRoute('/my-today')).toBe('today')
     expect(resolveJourneyRoute('/areas')).toBe('areas')

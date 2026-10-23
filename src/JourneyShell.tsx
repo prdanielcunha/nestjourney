@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import {
-  BarChart3, ChevronDown, CircleHelp, CloudOff, Eye, HeartHandshake, House, Languages, Leaf,
+  BarChart3, CalendarDays, ChevronDown, CircleHelp, CloudOff, Eye, HeartHandshake, House, Languages, Leaf,
   ListTodo, MoreHorizontal, PanelLeftClose, PanelLeftOpen, Settings2, UserCheck, Users, UsersRound, Workflow,
 } from 'lucide-react'
 import { auth } from './firebase'
@@ -14,6 +14,7 @@ import {
   type JourneyAccessContext,
   type JourneyViewAsRole,
 } from './journeyRepository'
+import { canSeeSharedBirthdays } from './birthdayRepository'
 import { canOpenJourneyArea, canViewJourneyPeople, canViewJourneyVision, resolveJourneyResponsibility } from './journeyExperience'
 import { getInitialLocale, localeLabels, persistLocale, type AppLocale } from './i18n'
 import { useJourneyLabels } from './journeyLabels'
@@ -31,7 +32,7 @@ type NavItem={
 const copy={
   'pt-BR':{
     tagline:'cuidado em cada passo',today:'Hoje',todayDesc:'O que precisa de você agora',
-    people:'Pessoas',peopleDesc:'Pessoas e jornada permitida',journey:'Jornada',journeyDesc:'O caminho de cuidado e suas áreas',
+    people:'Pessoas',peopleDesc:'Pessoas e jornada permitida',birthdays:'Aniversários',birthdaysDesc:'Datas e celebrações autorizadas',journey:'Jornada',journeyDesc:'O caminho de cuidado e suas áreas',
     vision:'Visão',visionDesc:'Leitura pastoral, operacional e executiva',management:'Gestão',managementDesc:'Equipe, implantação, relatórios e ajustes',
     areas:'Áreas de cuidado',presence:'Presença',presenceDesc:'Cultos, visitantes e vínculo',table:'Encontros',tableDesc:'Encontros e participação',
     care:'Cuidado & Conexão',careDesc:'Contato em 24–48h e próximos passos',groups:'Grupos',groupsDesc:'Grupos, participantes e reuniões',
@@ -41,7 +42,7 @@ const copy={
   },
   en:{
     tagline:'care at every step',today:'Today',todayDesc:'What needs you now',
-    people:'People',peopleDesc:'People and permitted journey',journey:'Journey',journeyDesc:'The care path and its areas',
+    people:'People',peopleDesc:'People and permitted journey',birthdays:'Birthdays',birthdaysDesc:'Birthday dates and celebrations',journey:'Journey',journeyDesc:'The care path and its areas',
     vision:'Vision',visionDesc:'Pastoral, operational, and executive read',management:'Management',managementDesc:'Team, rollout, reports, and settings',
     areas:'Care areas',presence:'Presence',presenceDesc:'Services, visitors, and relationships',table:'Gatherings',tableDesc:'Gatherings and participation',
     care:'Care & Connection',careDesc:'24–48h contact and next steps',groups:'Groups',groupsDesc:'Groups, members, and meetings',
@@ -51,7 +52,7 @@ const copy={
   },
   es:{
     tagline:'cuidado en cada paso',today:'Hoy',todayDesc:'Lo que necesita de ti ahora',
-    people:'Personas',peopleDesc:'Personas y jornada permitida',journey:'Jornada',journeyDesc:'El camino de cuidado y sus áreas',
+    people:'Personas',peopleDesc:'Personas y jornada permitida',birthdays:'Cumpleaños',birthdaysDesc:'Fechas y celebraciones',journey:'Jornada',journeyDesc:'El camino de cuidado y sus áreas',
     vision:'Visión',visionDesc:'Lectura pastoral, operativa y ejecutiva',management:'Gestión',managementDesc:'Equipo, implementación, informes y ajustes',
     areas:'Áreas de cuidado',presence:'Presencia',presenceDesc:'Cultos, visitantes y vínculo',table:'Encuentros',tableDesc:'Encuentros y participación',
     care:'Cuidado & Conexión',careDesc:'Contacto en 24–48h y próximos pasos',groups:'Grupos',groupsDesc:'Grupos, participantes y reuniones',
@@ -168,6 +169,7 @@ export function JourneyShell({children}:{children:ReactNode}){
   const primary:NavItem[]=[
     {href:'/my-today',label:t.today,description:t.todayDesc,icon:ListTodo},
     {href:'/journey-profile',label:t.people,description:t.peopleDesc,icon:Users,enabled:a=>canViewJourneyPeople(a)},
+    {href:'/birthdays',label:t.birthdays,description:t.birthdaysDesc,icon:CalendarDays,enabled:a=>canSeeSharedBirthdays(a)},
     {href:'/areas',label:t.journey,description:t.journeyDesc,icon:Workflow},
     {href:'/vision',label:t.vision,description:t.visionDesc,icon:Eye,enabled:a=>canViewJourneyVision(a)},
   ]
