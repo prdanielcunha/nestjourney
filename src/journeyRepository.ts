@@ -252,6 +252,7 @@ export interface PresencePerson {
   congregationId: string
   name: string
   photoUrl?: string
+  archived?: boolean
   phone?: string
   consent?: boolean
   preferredContactChannel?: PreferredContactChannel
@@ -1164,6 +1165,7 @@ export async function listPresencePeople(organizationId: string, congregationId:
       organizationId,
       congregationId,
       name: asString(data.name) || '—',
+      archived: data.directoryArchived===true,
       photoUrl: asString(data.photoUrl || data.photoURL) || undefined,
       phone: asString(data.phone) || undefined,
       consent: Boolean(data.consent),
@@ -1189,6 +1191,7 @@ export async function listJourneyPeople(organizationId: string, congregationId: 
       organizationId,
       congregationId,
       name: asString(data.name) || '—',
+      archived: data.directoryArchived===true,
       photoUrl: asString(data.photoUrl || data.photoURL) || undefined,
       phone: asString(data.phone) || undefined,
       consent: Boolean(data.consent),
@@ -2739,10 +2742,10 @@ export async function closePresenceSession(
 
 
 /** All new participation records go through the organization directory gateway. */
-export async function createJourneyMember(input: { access: JourneyAccessContext; congregationId: string; name: string; preferredName?: string; requestId?: string; selection?: DirectorySelection }): Promise<string> {
+export async function createJourneyMember(input: { access: JourneyAccessContext; congregationId: string; name: string; preferredName?: string; phone?:string; requestId?: string; selection?: DirectorySelection }): Promise<string> {
   assertSensitiveJourneyWriteIsOnline()
   const result=await registerCentralPeople(input.access.organizationId,input.congregationId,input.requestId||crypto.randomUUID(),[
-    {name:input.name,preferredName:input.preferredName||'',...input.selection},
+    {name:input.name,preferredName:input.preferredName||'',phone:input.phone||'',...input.selection},
   ])
   return result.people[0].id
 }

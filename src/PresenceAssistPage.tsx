@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Check, ChevronLeft, HeartHandshake, ShieldCheck, UserCheck, X } from 'lucide-react'
+import { ChevronLeft, HeartHandshake, UserCheck, X } from 'lucide-react'
 import { auth } from './firebase'
 import {DirectoryPersonPicker} from './PeopleDirectoryPanel'
 import {PeopleDirectoryError,type DirectorySelection} from './peopleDirectoryClient'
@@ -16,7 +16,7 @@ import {
   listAbsenceCareRoutePersonIds,
   listJourneyCongregations,
   listPresenceChecks,
-  listPresencePeople,
+  listJourneyPeople,
   listPresenceSessions,
   loadJourneyAccess,
   recordPresenceCheck,
@@ -24,6 +24,7 @@ import {
   type JourneyAccessContext,
   type JourneyCongregation,
   type PresencePerson,
+  type JourneyPersonRecord,
   type PresenceSessionRecord,
 } from './journeyRepository'
 import { getInitialLocale, localeLabels, persistLocale, presenceAssistCopy, type AppLocale } from './i18n'
@@ -36,11 +37,10 @@ import { CrossUnitPresencePanel } from './CrossUnitPresencePanel'
 import { EventSeriesPanel } from './EventSeriesPanel'
 import type { JourneyEventSeries } from './journeyEventSeries'
 import { loadJourneyRolloutFlags, DEFAULT_JOURNEY_ROLLOUT_FLAGS, type JourneyRolloutFlags } from './journeyReleaseFlags'
+import {AttendanceRoster} from './packages/attendance/AttendanceRoster'
+import {attendanceCopy} from './packages/attendance/copy'
+import {canImportJourneyMembers} from './memberBulkImportRepository'
 import './PresenceAssistPage.css'
-
-function initials(name: string) {
-  return name.split(' ').filter(Boolean).map((part) => part[0]).slice(0, 2).join('').toUpperCase()
-}
 
 function bondCopy(locale: AppLocale) {
   if (locale === 'en') return {
@@ -112,10 +112,11 @@ export default function PresenceAssistPage() {
   const [rollout, setRollout] = useState<JourneyRolloutFlags>(DEFAULT_JOURNEY_ROLLOUT_FLAGS)
   const [congregations, setCongregations] = useState<JourneyCongregation[]>([])
   const [congregationId, setCongregationId] = useState('')
-  const [people, setPeople] = useState<PresencePerson[]>([])
+  const [people, setPeople] = useState<JourneyPersonRecord[]>([])
   const [sessions, setSessions] = useState<PresenceSessionRecord[]>([])
   const [checks, setChecks] = useState<PresenceCheck[]>([])
-  const [query, setQuery] = useState('')
+  const [feedback,setFeedback] = useState('')
+  const markGuard = useRef(false)
   const [loading, setLoading] = useState(true)
   const [loadingSlow, setLoadingSlow] = useState(false)
   const [bootstrapFailed, setBootstrapFailed] = useState(false)
@@ -135,9 +136,14 @@ export default function PresenceAssistPage() {
   const [showSession, setShowSession] = useState(false)
   const [seriesPreset, setSeriesPreset] = useState<JourneyEventSeries|null>(null)
   const [showVisitor, setShowVisitor] = useState(false)
+  const desiredScopeRef=useRef('')
+  const [scopeLoaded,setScopeLoaded]=useState(false)
+  const scopeRequestRef=useRef(0)
+  const selectedSessionRef=useRef('')
+  const [selectedSessionId,setSelectedSessionId]=useState('')
   const [routedAbsenceIds, setRoutedAbsenceIds] = useState<Set<string>>(new Set())
 
-  const displaySession = sessions.find((item) => item.status === 'open') ?? sessions[0]
+  const displaySession = sessions.find(item=>item.id===selectedSessionId) ?? sessions.find((item) => item.status === 'open') ?? sessions[0]
   const latest = useMemo(() => latestChecksByPerson(checks), [checks])
   const coverage = useMemo(
     () => displaySession ? calculatePresenceCoverage(displaySession, checks) : null,
@@ -147,34 +153,29 @@ export default function PresenceAssistPage() {
     () => displaySession ? confirmedAbsencePersonIds(displaySession, checks) : [],
     [displaySession, checks],
   )
-  const visiblePeople = useMemo(() => {
-    const needle = query.trim().toLocaleLowerCase(locale)
-    return needle ? people.filter((person) => person.name.toLocaleLowerCase(locale).includes(needle)) : people
-  }, [people, query, locale])
 
   const refreshScope = useCallback(async (orgId: string, unitId: string) => {
+    const scope=orgId+':'+unitId
+    if(desiredScopeRef.current!==scope)return
+    const request=++scopeRequestRef.current
     const [nextPeople, nextSessions] = await Promise.all([
-      listPresencePeople(orgId, unitId),
-      listPresenceSessions(orgId, unitId),
+      listJourneyPeople(orgId, unitId), listPresenceSessions(orgId, unitId),
     ])
-    setPeople(nextPeople)
-    setSessions(nextSessions)
-    const session = nextSessions.find((item) => item.status === 'open') ?? nextSessions[0]
-    if (session) {
-      const [nextChecks, routedPeople] = await Promise.all([
-        listPresenceChecks(orgId, unitId, session.id),
-        listAbsenceCareRoutePersonIds(orgId, unitId, session.id),
-      ])
-      setChecks(nextChecks)
-      setRoutedAbsenceIds(new Set(routedPeople))
-    } else {
-      setChecks([])
-      setRoutedAbsenceIds(new Set())
-    }
+    const session=nextSessions.find(item=>item.id===selectedSessionRef.current)??nextSessions.find(item=>item.status==='open')??nextSessions[0]
+    const [nextChecks,routedPeople]=session?await Promise.all([
+      listPresenceChecks(orgId,unitId,session.id),listAbsenceCareRoutePersonIds(orgId,unitId,session.id),
+    ]):[[],[]]
+    if(request!==scopeRequestRef.current||desiredScopeRef.current!==scope)return
+    setPeople(nextPeople);setSessions(nextSessions);setChecks(nextChecks);setScopeLoaded(true)
+    selectedSessionRef.current=session?.id||''
+    setSelectedSessionId(session?.id||'')
+    setRoutedAbsenceIds(new Set(routedPeople))
   }, [])
+  useEffect(()=>()=>{scopeRequestRef.current++},[])
 
   const bootstrap = useCallback(async () => {
     const runId = ++bootstrapRunRef.current
+    desiredScopeRef.current='';scopeRequestRef.current++;setScopeLoaded(false)
     setLoading(true)
     setLoadingSlow(false)
     setBootstrapFailed(false)
@@ -198,6 +199,7 @@ export default function PresenceAssistPage() {
         if (bootstrapRunRef.current !== runId) return
         setCongregations(nextCongregations)
         const unitId = resolveActiveJourneyCongregationId(nextAccess.organizationId, nextCongregations)
+        desiredScopeRef.current=nextAccess.organizationId+':'+unitId
         setCongregationId(unitId)
         if (unitId) await refreshScope(organizationId, unitId)
       })(), 10000, 'presence_bootstrap')
@@ -224,17 +226,24 @@ export default function PresenceAssistPage() {
 
   useEffect(() => {
     if (!access?.canManagePresence || !congregationId) return
-    return subscribeJourneyLiveChanges({
+    let active=true
+    const stop=subscribeJourneyLiveChanges({
       organizationId: access.organizationId,
       congregationId,
       collections: ['people', 'presenceSessions', 'presenceChecks', 'careRequests'],
-      onChange: () => { void refreshScope(access.organizationId, congregationId).catch((cause) => console.error('Presence live refresh failed', cause)) },
+      onChange: () => { if(!active)return;void refreshScope(access.organizationId, congregationId).catch((cause) => console.error('Presence live refresh failed', cause)) },
       onError: (cause) => console.error('Presence live subscription failed', cause),
     })
+    return()=>{active=false;stop()}
   }, [access, congregationId, refreshScope])
 
   async function selectCongregation(unitId: string) {
     if (!access) return
+    desiredScopeRef.current=access.organizationId+':'+unitId
+    setScopeLoaded(false)
+    scopeRequestRef.current++
+    selectedSessionRef.current='';setSelectedSessionId('')
+    setPeople([]);setChecks([]);setSessions([]);setFeedback('')
     setCongregationId(unitId)
     setActiveJourneyCongregationId(access.organizationId,unitId)
     setBusy(true)
@@ -244,15 +253,28 @@ export default function PresenceAssistPage() {
     finally { setBusy(false) }
   }
 
+  async function selectSession(sessionId:string){
+    if(!access||busy)return
+    setScopeLoaded(false)
+    selectedSessionRef.current=sessionId
+    setSelectedSessionId(sessionId);setChecks([]);setFeedback('')
+    setBusy(true);setError('')
+    try{await refreshScope(access.organizationId,congregationId)}
+    catch{setError(t.error)}finally{setBusy(false)}
+  }
+
   async function markPresenceState(person: PresencePerson, state: PresenceVerificationState) {
-    if (!access || !displaySession || displaySession.status !== 'open' || !online) return
+    if (!access || !displaySession || displaySession.status !== 'open' || !online || busy || !scopeLoaded || markGuard.current) return
+    if(person.organizationId!==access.organizationId||person.congregationId!==congregationId)return
     const previous = latest.get(person.id)
     if (previous?.state === state) return
     if (state === 'absent_confirmed' && !window.confirm(t.confirmAbsent.replace('{name}', person.name))) return
     const correctionReason = previous ? window.prompt(locale === 'en' ? 'Reason for correcting this check:' : locale === 'es' ? 'Motivo de la corrección:' : 'Motivo da correção desta presença:')?.trim() : undefined
     if (previous && (!correctionReason || correctionReason.length > 240)) return
+    markGuard.current=true
     setBusy(true)
     setError('')
+    setFeedback('')
     try {
       await recordPresenceCheck({
         organizationId: access.organizationId,
@@ -265,12 +287,14 @@ export default function PresenceAssistPage() {
         correctionReason,
       })
       setChecks(await listPresenceChecks(access.organizationId, congregationId, displaySession.id))
+      const copy=attendanceCopy[locale]
+      setFeedback(person.name+' · '+(state==='present_confirmed'?copy.present:state==='absent_confirmed'?copy.absent:copy.pending))
     } catch (cause) { console.error(cause); setError(t.error) }
-    finally { setBusy(false) }
+    finally { markGuard.current=false;setBusy(false) }
   }
 
   async function claimBond(person: PresencePerson) {
-    if (!access || person.bondHostRef || !online) return
+    if (!access || person.bondHostRef || !online || busy || !scopeLoaded) return
     setBusy(true)
     setError('')
     try {
@@ -287,7 +311,7 @@ export default function PresenceAssistPage() {
   }
 
   async function closeSession() {
-    if (!access || !displaySession || displaySession.status !== 'open') return
+    if (!access || !displaySession || displaySession.status !== 'open' || !scopeLoaded || busy || !online) return
     if (!window.confirm(t.confirmClose)) return
     setBusy(true)
     setError('')
@@ -299,7 +323,7 @@ export default function PresenceAssistPage() {
   }
 
   async function routeAbsenceToCare(person: PresencePerson) {
-    if (!access || !displaySession || displaySession.status !== 'closed' || !online) return
+    if (!access || !displaySession || displaySession.status !== 'closed' || !online || busy || !scopeLoaded) return
     if (!confirmedAbsences.includes(person.id) || routedAbsenceIds.has(person.id)) return
     setBusy(true)
     setError('')
@@ -315,8 +339,7 @@ export default function PresenceAssistPage() {
   }
 
   const noSessionGuide=emptyGuidance(locale,'presence_no_session')
-  const noPeopleGuide=emptyGuidance(locale,'presence_no_people')
-  const canAddVisitor=Boolean(access?.canManagePeople&&displaySession?.status==='open'&&online)
+  const canAddVisitor=Boolean(scopeLoaded&&access?.canManagePeople&&displaySession?.status==='open'&&online&&!busy)
   const activeUnit=congregations.find(item=>item.id===congregationId)
   const unverifiedCount=coverage?.unverified??people.length
   const focusTitle=displaySession?.status==='open'
@@ -345,7 +368,7 @@ export default function PresenceAssistPage() {
     return <main className="presence-assist"><div className="presence-loading presence-loading-card"><span className="presence-loading-spinner" aria-hidden="true" /><strong>{t.loading}</strong>{loadingSlow ? <p>{slowMessage}</p> : null}</div></main>
   }
 
-  if (bootstrapFailed && !access) {
+  if ((bootstrapFailed && !access)||(!scopeLoaded&&Boolean(error))) {
     const title = locale === 'en' ? 'We could not load this church' : locale === 'es' ? 'No pudimos cargar esta iglesia' : 'Não conseguimos carregar esta igreja'
     const body = locale === 'en' ? 'Your session is safe. Try again to reload your organization, permissions, and people.' : locale === 'es' ? 'Tu sesión está segura. Inténtalo de nuevo para recargar tu organización, permisos y personas.' : 'Sua sessão continua segura. Tente novamente para recarregar a organização, as permissões e as pessoas.'
     return <main className="presence-assist"><AccessDeniedState locale={locale} title={title} body={body} retryLabel={t.retry} onRetry={() => void bootstrap()} /></main>
@@ -369,6 +392,7 @@ export default function PresenceAssistPage() {
     </section>
 
     {error ? <div className="presence-error" role="alert">{error}</div> : null}
+    {feedback?<p className="presence-save-feedback" role="status">{feedback}</p>:null}
     {!online?<div className="presence-error" role="status">{offlineNote}</div>:null}
 
     <JourneyAreaFocus
@@ -385,74 +409,53 @@ export default function PresenceAssistPage() {
         ?[
           {label:locale==='en'?'Go to people':locale==='es'?'Ir a personas':'Ir para pessoas',href:'#presence-people',primary:true},
           ...(canAddVisitor?[{label:t.newVisitor,onClick:()=>setShowVisitor(true)}]:[]),
-          {label:t.close,onClick:()=>void closeSession(),disabled:busy||!online},
+          {label:t.close,onClick:()=>void closeSession(),disabled:busy||!online||!scopeLoaded},
         ]
-        :[{label:t.newSession,onClick:()=>setShowSession(true),disabled:!congregationId||busy||!online,primary:true}]
+        :[{label:t.newSession,onClick:()=>{if(scopeLoaded&&!sessions.some(item=>item.status==='open'))setShowSession(true)},disabled:!congregationId||busy||!online||sessions.some(item=>item.status==='open'),primary:true}]
       }
     />
 
     <section className="journey-area-toolbar">
+      {sessions.length>1?<label><span>{locale==='en'?'Service history':locale==='es'?'Historial de cultos':'Culto e histórico'}</span><select value={displaySession?.id||''} disabled={busy} onChange={event=>void selectSession(event.target.value)}>{sessions.map(session=><option key={session.id} value={session.id}>{session.eventName||new Date(session.openedAt).toLocaleString(locale)} · {session.status==='open'?(locale==='en'?'Open':locale==='es'?'Abierto':'Aberto'):t.closed}</option>)}</select></label>:null}
       {congregations.length>1?<label><span>{t.congregation}</span><select value={congregationId} onChange={(event) => void selectCongregation(event.target.value)} disabled={busy}>{congregations.map((item) => <option value={item.id} key={item.id}>{item.name}{item.city ? ` · ${item.city}` : ''}</option>)}</select></label>:null}
-      <label className="grow"><span>{t.search}</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t.search} /></label>
+      {canImportJourneyMembers(access)?<div className="presence-member-shortcuts"><a className="presence-button" href="/journey-profile?register=member">{locale==='en'?'Register member':locale==='es'?'Registrar miembro':'Cadastrar membro'}</a><a className="presence-button" href="/journey-profile?import=members">{locale==='en'?'Import a list':locale==='es'?'Importar lista':'Importar lista de membros'}</a></div>:null}
     </section>
 
     {displaySession ? <section className="presence-panel presence-session-card">
       <div className="presence-session-head"><div><span className="presence-kicker">{t.session}</span><h2>{displaySession.eventName ?? new Date(displaySession.openedAt).toLocaleString(locale)}</h2><p>{new Date(displaySession.openedAt).toLocaleString(locale)} · {displaySession.status === 'closed' ? t.closed : displaySession.eventRef}</p></div><span className="presence-badge"><UserCheck size={15} /> {displaySession.status === 'open' ? t.session : t.closed}</span></div>
       {coverage ? <><div className="coverage-wrap"><span className="coverage-number">{coverage.percent}%</span><div className="coverage-track" aria-label={`${t.coverage}: ${coverage.percent}%`}><span style={{ width: `${coverage.percent}%` }} /></div><div className="coverage-meta">{coverage.verified} {t.verified}<br />{coverage.unverified} {t.unverified}</div></div><p className="coverage-note">{coverage.meetsMinimum ? t.qualityReady : t.qualityNotReady}</p>{displaySession.status === 'closed' ? <p className="coverage-note">{coverage.meetsMinimum ? `${t.absenceEvidence}: ${confirmedAbsences.length}` : t.absenceBlocked}</p> : null}</> : null}
-    </section> : <div className="presence-panel"><GuidedEmptyState icon={UserCheck} title={noSessionGuide.title} body={noSessionGuide.body} primary={{label:noSessionGuide.primary,onClick:()=>setShowSession(true)}} secondary={{label:noSessionGuide.secondary||t.back,href:'/my-today'}}/></div>}
+    </section> : <div className="presence-panel"><GuidedEmptyState icon={UserCheck} title={noSessionGuide.title} body={noSessionGuide.body} primary={{label:noSessionGuide.primary,onClick:()=>{if(scopeLoaded&&!sessions.some(item=>item.status==='open'))setShowSession(true)}}} secondary={{label:noSessionGuide.secondary||t.back,href:'/my-today'}}/></div>}
 
-    {rollout.eventSeries && access && congregationId ? <EventSeriesPanel key={access.organizationId+':'+congregationId} access={access} congregationId={congregationId} locale={locale} canLaunch={displaySession?.status!=='open'} onLaunch={series=>{setSeriesPreset(series);setShowSession(true)}}/> : null}
+    {rollout.eventSeries && access && congregationId ? <EventSeriesPanel key={access.organizationId+':'+congregationId} access={access} congregationId={congregationId} locale={locale} canLaunch={scopeLoaded&&!busy&&online&&!sessions.some(item=>item.status==='open')} onLaunch={series=>{setSeriesPreset(series);setShowSession(true)}}/> : null}
     {rollout.crossUnitPresence && displaySession?.status==='open' && access ? <CrossUnitPresencePanel access={access} congregationId={congregationId} units={congregations} session={displaySession} checks={checks} locale={locale} onChanged={()=>refreshScope(access.organizationId,congregationId)}/> : null}
 
-    <div className="presence-list-head" id="presence-people"><h2>{t.people} · {visiblePeople.length}</h2><span className="presence-badge"><ShieldCheck size={14} /> {t.sourceRule}</span></div>
-    <section className="presence-grid">
-      {visiblePeople.map((person) => {
-        const current = latest.get(person.id)
-        const present = current?.state === 'present_confirmed'
-        const absent = current?.state === 'absent_confirmed'
-        const eligible = !displaySession?.eligiblePersonIds || displaySession.eligiblePersonIds.includes(person.id)
-        const absenceUsable = Boolean(displaySession?.status === 'closed' && confirmedAbsences.includes(person.id))
-        const contactAllowed = Boolean(person.consent && person.phone)
-        const routedToCare = routedAbsenceIds.has(person.id)
-        return <article className="presence-panel presence-person" key={person.id}>
-          <div className="presence-person-top"><span className="presence-avatar">{person.photoUrl ? <img src={person.photoUrl} alt="" /> : initials(person.name)}</span><div className="presence-person-name"><strong>{person.name}</strong><small>{person.visits ? `${person.visits}x` : t.notVerified}</small></div></div>
-          <span className={`presence-state ${present ? 'confirmed' : absent ? 'absent' : ''}`}>{present ? t.present : absent ? t.absent : t.notVerified}{current?.correctedFromCheckId ? ` · ${t.correcting}` : ''}</span>
-          <div className="presence-bond-row">
-            <span className={`presence-bond-state ${person.bondHostRef ? 'assigned' : ''}`}><HeartHandshake size={14}/>{person.bondHostRef ? (person.bondHostRef === access.userId ? bond.mine : bond.assigned) : bond.none}</span>
-            {!person.bondHostRef && displaySession?.status === 'open' ? <button className="presence-bond-button" disabled={busy||!online} onClick={() => void claimBond(person)}>{bond.claim}</button> : null}
-          </div>
-          {absenceUsable ? <div className={`presence-absence-care ${contactAllowed ? '' : 'blocked'}`}>
-            <HeartHandshake size={15}/>
-            <div><strong>{routedToCare ? absenceCare.routed : contactAllowed ? absenceCare.route : absenceCare.noContact}</strong><p>{contactAllowed ? absenceCare.routeHint : absenceCare.noContactHint}</p></div>
-            {contactAllowed && !routedToCare ? <button className="presence-bond-button" disabled={busy||!online} onClick={() => void routeAbsenceToCare(person)}>{absenceCare.route}</button> : null}
-          </div> : null}
-          {!eligible?<p className="presence-eligibility-note">{locale==='en'?'Outside this event’s eligible roster: only a verified presence may be recorded.':locale==='es'?'Fuera de la lista elegible: solo se puede confirmar presencia.':'Fora do público elegível deste evento: somente presença real pode ser confirmada.'}</p>:null}
-          <div className="presence-person-actions">
-            <button className={`presence-button ${present ? 'success' : 'primary'}`} disabled={busy || !online || present || displaySession?.status !== 'open'} onClick={() => void markPresenceState(person, 'present_confirmed')}>{present ? <><Check size={17} /> {t.present}</> : t.markPresent}</button>
-            <button className={`presence-button ${absent ? 'absence' : ''}`} disabled={busy || !online || absent || !eligible || displaySession?.status !== 'open'} onClick={() => void markPresenceState(person, 'absent_confirmed')}>{absent ? <><X size={17} /> {t.absent}</> : t.markAbsent}</button>
-            <button className="presence-button" disabled={busy || !online || !current || current.state === 'unverified' || displaySession?.status !== 'open'} onClick={() => void markPresenceState(person, 'unverified')} aria-label={locale === 'en' ? `Undo check for ${person.name}` : locale === 'es' ? `Deshacer verificación de ${person.name}` : `Desfazer conferência de ${person.name}`}>{t.notVerified}</button>
-          </div>
-        </article>
-      })}
-    </section>
-    {!visiblePeople.length ? query.trim()?<div className="presence-panel presence-empty">{t.empty}</div>:<div className="presence-panel"><GuidedEmptyState icon={UserCheck} title={noPeopleGuide.title} body={noPeopleGuide.body} primary={canAddVisitor?{label:noPeopleGuide.primary,onClick:()=>setShowVisitor(true)}:displaySession?.status==='open'?{label:locale==='en'?'Open Help':locale==='es'?'Abrir Ayuda':'Abrir Ajuda',href:'/help'}:{label:t.newSession,onClick:()=>setShowSession(true)}} secondary={{label:noPeopleGuide.secondary||t.back,href:'/help'}}/></div> : null}
+    <AttendanceRoster key={access.organizationId+':'+congregationId+':'+(displaySession?.id||'none')} people={people.filter(person=>!person.archived||displaySession?.eligiblePersonIds?.includes(person.id)||latest.has(person.id))} session={displaySession} checks={checks} locale={locale} editable={scopeLoaded&&displaySession?.status==='open'} busy={busy} online={online} onMark={(person,state)=>void markPresenceState(person,state)} profileHref={access.canManagePeople?person=>'/journey-profile?person='+encodeURIComponent(person.id):undefined} renderDetails={person=>{
+      const absenceUsable=Boolean(displaySession?.status==='closed'&&confirmedAbsences.includes(person.id))
+      const contactAllowed=Boolean(person.consent&&person.phone)
+      const routedToCare=routedAbsenceIds.has(person.id)
+      return <>
+        <div className="presence-bond-row"><span className={`presence-bond-state ${person.bondHostRef?'assigned':''}`}><HeartHandshake size={14}/>{person.bondHostRef?(person.bondHostRef===access.userId?bond.mine:bond.assigned):bond.none}</span>{!person.bondHostRef&&displaySession?.status==='open'?<button className="presence-bond-button" disabled={busy||!online} onClick={()=>void claimBond(person)}>{bond.claim}</button>:null}</div>
+        {absenceUsable?<div className={`presence-absence-care ${contactAllowed?'':'blocked'}`}><HeartHandshake size={15}/><div><strong>{routedToCare?absenceCare.routed:contactAllowed?absenceCare.route:absenceCare.noContact}</strong><p>{contactAllowed?absenceCare.routeHint:absenceCare.noContactHint}</p></div>{contactAllowed&&!routedToCare?<button className="presence-bond-button" disabled={busy||!online} onClick={()=>void routeAbsenceToCare(person)}>{absenceCare.route}</button>:null}</div>:null}
+      </>
+    }}/>
     <p className="presence-rule">{t.sourceRule}<br />{t.correctionRule}</p>
   </div>
 
   {showSession ? <SessionModal preset={seriesPreset} close={() => {setShowSession(false);setSeriesPreset(null)}} create={async (eventName, expected, eventTypeId, eligiblePersonIds, eventSeriesId, requestId) => {
-    if (!access || !online) return
+    if (!access || !online || !scopeLoaded || busy || sessions.some(item=>item.status==='open')) return
     setBusy(true); setError('')
     try {
-      await createPresenceSession({ organizationId: access.organizationId, congregationId, actorId: access.userId, eventName, expectedPeopleCount: expected, minimumCoveragePercent: 90, eventTypeId, eligiblePersonIds, eventSeriesId, requestId })
+      const createdSessionId=await createPresenceSession({ organizationId: access.organizationId, congregationId, actorId: access.userId, eventName, expectedPeopleCount: expected, minimumCoveragePercent: 90, eventTypeId, eligiblePersonIds, eventSeriesId, requestId })
+      selectedSessionRef.current=createdSessionId
       setShowSession(false)
       setSeriesPreset(null)
       await refreshScope(access.organizationId, congregationId)
     } catch (cause) { console.error(cause); setError(t.error) }
     finally { setBusy(false) }
-  }} eligiblePeople={people} locale={locale} online={online} /> : null}
+  }} eligiblePeople={people.filter(person=>!person.archived)} locale={locale} online={online} /> : null}
 
   {showVisitor&&access ? <VisitorModal error={error} org={access.organizationId} canPick={access.isOwner||['owner','admin','pastor','data_admin'].includes(access.organizationRole)} close={() => setShowVisitor(false)} save={async (name, phone, consent, preferredContactChannel, claimBond,requestId,selection) => {
-    if (!access || !displaySession || !online) return
+    if (!access || !displaySession || !online || busy || !scopeLoaded || displaySession.status!=='open') return
     setBusy(true); setError('')
     try {
       const person = await createMinimalVisitor({ organizationId: access.organizationId, congregationId, actorId: access.userId, name, phone, consent, preferredContactChannel, requestId,selection })
@@ -547,11 +550,11 @@ function SessionModal({ close, create, eligiblePeople, locale, preset, online }:
           <small>{requiresSelection?(locale==='en'?'Select only the people expected at this special event.':locale==='es'?'Seleccione únicamente las personas elegibles de este evento.':'Selecione somente as pessoas elegíveis para este evento especial.'):copy.peopleHint}</small>
         </div>
       </div>
-      {requiresSelection?<div className="presence-eligible-picker">
+      <details className="presence-roster-review" open={requiresSelection||undefined}><summary>{locale==='en'?'Review expected people':locale==='es'?'Revisar personas previstas':'Conferir quem é esperado neste culto'} · {expected}</summary><div className="presence-eligible-picker">
         <label className="presence-field"><span>{locale==='en'?'Search eligible people':locale==='es'?'Buscar personas elegibles':'Buscar pessoas elegíveis'}</span><input value={eligibleSearch} onChange={event=>setEligibleSearch(event.target.value)} placeholder={locale==='en'?'Search names':locale==='es'?'Buscar nombres':'Buscar nomes'}/></label>
         <div className="presence-eligible-options" role="group" aria-label={locale==='en'?'Eligible attendees':locale==='es'?'Personas elegibles':'Pessoas elegíveis'}>{visibleEligiblePeople.map(person=><label key={person.id}><input type="checkbox" checked={selectedIds.has(person.id)} onChange={event=>setSelectedIds(current=>{const next=new Set(current);if(event.target.checked)next.add(person.id);else next.delete(person.id);return next})}/><span>{person.name}</span></label>)}</div>
         <p>{locale==='en'?'Do not mark other people as absent in a special-event roster.':locale==='es'?'No marque como ausentes a personas fuera de este público.':'Não marque como ausentes pessoas fora do público deste evento.'}</p>
-      </div>:null}
+      </div></details>
       <div className="presence-modal-actions">
         <button className="presence-button" disabled={saving} onClick={close}>{t.cancel}</button>
         <button className="presence-button primary" disabled={saving || !online || !name.trim() || (requiresSelection && expected === 0)} onClick={()=>void submit()}>{copy.start}</button>

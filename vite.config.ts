@@ -5,6 +5,7 @@ import { defineConfig } from 'vite'
 // Firebase SDK families, and icon library from NestJourney's application code.
 export default defineConfig({
   plugins: [react()],
+  server: {allowedHosts: ['terminal.local']},
   build: {
     rolldownOptions: {
       output: {

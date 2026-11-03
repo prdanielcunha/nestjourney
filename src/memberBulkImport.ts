@@ -4,6 +4,7 @@ export interface MemberImportRow {
   rowNumber: number
   name: string
   preferredName: string
+  phone?:string
   status: 'ready' | 'duplicate' | 'review' | 'invalid'
   warning: string
 }
@@ -45,14 +46,22 @@ export function previewMemberImport(source: string, knownPeople: Array<{name: st
   const known = new Set(knownPeople.map(item=>normalizePersonName(item.name)).filter(Boolean))
   const seen = new Set<string>()
   return data.map(({columns,rowNumber}):MemberImportRow=>{
-    const [name='', preferredName='', ...extra] = columns
+    const name=columns[0]||''
+    const header=hasHeader?rows[0].columns.map(normalizePersonName):[]
+    const phoneColumn=header.findIndex(value=>['telefone','phone','telefono','celular','whatsapp'].includes(value))
+    const hasPhone=phoneColumn>=0||!hasHeader&&(columns.length===3||/^\+?[\d ()-]+$/.test(columns[1]||''))
+    const phone=hasPhone?(columns[phoneColumn>=0?phoneColumn:1]||''):''
+    const preferredColumn=header.findIndex(value=>['nome preferido','preferred name','nombre preferido'].includes(value))
+    const preferredName=columns[preferredColumn>=0?preferredColumn:hasPhone?2:1]||''
+    const extra=columns.slice(hasPhone?3:2)
     const key=normalizePersonName(name)
     const duplicate=known.has(key) || seen.has(key)
     if (key) seen.add(key)
-    const invalid=extra.some(Boolean) || name.length < 2 || name.length > 160 ||
+    const phoneInvalid=phone&&(!/^\+?[\d ()-]+$/.test(phone)||phone.replace(/\D/g,'').length<10||phone.replace(/\D/g,'').length>15)
+    const invalid=phoneInvalid||extra.some(Boolean) || name.length < 2 || name.length > 160 ||
       preferredName.length > 120 || /[\x00-\x1f<>]/.test(name+preferredName)
     const sparse=key.split(' ').length < 2
-    return {rowNumber,name,preferredName,
+    return {rowNumber,name,preferredName,...(phone?{phone}:{}),
       status:invalid?'invalid':duplicate?'duplicate':sparse?'review':'ready',
       warning:invalid?'invalid_columns_or_name':duplicate?'possible_duplicate':sparse?'short_name_review':'',
     }
@@ -68,5 +77,5 @@ export function prepareApprovedMemberImport(rows: MemberImportRow[], selected: n
     if(names.has(name))throw new Error('member_import_duplicate_in_approval')
     names.add(name)
   }
-  return approved.map(row=>({name:row.name.trim().replace(/\s+/g,' '),preferredName:row.preferredName.trim().replace(/\s+/g,' ')}))
+  return approved.map(row=>({name:row.name.trim().replace(/\s+/g,' '),preferredName:row.preferredName.trim().replace(/\s+/g,' '),...(row.phone?{phone:row.phone.trim()}:{})}))
 }
