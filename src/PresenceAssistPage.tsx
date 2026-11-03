@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ChevronLeft, HeartHandshake, UserCheck, X } from 'lucide-react'
+import { AlertCircle, ChevronLeft, HeartHandshake, UserCheck, UsersRound, X } from 'lucide-react'
+import { createPortal } from 'react-dom'
+import { useModalDialog } from './useModalDialog'
 import { auth } from './firebase'
 import {DirectoryPersonPicker} from './PeopleDirectoryPanel'
 import {PeopleDirectoryError,type DirectorySelection} from './peopleDirectoryClient'
@@ -441,7 +443,7 @@ export default function PresenceAssistPage() {
     <p className="presence-rule">{t.sourceRule}<br />{t.correctionRule}</p>
   </div>
 
-  {showSession ? <SessionModal preset={seriesPreset} close={() => {setShowSession(false);setSeriesPreset(null)}} create={async (eventName, expected, eventTypeId, eligiblePersonIds, eventSeriesId, requestId) => {
+  {showSession ? <SessionModal unitName={activeUnit?.name||''} preset={seriesPreset} close={() => {setShowSession(false);setSeriesPreset(null)}} create={async (eventName, expected, eventTypeId, eligiblePersonIds, eventSeriesId, requestId) => {
     if (!access || !online || !scopeLoaded || busy || sessions.some(item=>item.status==='open')) return
     setBusy(true); setError('')
     try {
@@ -480,87 +482,111 @@ export default function PresenceAssistPage() {
   </main>
 }
 
-function SessionModal({ close, create, eligiblePeople, locale, preset, online }: { close: () => void; create: (name: string, expected: number, eventTypeId: string, eligiblePersonIds: string[], eventSeriesId?: string,requestId?:string) => Promise<void>; eligiblePeople: PresencePerson[]; locale: AppLocale; preset:JourneyEventSeries|null; online:boolean }) {
+function SessionModal({ close, create, eligiblePeople, locale, preset, online, unitName }: { unitName: string; close: () => void; create: (name: string, expected: number, eventTypeId: string, eligiblePersonIds: string[], eventSeriesId?: string,requestId?:string) => Promise<void>; eligiblePeople: PresencePerson[]; locale: AppLocale; preset:JourneyEventSeries|null; online:boolean }) {
   const t = presenceAssistCopy[locale]
+  const dialogRef = useRef<HTMLElement>(null)
   const [requestId] = useState(()=>crypto.randomUUID())
-  const savingGuard=useRef(false)
-  const [saving,setSaving]=useState(false)
-  const [name, setName] = useState(`${preset?.title||t.todayEvent} · ${new Date().toLocaleDateString(locale)}`)
-  const [eventTypeId, setEventTypeId] = useState<string>(preset?.eventTypeId||'general')
-  const [eligibleSearch, setEligibleSearch] = useState('')
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set(preset?.eventTypeId==='youth'||preset?.eventTypeId==='special'?[]:eligiblePeople.map(person=>person.id)))
-  const requiresSelection = eventTypeId === 'youth' || eventTypeId === 'special'
+  const savingGuard = useRef(false)
+  const [saving,setSaving] = useState(false)
+  useModalDialog(dialogRef, close, saving)
+  const [name,setName] = useState(`${preset?.title||t.todayEvent} · ${new Date().toLocaleDateString(locale)}`)
+  const [eventTypeId,setEventTypeId] = useState<string>(preset?.eventTypeId||'general')
+  const [eligibleSearch,setEligibleSearch] = useState('')
+  const [selectedIds,setSelectedIds] = useState<Set<string>>(() => new Set(preset?.eventTypeId==='youth'||preset?.eventTypeId==='special'?[]:eligiblePeople.map(person=>person.id)))
+  const requiresSelection = eventTypeId==='youth'||eventTypeId==='special'
   const expected = selectedIds.size
+  const hasPeople = eligiblePeople.length>0
   const visibleEligiblePeople = eligiblePeople.filter(person=>person.name.toLocaleLowerCase(locale).includes(eligibleSearch.trim().toLocaleLowerCase(locale)))
   const chooseEventType=(next:string)=>{
     setEventTypeId(next)
     setSelectedIds(new Set(next==='youth'||next==='special'?[]:eligiblePeople.map(person=>person.id)))
   }
   const submit=async()=>{
-    if(savingGuard.current||!online)return
+    if(savingGuard.current||!online||!name.trim()||(requiresSelection&&expected===0))return
     savingGuard.current=true;setSaving(true)
     try {await create(name,expected,eventTypeId,[...selectedIds],preset?.id,requestId)}
     finally {savingGuard.current=false;setSaving(false)}
   }
-  const copy = locale === 'en'
+  const copy = locale==='en'
     ? {
-        title: 'Record attendance',
-        subtitle: 'Confirm the service and start marking who is present.',
-        event: 'Service or gathering',
-        people: 'People to check',
-        peopleHint: 'Eligible people are frozen when the session opens. Visitors added later cannot inflate its coverage.',
-        eventType: 'Gathering type',
-        start: 'Start recording attendance',
+        kicker:'PRESENCE / NEW SERVICE',title:'Record attendance',
+        subtitle:'Choose the service and confirm attendees with a few taps.',
+        event:'Service or gathering',people:'People expected',eventType:'Gathering type',
+        peopleHint:'This list is saved when you open the service. New visitors can still be added later.',
+        noPeople:'No people available in this congregation',
+        noPeopleHint:'Check the selected campus or add people in People. You may still open a service to register new visitors.',
+        selectionHint:'Choose the people expected for this event before starting.',
+        search:'Search by name',review:'Review the expected people',manage:'Open People',
+        start:'Start recording',
       }
-    : locale === 'es'
+    : locale==='es'
       ? {
-          title: 'Registrar asistencia',
-          subtitle: 'Confirma el culto y comienza a marcar quién está presente.',
-          event: 'Culto o encuentro',
-          people: 'Personas para revisar',
-          peopleHint: 'Las personas elegibles se fijan al abrir la sesión. Los visitantes nuevos no inflan su cobertura.',
-          eventType: 'Tipo de encuentro',
-          start: 'Comenzar a registrar asistencia',
+          kicker:'PRESENCIA / NUEVO CULTO',title:'Registrar asistencia',
+          subtitle:'Elige el culto y confirma las personas con pocos toques.',
+          event:'Culto o encuentro',people:'Personas previstas',eventType:'Tipo de encuentro',
+          peopleHint:'Esta lista se guarda al abrir el culto. Puedes añadir visitantes después.',
+          noPeople:'No hay personas disponibles en esta congregación',
+          noPeopleHint:'Revisa la sede o registra personas en Personas. Puedes abrir el culto para registrar visitantes nuevos.',
+          selectionHint:'Selecciona a las personas previstas para este evento antes de comenzar.',
+          search:'Buscar por nombre',review:'Revisar personas previstas',manage:'Abrir Personas',
+          start:'Comenzar registro',
         }
       : {
-          title: 'Registrar presença',
-          subtitle: 'Confirme o culto e comece a marcar quem está presente.',
-          event: 'Culto ou encontro',
-          people: 'Pessoas para conferir',
-          peopleHint: 'A lista elegível é congelada ao abrir a sessão. Visitantes incluídos depois não aumentam a cobertura.',
-          eventType: 'Tipo de culto ou encontro',
-          start: 'Começar a registrar presença',
+          kicker:'PRESENÇA / NOVO CULTO',title:'Registrar presença',
+          subtitle:'Escolha o culto e confira as pessoas em poucos toques.',
+          event:'Culto ou encontro',people:'Pessoas esperadas',eventType:'Tipo de culto',
+          peopleHint:'A lista é definida ao abrir o culto. Novos visitantes podem ser cadastrados depois.',
+          noPeople:'Nenhuma pessoa disponível nesta congregação',
+          noPeopleHint:'Confira a congregação selecionada ou cadastre pessoas em Pessoas. Você ainda pode abrir o culto para registrar novos visitantes.',
+          selectionHint:'Selecione as pessoas esperadas neste evento antes de começar.',
+          search:'Buscar pelo nome',review:'Conferir pessoas esperadas',manage:'Abrir Pessoas',
+          start:'Começar conferência',
         }
-
-  return <div className="presence-modal-backdrop" onMouseDown={()=>{if(!saving)close()}}>
-    <section className="presence-panel presence-modal" role="dialog" aria-modal="true" aria-labelledby="presence-session-title" onMouseDown={(event) => event.stopPropagation()}>
-      <div className="presence-modal-header">
-        <div><h2 id="presence-session-title">{copy.title}</h2><p>{copy.subtitle}</p></div>
-        <button className="presence-modal-close" type="button" disabled={saving} onClick={close} aria-label={t.cancel}><X size={20} /></button>
-      </div>
-      <div className="presence-modal-grid">
-        <label className="presence-field">
-          <span>{copy.event}</span>
-          <input value={name} onChange={(event) => setName(event.target.value)} autoFocus />
-        </label>
-        <label className="presence-field"><span>{copy.eventType}</span><select value={eventTypeId} disabled={Boolean(preset)} onChange={event => chooseEventType(event.target.value)}><option value="general">{locale==='en'?'Regular gathering':locale==='es'?'Encuentro habitual':'Encontro habitual'}</option><option value="sunday">{locale==='en'?'Sunday service':locale==='es'?'Culto dominical':'Culto de domingo'}</option><option value="midweek">{locale==='en'?'Midweek service':locale==='es'?'Culto semanal':'Culto da semana'}</option><option value="youth">{locale==='en'?'Youth gathering':locale==='es'?'Encuentro juvenil':'Encontro de jovens'}</option><option value="special">{locale==='en'?'Special event':locale==='es'?'Evento especial':'Evento especial'}</option></select></label>
-        <div className="presence-field presence-readonly-field">
-          <span>{copy.people}</span>
-          <strong>{expected}</strong>
-          <small>{requiresSelection?(locale==='en'?'Select only the people expected at this special event.':locale==='es'?'Seleccione únicamente las personas elegibles de este evento.':'Selecione somente as pessoas elegíveis para este evento especial.'):copy.peopleHint}</small>
+  return createPortal(<div className="presence-modal-backdrop" onMouseDown={event=>{if(event.target===event.currentTarget&&!saving)close()}}>
+    <section ref={dialogRef} tabIndex={-1} className="presence-panel presence-modal presence-session-modal" role="dialog" aria-modal="true" aria-labelledby="presence-session-title">
+      <header className="presence-modal-header">
+        <div><span className="presence-modal-eyebrow">{copy.kicker}{unitName ? ` · ${unitName}` : ''}</span><h2 id="presence-session-title">{copy.title}</h2><p>{copy.subtitle}</p></div>
+        <button className="presence-modal-close" type="button" disabled={saving} onClick={close} aria-label={t.cancel}><X size={20}/></button>
+      </header>
+      <div className="presence-modal-scroll">
+        <div className="presence-modal-grid">
+          <label className="presence-field">
+            <span>{copy.event}</span>
+            <input value={name} onChange={event=>setName(event.target.value)} maxLength={120} />
+          </label>
+          <label className="presence-field"><span>{copy.eventType}</span>
+            <select value={eventTypeId} disabled={Boolean(preset)} onChange={event=>chooseEventType(event.target.value)}>
+              <option value="general">{locale==='en'?'Regular gathering':locale==='es'?'Encuentro habitual':'Encontro habitual'}</option>
+              <option value="sunday">{locale==='en'?'Sunday service':locale==='es'?'Culto dominical':'Culto de domingo'}</option>
+              <option value="midweek">{locale==='en'?'Midweek service':locale==='es'?'Culto semanal':'Culto da semana'}</option>
+              <option value="youth">{locale==='en'?'Youth gathering':locale==='es'?'Encuentro juvenil':'Encontro de jovens'}</option>
+              <option value="special">{locale==='en'?'Special event':locale==='es'?'Evento especial':'Evento especial'}</option>
+            </select>
+          </label>
         </div>
+        {hasPeople?<div className="presence-roster-summary">
+          <span className="presence-roster-icon"><UsersRound size={19}/></span>
+          <div><strong>{expected} {copy.people.toLocaleLowerCase(locale)}</strong>
+            <p>{requiresSelection&&expected===0?copy.selectionHint:copy.peopleHint}</p>
+          </div>
+        </div>:<div className="presence-empty-roster" role="status">
+          <AlertCircle size={20}/>
+          <div><strong>{copy.noPeople}</strong><p>{copy.noPeopleHint}</p><a href="/people">{copy.manage}</a></div>
+        </div>}
+        {hasPeople?<details className="presence-roster-review" open={requiresSelection||undefined}>
+          <summary>{copy.review}<span>{expected}</span></summary>
+          <div className="presence-eligible-picker">
+            <label className="presence-field"><span>{copy.search}</span><input type="search" value={eligibleSearch} onChange={event=>setEligibleSearch(event.target.value)} placeholder={copy.search}/></label>
+            <div className="presence-eligible-options" role="group" aria-label={copy.people}>{visibleEligiblePeople.map(person=><label key={person.id}><input type="checkbox" checked={selectedIds.has(person.id)} onChange={event=>setSelectedIds(current=>{const next=new Set(current);if(event.target.checked)next.add(person.id);else next.delete(person.id);return next})}/><span>{person.name}</span></label>)}</div>
+          </div>
+        </details>:null}
       </div>
-      <details className="presence-roster-review" open={requiresSelection||undefined}><summary>{locale==='en'?'Review expected people':locale==='es'?'Revisar personas previstas':'Conferir quem é esperado neste culto'} · {expected}</summary><div className="presence-eligible-picker">
-        <label className="presence-field"><span>{locale==='en'?'Search eligible people':locale==='es'?'Buscar personas elegibles':'Buscar pessoas elegíveis'}</span><input value={eligibleSearch} onChange={event=>setEligibleSearch(event.target.value)} placeholder={locale==='en'?'Search names':locale==='es'?'Buscar nombres':'Buscar nomes'}/></label>
-        <div className="presence-eligible-options" role="group" aria-label={locale==='en'?'Eligible attendees':locale==='es'?'Personas elegibles':'Pessoas elegíveis'}>{visibleEligiblePeople.map(person=><label key={person.id}><input type="checkbox" checked={selectedIds.has(person.id)} onChange={event=>setSelectedIds(current=>{const next=new Set(current);if(event.target.checked)next.add(person.id);else next.delete(person.id);return next})}/><span>{person.name}</span></label>)}</div>
-        <p>{locale==='en'?'Do not mark other people as absent in a special-event roster.':locale==='es'?'No marque como ausentes a personas fuera de este público.':'Não marque como ausentes pessoas fora do público deste evento.'}</p>
-      </div></details>
-      <div className="presence-modal-actions">
-        <button className="presence-button" disabled={saving} onClick={close}>{t.cancel}</button>
-        <button className="presence-button primary" disabled={saving || !online || !name.trim() || (requiresSelection && expected === 0)} onClick={()=>void submit()}>{copy.start}</button>
-      </div>
+      <footer className="presence-modal-actions">
+        <button className="presence-button presence-modal-cancel" type="button" disabled={saving} onClick={close}>{t.cancel}</button>
+        <button className="presence-button primary" type="button" disabled={saving||!online||!name.trim()||(requiresSelection&&expected===0)} onClick={()=>void submit()}>{saving?(locale==='en'?'Opening…':locale==='es'?'Abriendo…':'Abrindo…'):copy.start}</button>
+      </footer>
     </section>
-  </div>
+  </div>,document.body)
 }
 
 function VisitorModal({ close, save, locale,org,canPick,error }: { close: () => void; save: (name: string, phone: string, consent: boolean, preferredContactChannel: 'whatsapp' | 'phone' | undefined, claimBond: boolean,requestId:string,selection:DirectorySelection) => Promise<void>; locale: AppLocale;org:string;canPick:boolean;error:string }) {
@@ -568,6 +594,8 @@ function VisitorModal({ close, save, locale,org,canPick,error }: { close: () => 
   const bond = bondCopy(locale)
   const [requestId] = useState(()=>crypto.randomUUID())
   const [saving,setSaving] = useState(false)
+  const dialogRef=useRef<HTMLElement>(null)
+  useModalDialog(dialogRef,close,saving)
   const savingGuard=useRef(false)
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
@@ -587,5 +615,5 @@ function VisitorModal({ close, save, locale,org,canPick,error }: { close: () => 
     : locale === 'es'
       ? 'Cuando el contacto está autorizado, se exige un número válido y el canal preferido antes de crear la tarea de cuidado.'
       : 'Quando o contato é autorizado, informe um número válido e o canal preferido antes de criar a tarefa de cuidado.'
-  return <div className="presence-modal-backdrop" onMouseDown={()=>{if(!saving)close()}}><section className="presence-panel presence-modal visitor-form" role="dialog" aria-modal="true" aria-labelledby="presence-visitor-title" onMouseDown={(event) => event.stopPropagation()}><div className="presence-session-head"><h2 id="presence-visitor-title">{t.newVisitor}</h2><button className="presence-button" onClick={close} disabled={saving} aria-label={t.cancel}><X size={17} /></button></div><div className="presence-modal-grid"><label className="presence-field"><span>{t.visitorName}</span><input value={name} onChange={(event) => {setName(event.target.value);setSelection({})}} autoFocus /></label>{canPick?<DirectoryPersonPicker org={org} locale={locale} name={name} value={selection} onChange={setSelection}/>:null}<label className="presence-check"><input type="checkbox" checked={consent} onChange={(event) => { setConsent(event.target.checked); if (!event.target.checked) setPhone('') }} /><span>{t.consent}</span></label><label className="presence-field"><span>{t.phone}</span><input inputMode="tel" value={phone} onChange={(event) => setPhone(event.target.value)} disabled={!consent} aria-invalid={consent&&!phoneValid} /></label>{consent?<label className="presence-field"><span>{locale==='en'?'Preferred channel':locale==='es'?'Canal preferido':'Canal preferido'}</span><select value={preferredContactChannel} onChange={(event)=>setPreferredContactChannel(event.target.value as 'whatsapp'|'phone')}><option value="whatsapp">WhatsApp</option><option value="phone">{locale==='en'?'Phone call':locale==='es'?'Llamada':'Ligação'}</option></select></label>:null}{consent?<p className="coverage-note">{contactHint}</p>:null}<label className="presence-check"><input type="checkbox" checked={claimBond} onChange={(event) => setClaimBond(event.target.checked)} /><span>{bond.visitorClaim}</span></label></div>{error?<p className="journey-error" role="alert">{error}</p>:null}<div className="presence-modal-actions"><button className="presence-button" disabled={saving} onClick={close}>{t.cancel}</button><button className="presence-button primary" disabled={saving || !name.trim() || (consent && !phoneValid)} onClick={()=>void submit()}>{t.saveVisitor}</button></div></section></div>
+  return createPortal(<div className="presence-modal-backdrop" onMouseDown={event=>{if(event.target===event.currentTarget&&!saving)close()}}><section ref={dialogRef} tabIndex={-1} className="presence-panel presence-modal visitor-form" role="dialog" aria-modal="true" aria-labelledby="presence-visitor-title"><div className="presence-session-head"><h2 id="presence-visitor-title">{t.newVisitor}</h2><button className="presence-button" onClick={close} disabled={saving} aria-label={t.cancel}><X size={17} /></button></div><div className="presence-modal-grid"><label className="presence-field"><span>{t.visitorName}</span><input value={name} onChange={(event) => {setName(event.target.value);setSelection({})}} /></label>{canPick?<DirectoryPersonPicker org={org} locale={locale} name={name} value={selection} onChange={setSelection}/>:null}<label className="presence-check"><input type="checkbox" checked={consent} onChange={(event) => { setConsent(event.target.checked); if (!event.target.checked) setPhone('') }} /><span>{t.consent}</span></label><label className="presence-field"><span>{t.phone}</span><input inputMode="tel" value={phone} onChange={(event) => setPhone(event.target.value)} disabled={!consent} aria-invalid={consent&&!phoneValid} /></label>{consent?<label className="presence-field"><span>{locale==='en'?'Preferred channel':locale==='es'?'Canal preferido':'Canal preferido'}</span><select value={preferredContactChannel} onChange={(event)=>setPreferredContactChannel(event.target.value as 'whatsapp'|'phone')}><option value="whatsapp">WhatsApp</option><option value="phone">{locale==='en'?'Phone call':locale==='es'?'Llamada':'Ligação'}</option></select></label>:null}{consent?<p className="coverage-note">{contactHint}</p>:null}<label className="presence-check"><input type="checkbox" checked={claimBond} onChange={(event) => setClaimBond(event.target.checked)} /><span>{bond.visitorClaim}</span></label></div>{error?<p className="journey-error" role="alert">{error}</p>:null}<div className="presence-modal-actions"><button className="presence-button" disabled={saving} onClick={close}>{t.cancel}</button><button className="presence-button primary" disabled={saving || !name.trim() || (consent && !phoneValid)} onClick={()=>void submit()}>{t.saveVisitor}</button></div></section></div>,document.body)
 }
