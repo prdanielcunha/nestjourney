@@ -1,0 +1,10 @@
+.mesa-person-row{grid-template-columns:minmax(0,1fr) auto;gap:14px;padding:14px 16px}
+.mesa-person-identity{display:flex!important;flex-direction:row;align-items:center;gap:12px;min-width:0}
+.mesa-person-identity>div{display:flex;flex-direction:column;gap:5px;min-width:0}
+.mesa-person-identity strong{font-size:13px;line-height:1.3;overflow-wrap:anywhere}
+.mesa-person-identity span:not(.mesa-person-avatar){font-size:11px;color:var(--nj-text-subtle)}
+.mesa-person-avatar{height:44px;width:44px;flex:0 0 44px;display:grid;place-items:center;border:1px solid var(--nj-border-strong);border-radius:14px;object-fit:cover;background:var(--nj-surface-raised);color:var(--nj-accent);font-size:13px;font-weight:800}
+.mesa-person-row .journey-inline-actions{display:flex;flex-direction:row;align-items:center;justify-content:flex-end}
+.mesa-person-row .journey-inline-actions button{min-height:44px;font-size:11px;white-space:normal;text-align:center}
+.mesa-retry,.bd-retry{margin-left:9px;padding:9px 12px;border-radius:10px;min-height:40px;border:1px solid var(--nj-border-strong);background:var(--nj-surface-raised);color:var(--nj-text);font:inherit;font-size:12px;font-weight:800;cursor:pointer}
+@media(max-width:720px){.mesa-person-row{grid-template-columns:1fr;gap:12px}.mesa-person-row .journey-inline-actions{display:grid;grid-template-columns:1fr 1fr;width:100%}.mesa-person-row .journey-inline-actions button{width:100%;min-height:46px}}
