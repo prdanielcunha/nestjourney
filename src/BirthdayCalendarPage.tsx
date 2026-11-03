@@ -4,6 +4,8 @@ import {
   Search,ShieldCheck,Trash2,Users,
 } from 'lucide-react'
 import {auth} from './firebase'
+import {withTimeout} from './asyncGuard'
+import {JourneyLoadState} from './JourneyLoadState'
 import {
   getActiveJourneyOrganizationId,getActiveJourneyCongregationId,
   listJourneyCongregations,listJourneyPeople,loadJourneyAccess,
@@ -94,6 +96,9 @@ export default function BirthdayCalendarPage(){
   const [people,setPeople]=useState<JourneyPersonRecord[]>([])
   const [records,setRecords]=useState<PersonBirthdayRecord[]>([])
   const [loading,setLoading]=useState(true)
+  const [loadingSlow,setLoadingSlow]=useState(false)
+  const [loadFailed,setLoadFailed]=useState(false)
+  const bootstrapRunRef=useRef(0)
   const [busy,setBusy]=useState(false)
   const [message,setMessage]=useState('')
   const [error,setError]=useState('')
@@ -113,31 +118,48 @@ export default function BirthdayCalendarPage(){
     // A slower response for a prior congregation must never replace this scope's PII.
     const generation=++loadGenerationRef.current
     currentScopeRef.current=ctx.organizationId+':'+id
-    const [p,b]=await Promise.all([
+    const [p,b]=await withTimeout(Promise.all([
       listJourneyPeople(ctx.organizationId,id),
       listPersonBirthdays(ctx,id),
-    ])
+    ]),11000,'birthday_congregation')
     if(generation!==loadGenerationRef.current||
        currentScopeRef.current!==ctx.organizationId+':'+id)return
     setPeople(p);setRecords(b)
   },[])
   const bootstrap=useCallback(async()=>{
-    setLoading(true);setError('')
+    const run=++bootstrapRunRef.current
+    ++loadGenerationRef.current
+    currentScopeRef.current=''
+    setLoading(true);setLoadingSlow(false);setLoadFailed(false);setError('')
+    setPeople([]);setRecords([]);setUnits([]);setUnitId('');setAccess(null)
+    const slowTimer=window.setTimeout(()=>{if(run===bootstrapRunRef.current)setLoadingSlow(true)},5000)
     try{
-      const user=auth?.currentUser,org=getActiveJourneyOrganizationId()
-      if(!user||!org)throw new Error('missing_context')
-      const context=await loadJourneyAccess(user.uid,org)
-      setAccess(context)
-      if(!canSeeSharedBirthdays(context))return
-      const available=await listJourneyCongregations(context)
-      setUnits(available)
-      const id=resolveActiveJourneyCongregationId(org,available)
-      setUnitId(id)
-      if(id)await loadUnit(context,id)
-    }catch{setError(words[locale].error)}
-    finally{setLoading(false)}
-  },[loadUnit,locale])
+      await withTimeout((async()=>{
+        const user=auth?.currentUser,org=getActiveJourneyOrganizationId()
+        if(!user||!org)throw new Error('missing_context')
+        const context=await loadJourneyAccess(user.uid,org)
+        if(run!==bootstrapRunRef.current)return
+        setAccess(context)
+        if(!canSeeSharedBirthdays(context))return
+        const available=await listJourneyCongregations(context)
+        if(run!==bootstrapRunRef.current)return
+        setUnits(available)
+        const id=resolveActiveJourneyCongregationId(org,available)
+        setUnitId(id)
+        if(id)await loadUnit(context,id)
+      })(),14000,'birthdays_bootstrap')
+    }catch(cause){
+      if(run!==bootstrapRunRef.current)return
+      ++loadGenerationRef.current
+      console.error('Birthday calendar load failed',cause)
+      setLoadFailed(true)
+    }finally{
+      window.clearTimeout(slowTimer)
+      if(run===bootstrapRunRef.current)setLoading(false)
+    }
+  },[loadUnit])
   useEffect(()=>{void bootstrap()},[bootstrap])
+  useEffect(()=>()=>{bootstrapRunRef.current++;loadGenerationRef.current++},[])
   useEffect(()=>{
     const onScope=()=>{const current=access&&getActiveJourneyCongregationId(access.organizationId);if(current&&currentScopeRef.current!==access!.organizationId+':'+current&&units.some(u=>u.id===current)){
       setUnitId(current);setPeople([]);setRecords([]);setEditing(false);setPersonId('')
@@ -208,11 +230,12 @@ export default function BirthdayCalendarPage(){
     setUnitId(id);setPeople([]);setRecords([]);setEditing(false);setPersonId('')
     setActiveJourneyCongregationId(access.organizationId,id)
     setBusy(true);setError('')
-    try{await loadUnit(access,id)}catch{setError(t.error)}finally{setBusy(false)}
+    try{await loadUnit(access,id)}catch(cause){++loadGenerationRef.current;console.error('Birthday congregation load failed',cause);setError(t.error)}finally{setBusy(false)}
   }
   const monthTitle=new Intl.DateTimeFormat(locale,{month:'long',year:'numeric'}).format(cursor)
   const initials=(s:string)=>s.split(/\s+/).filter(Boolean).slice(0,2).map(w=>w[0].toUpperCase()).join('')
-  if(loading)return <main className="birthdays-page"><p className="bd-loading">{t.loading}</p></main>
+  if(loading)return <JourneyLoadState locale={locale} title={t.title} phase="loading" slow={loadingSlow} onRetry={()=>void bootstrap()}/>
+  if(loadFailed)return <JourneyLoadState locale={locale} title={t.title} phase="error" onRetry={()=>void bootstrap()}/>
   if(!canRead)return <main className="birthdays-page"><AccessDeniedState locale={locale} title={t.title} body={t.editHint} retryLabel={t.loading} onRetry={()=>void bootstrap()}/></main>
   return <main className="birthdays-page">
     <div className="bd-container">
@@ -226,7 +249,8 @@ export default function BirthdayCalendarPage(){
         </div>
       </header>
       {message?<p role="status" className="bd-confirmation">{message}</p>:null}
-      {error?<p role="alert" className="bd-error">{error}</p>:null}
+      {error?<p role="alert" className="bd-error">{error} <button type="button" className="bd-retry" onClick={()=>void bootstrap()}>{locale==='en'?'Try again':locale==='es'?'Intentar de nuevo':'Tentar novamente'}</button></p>:null}
+      {!unitId?<p role="status" className="bd-error">{t.loadingUnits}</p>:null}
       <section className="bd-pulse" aria-label={t.week}>
         <article className="bd-pulse-feature"><span>{t.today}</span><strong>{upcoming.filter(x=>x.daysUntil===0).length}</strong><small>{upcoming.find(x=>x.daysUntil===0)?.name||t.empty}</small></article>
         <article><span>{t.week}</span><strong>{upcoming.filter(x=>x.daysUntil<=7).length}</strong><small>{upcoming.find(x=>x.daysUntil>0&&x.daysUntil<=7)?.name||'—'}</small></article>
