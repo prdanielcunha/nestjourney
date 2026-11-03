@@ -443,7 +443,7 @@ export default function PresenceAssistPage() {
     <p className="presence-rule">{t.sourceRule}<br />{t.correctionRule}</p>
   </div>
 
-  {showSession ? <SessionModal preset={seriesPreset} close={() => {setShowSession(false);setSeriesPreset(null)}} create={async (eventName, expected, eventTypeId, eligiblePersonIds, eventSeriesId, requestId) => {
+  {showSession ? <SessionModal unitName={activeUnit?.name||''} preset={seriesPreset} close={() => {setShowSession(false);setSeriesPreset(null)}} create={async (eventName, expected, eventTypeId, eligiblePersonIds, eventSeriesId, requestId) => {
     if (!access || !online || !scopeLoaded || busy || sessions.some(item=>item.status==='open')) return
     setBusy(true); setError('')
     try {
@@ -482,7 +482,7 @@ export default function PresenceAssistPage() {
   </main>
 }
 
-function SessionModal({ close, create, eligiblePeople, locale, preset, online }: { close: () => void; create: (name: string, expected: number, eventTypeId: string, eligiblePersonIds: string[], eventSeriesId?: string,requestId?:string) => Promise<void>; eligiblePeople: PresencePerson[]; locale: AppLocale; preset:JourneyEventSeries|null; online:boolean }) {
+function SessionModal({ close, create, eligiblePeople, locale, preset, online, unitName }: { unitName: string; close: () => void; create: (name: string, expected: number, eventTypeId: string, eligiblePersonIds: string[], eventSeriesId?: string,requestId?:string) => Promise<void>; eligiblePeople: PresencePerson[]; locale: AppLocale; preset:JourneyEventSeries|null; online:boolean }) {
   const t = presenceAssistCopy[locale]
   const dialogRef = useRef<HTMLElement>(null)
   const [requestId] = useState(()=>crypto.randomUUID())
@@ -545,7 +545,7 @@ function SessionModal({ close, create, eligiblePeople, locale, preset, online }:
   return createPortal(<div className="presence-modal-backdrop" onMouseDown={event=>{if(event.target===event.currentTarget&&!saving)close()}}>
     <section ref={dialogRef} tabIndex={-1} className="presence-panel presence-modal presence-session-modal" role="dialog" aria-modal="true" aria-labelledby="presence-session-title">
       <header className="presence-modal-header">
-        <div><span className="presence-modal-eyebrow">{copy.kicker}</span><h2 id="presence-session-title">{copy.title}</h2><p>{copy.subtitle}</p></div>
+        <div><span className="presence-modal-eyebrow">{copy.kicker}{unitName ? ` · ${unitName}` : ''}</span><h2 id="presence-session-title">{copy.title}</h2><p>{copy.subtitle}</p></div>
         <button className="presence-modal-close" type="button" disabled={saving} onClick={close} aria-label={t.cancel}><X size={20}/></button>
       </header>
       <div className="presence-modal-scroll">
