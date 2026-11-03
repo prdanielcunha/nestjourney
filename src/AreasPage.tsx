@@ -1,6 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowRight, HeartHandshake, House, Leaf, Route, ShieldCheck, UserCheck, UsersRound } from 'lucide-react'
 import { auth } from './firebase'
+import { withTimeout } from './asyncGuard'
+import { JourneyLoadState } from './JourneyLoadState'
 import { canOperateJourneyStage, getActiveJourneyOrganizationId, loadActiveJourneyPlaybook, loadJourneyAccess, type JourneyAccessContext } from './journeyRepository'
 import type { JourneyPlaybookDefinition } from './playbookEngine'
 import { canOpenJourneyArea } from './journeyExperience'
@@ -54,18 +56,39 @@ export default function AreasPage(){
   const [access,setAccess]=useState<JourneyAccessContext|null>(null)
   const [playbook,setPlaybook]=useState<JourneyPlaybookDefinition|null>(null)
   const [loading,setLoading]=useState(true)
+  const [loadingSlow,setLoadingSlow]=useState(false)
+  const [loadFailed,setLoadFailed]=useState(false)
+  const bootstrapRef=useRef(0)
 
   const bootstrap=useCallback(async()=>{
-    setLoading(true)
+    const run=++bootstrapRef.current
+    setLoading(true);setLoadingSlow(false);setLoadFailed(false)
+    setAccess(null);setPlaybook(null)
+    const slowTimer=window.setTimeout(()=>{if(run===bootstrapRef.current)setLoadingSlow(true)},5000)
     try{
-      const user=auth?.currentUser,organizationId=getActiveJourneyOrganizationId()
-      if(!user||!organizationId)throw new Error('missing_ecosystem_context')
-      const nextAccess=await loadJourneyAccess(user.uid,organizationId)
-      setAccess(nextAccess)
-      setPlaybook(await loadActiveJourneyPlaybook(nextAccess))
-    }finally{setLoading(false)}
+      await withTimeout((async()=>{
+        const user=auth?.currentUser,organizationId=getActiveJourneyOrganizationId()
+        if(!user||!organizationId)throw new Error('missing_ecosystem_context')
+        const nextAccess=await loadJourneyAccess(user.uid,organizationId)
+        if(run!==bootstrapRef.current)return
+        setAccess(nextAccess)
+        // A temporarily unavailable playbook should not prevent opening the allowed areas.
+        try{
+          const nextPlaybook=await withTimeout(loadActiveJourneyPlaybook(nextAccess),6000,'areas_playbook')
+          if(run===bootstrapRef.current)setPlaybook(nextPlaybook)
+        }catch(cause){console.warn('Journey playbook unavailable',cause)}
+      })(),12000,'areas_bootstrap')
+    }catch(cause){
+      if(run!==bootstrapRef.current)return
+      console.error('Journey areas load failed',cause)
+      setLoadFailed(true)
+    }finally{
+      window.clearTimeout(slowTimer)
+      if(run===bootstrapRef.current)setLoading(false)
+    }
   },[])
   useEffect(()=>{void bootstrap()},[bootstrap])
+  useEffect(()=>()=>{bootstrapRef.current++},[])
 
   const names=useMemo(()=>({
     presence:labels.presence||base.presence,
@@ -75,7 +98,8 @@ export default function AreasPage(){
     discipleship:labels.discipleship||base.root,
   }),[labels,base])
 
-  if(loading)return <main className="journey-section-page"><div className="journey-loading">{base.loading}</div></main>
+  if(loading)return <JourneyLoadState locale={locale} title={base.title} phase="loading" slow={loadingSlow} onRetry={()=>void bootstrap()}/>
+  if(loadFailed)return <JourneyLoadState locale={locale} title={base.title} phase="error" onRetry={()=>void bootstrap()}/>
   if(!access)return <main className="journey-section-page"><div className="journey-no-access"><ShieldCheck size={32}/><p>{base.noAccess}</p></div></main>
 
   const modules=[
