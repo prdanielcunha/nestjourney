@@ -31,3 +31,11 @@ describe('member import requires explicit human review',()=>{
     expect(()=>previewMemberImport(Array.from({length:76},(_,i)=>'Person '+i).join('\n'),[])).toThrow()
   })
 })
+
+it('imports an organizational phone without granting messaging consent',()=>{
+  const rows=previewMemberImport('Nome;Telefone;Nome preferido\nPessoa Exemplo;(43) 91234-5678;Exemplo',[])
+  expect(rows[0].status).toBe('ready')
+  expect(prepareApprovedMemberImport(rows,[2])).toEqual([{name:'Pessoa Exemplo',preferredName:'Exemplo',phone:'(43) 91234-5678'}])
+  expect(prepareApprovedMemberImport(rows,[2])[0]).not.toHaveProperty('consent')
+  expect(previewMemberImport('Nome;Telefone\nPessoa Exemplo;abc123',[])[0].status).toBe('invalid')
+})

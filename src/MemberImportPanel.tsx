@@ -6,14 +6,15 @@ import {previewMemberImport,prepareApprovedMemberImport,type MemberImportRow} fr
 import {canImportJourneyMembers,importApprovedJourneyMembers} from './memberBulkImportRepository'
 import './MemberImportPanel.css'
 
-export function MemberImportPanel({access,congregationId,people,locale,onCompleted}:{
+export function MemberImportPanel({access,congregationId,people,locale,onCompleted,initiallyOpen=false}:{
   access:JourneyAccessContext
   congregationId:string
   people:JourneyPersonRecord[]
   locale:AppLocale
+  initiallyOpen?:boolean
   onCompleted:()=>Promise<void>
 }){
-  const [open,setOpen]=useState(false)
+  const [open,setOpen]=useState(initiallyOpen)
   const [source,setSource]=useState('')
   const [rows,setRows]=useState<MemberImportRow[]>([])
   const [selected,setSelected]=useState<number[]>([])
@@ -24,22 +25,22 @@ export function MemberImportPanel({access,congregationId,people,locale,onComplet
   const permitted=canImportJourneyMembers(access)
   const ready=useMemo(()=>rows.filter(row=>row.status==='ready'||row.status==='review'),[rows])
   const copy=locale==='en'?{
-    title:'Import church members',hint:'Paste a list or upload a CSV with Name;Preferred name. Review each row before saving. No contact or attendance is assumed.',
-    toggle:'Open member import',close:'Close',input:'Names (one per line, or CSV with two columns)',file:'Choose CSV/TXT',
+    title:'Import church members',hint:'Paste a list or upload a CSV with Name;Phone;Preferred name. Review each row before saving. No contact or attendance is assumed.',
+    toggle:'Open member import',close:'Close',input:'Names (one per line, or CSV with name and optional phone)',file:'Choose CSV/TXT',
     preview:'Preview and validate',ready:'Ready',review:'Check name',duplicate:'Possible duplicate — not imported',invalid:'Invalid row — not imported',
     choose:'Approve',all:'Select reviewed valid entries',none:'Clear selections',save:'Import selected members',
     empty:'Paste a list to preview it.',done:'Members imported:',confirm:'Confirm creating these people as members without automatically authorizing messages?',
     fail:'Import could not be completed. Check duplicates, permissions or file content.',count:'Selected records',blocked:'Rows requiring correction are never saved.',
   }:locale==='es'?{
-    title:'Importar miembros',hint:'Pegue una lista o importe CSV con Nombre;Nombre preferido. Revise cada fila. No se presume contacto ni asistencia.',
-    toggle:'Abrir importación',close:'Cerrar',input:'Nombres (uno por línea o CSV de dos columnas)',file:'Seleccionar CSV/TXT',
+    title:'Importar miembros',hint:'Pegue una lista o importe CSV con Nombre;Teléfono;Nombre preferido. Revise cada fila. No se presume contacto ni asistencia.',
+    toggle:'Abrir importación',close:'Cerrar',input:'Nombres (uno por línea o CSV con nombre y teléfono opcional)',file:'Seleccionar CSV/TXT',
     preview:'Revisar y validar',ready:'Listo',review:'Revisar nombre',duplicate:'Posible duplicado — no se importa',invalid:'Fila inválida — no se importa',
     choose:'Aprobar',all:'Seleccionar entradas revisadas',none:'Desmarcar todas',save:'Importar miembros seleccionados',
     empty:'Pegue una lista para revisarla.',done:'Miembros importados:',confirm:'¿Confirma crear estos miembros sin autorización automática de mensajes?',
     fail:'No se pudo importar. Revise duplicados, permisos o contenido.',count:'Registros seleccionados',blocked:'Nunca se guardan filas que requieren corrección.',
   }:{
-    title:'Importar membros',hint:'Cole uma lista ou envie CSV com Nome;Nome preferido. Revise as linhas antes de salvar. Contato e presença não são presumidos.',
-    toggle:'Abrir importação de membros',close:'Fechar',input:'Nomes (um por linha ou CSV com duas colunas)',file:'Escolher CSV/TXT',
+    title:'Importar membros',hint:'Cole uma lista ou envie CSV com Nome;Telefone;Nome preferido. Revise as linhas antes de salvar. Contato e presença não são presumidos.',
+    toggle:'Abrir importação de membros',close:'Fechar',input:'Nomes (um por linha ou CSV com nome e telefone opcional)',file:'Escolher CSV/TXT',
     preview:'Pré-visualizar e validar',ready:'Pronto',review:'Conferir nome',duplicate:'Possível duplicado — não importar',invalid:'Linha inválida — não importar',
     choose:'Aprovar',all:'Selecionar registros revisados',none:'Limpar seleção',save:'Importar membros selecionados',
     empty:'Cole uma lista para conferir.',done:'Membros importados:',confirm:'Confirma cadastrar essas pessoas como membros, sem autorizar mensagens automaticamente?',
@@ -57,7 +58,7 @@ export function MemberImportPanel({access,congregationId,people,locale,onComplet
   }
   const importRows=async()=>{
     if(!selected.length || busy)return
-    let approved:Array<{name:string;preferredName:string}>
+    let approved:Array<{name:string;preferredName:string;phone?:string}>
     try{approved=prepareApprovedMemberImport(rows,selected)}catch{setError(copy.fail);return}
     if(!window.confirm(copy.confirm))return
     setBusy(true);setError('');setFeedback('')
@@ -77,7 +78,7 @@ export function MemberImportPanel({access,congregationId,people,locale,onComplet
     <button type="button" className="member-import-toggle" onClick={()=>setOpen(!open)} aria-expanded={open}>{open?copy.close:copy.toggle}</button>
     {feedback?<p role="status" className="member-import-success">{feedback}</p>:null}
     {open?<div className="member-import-body">
-      <label>{copy.input}<textarea value={source} disabled={busy} onChange={e=>{setSource(e.target.value);setRows([]);setSelected([])}} rows={5} placeholder={'Nome;Nome preferido\nMaria da Silva;Maria\nJoão Pereira;João'}/></label>
+      <label>{copy.input}<textarea value={source} disabled={busy} onChange={e=>{setSource(e.target.value);setRows([]);setSelected([])}} rows={5} placeholder={'Nome;Telefone;Nome preferido\nPessoa Exemplo;43912345678;Exemplo'}/></label>
       <label className="member-import-file"><FileText size={16}/>{copy.file}<input type="file" accept=".csv,.txt,text/csv,text/plain" disabled={busy} onChange={async e=>{
         const file=e.target.files?.[0]
         if(!file)return
@@ -94,7 +95,7 @@ export function MemberImportPanel({access,congregationId,people,locale,onComplet
           const blocked=row.status==='invalid'||row.status==='duplicate'
           return <label key={row.rowNumber} className={blocked?'member-import-blocked':''}>
             <input type="checkbox" disabled={busy||blocked} checked={selected.includes(row.rowNumber)} aria-label={copy.choose+' '+row.name} onChange={e=>setSelected(existing=>e.target.checked?[...existing,row.rowNumber]:existing.filter(id=>id!==row.rowNumber))}/>
-            <span className="member-import-name"><strong>{row.name||'—'}</strong><small>{row.preferredName||'—'}</small></span>
+            <span className="member-import-name"><strong>{row.name||'—'}</strong><small>{[row.phone,row.preferredName].filter(Boolean).join(' · ')||'—'}</small></span>
             <span className="member-import-state">{row.status==='ready'?copy.ready:row.status==='review'?copy.review:row.status==='duplicate'?copy.duplicate:copy.invalid}</span>
           </label>
         })}</div>
