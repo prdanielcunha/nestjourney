@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import { pathToFileURL } from 'node:url'
 // Canonical Hub central-people boundary; publish and verify exact live source before Journey deploy.
 // Journey must never publish its local Rules/indexes.
-export const APPROVED_HUB_RULES_SHA256 = 'f4751402d5cf9daf37c8685b2dcd4b5367ed62f91276242c5c784938634d480c'
+export const APPROVED_HUB_RULES_SHA256 = '7bf4252ef2f1a3749018dff8267f6b52cad6baaebee1a4dd8c8fcb8b9d9c61cf'
 export function verifyPublishedHubRulesSource(value, expected = APPROVED_HUB_RULES_SHA256) {
   const files = value?.source?.files
   if (!Array.isArray(files) || files.length !== 1 || files[0]?.name !== 'firestore.rules' ||

@@ -176,6 +176,7 @@ export default function BirthdayCalendarPage(){
   const thisMonth=useMemo(()=>merged.filter(p=>p.month===cursor.getMonth()+1&&p.name.toLocaleLowerCase(locale).includes(filter.trim().toLocaleLowerCase(locale))),[merged,cursor,filter,locale])
   const searched=useMemo(()=>upcoming.filter(p=>p.name.toLocaleLowerCase(locale).includes(filter.trim().toLocaleLowerCase(locale))),[upcoming,filter,locale])
   const days=useMemo(()=>monthGrid(cursor.getFullYear(),cursor.getMonth()),[cursor])
+  const missingPeople=people.filter(person=>!records.some(record=>record.personId===person.id)&&(!filter||person.name.toLocaleLowerCase(locale).includes(filter.trim().toLocaleLowerCase(locale))))
   const picker=people.find(p=>p.id===personId)
   const already=records.find(r=>r.personId===personId)
   const selectedName=picker?.preferredName||picker?.name||''
@@ -290,6 +291,15 @@ export default function BirthdayCalendarPage(){
           </article>)}</div>
         </aside>
       </div>
+      {canEdit&&missingPeople.length?<section className="bd-missing" aria-label={t.missing}>
+        <div className="bd-upcoming-title"><h2>{t.missing}</h2><span>{missingPeople.length}</span></div>
+        <p>{t.instruction}</p>
+        <div className="bd-missing-list">{missingPeople.map(person=><article className="bd-person" key={person.id}>
+          <span className="bd-avatar">{initials(person.preferredName||person.name)}</span>
+          <div className="bd-person-detail"><strong>{person.preferredName||person.name}</strong><small>{t.missing}</small></div>
+          <button type="button" className="bd-primary" onClick={()=>openEditor(person.id)} aria-label={t.add+' — '+(person.preferredName||person.name)}><Plus size={15}/>{t.add}</button>
+        </article>)}</div>
+      </section>:null}
       <footer className="bd-footer"><ShieldCheck size={17}/><p>{t.privacy} {t.notice}</p></footer>
     </div>
     {editing&&canEdit?<div className="bd-modal-wrap" role="presentation" onMouseDown={e=>{if(e.target===e.currentTarget&&!busy)setEditing(false)}}>
