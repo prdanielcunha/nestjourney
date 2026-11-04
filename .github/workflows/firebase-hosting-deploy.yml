@@ -29,7 +29,8 @@ concurrency:
 
 jobs:
   deploy:
-    runs-on: ubuntu-latest
+    # Explicit standard runner pool; production gates and rollback remain unchanged.
+    runs-on: ubuntu-22.04
     env:
       # Firebase Web configuration is public by design and shared with the MillionsNest Hub.
       VITE_FIREBASE_API_KEY: AIzaSyAhXY8TV8qoXz8Pd2u5jFHUTVssZmi3kMs
