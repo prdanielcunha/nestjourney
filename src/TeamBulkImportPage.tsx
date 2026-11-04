@@ -31,6 +31,7 @@ import { getInitialLocale, localeLabels, persistLocale, type AppLocale } from '.
 import { AccessDeniedState } from './AccessDeniedState'
 import { createScopedAsyncGuard } from './scopedAsyncGuard'
 import './TeamBulkImportPage.css'
+import {TeamPeopleIntegrationPanel} from './TeamPeopleIntegrationPanel'
 
 const OCR_MODULE_URL = 'https://cdn.jsdelivr.net/npm/tesseract.js@6.0.1/dist/tesseract.esm.min.js'
 
@@ -188,6 +189,7 @@ export default function TeamBulkImportPage() {
     if (!access) return
     imageGuard.current.invalidate()
     setOcrBusy(false)
+    setRecords([])
     setCongregationId(nextId)
     // Never carry an imported preview over to a different congregation.
     setPreview([])
@@ -402,6 +404,8 @@ export default function TeamBulkImportPage() {
         <ShieldCheck size={20}/>
         <div><strong>{t.privacyTitle}</strong><p>{t.privacy}</p></div>
       </section>
+
+      {access ? <TeamPeopleIntegrationPanel key={access.organizationId+':'+congregationId+':'+records.map(row=>row.id+row.name).join(',')} access={access} unitId={congregationId} records={records} locale={locale}/> : null}
 
       <section className="team-import-panel">
         <div className="team-import-panel-head">
