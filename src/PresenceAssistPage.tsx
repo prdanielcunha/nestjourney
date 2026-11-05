@@ -18,8 +18,6 @@ import {
   listAbsenceCareRoutePersonIds,
   listJourneyCongregations,
   listPresenceChecks,
-  listJourneyPeople,
-  listPresenceSessions,
   loadJourneyAccess,
   recordPresenceCheck,
   subscribeJourneyLiveChanges,
@@ -31,10 +29,10 @@ import {
 } from './journeyRepository'
 import { getInitialLocale, localeLabels, persistLocale, presenceAssistCopy, type AppLocale } from './i18n'
 import { useJourneyLabels } from './journeyLabels'
-import { GuidedEmptyState } from './GuidedEmptyState'
-import { emptyGuidance } from './emptyGuidance'
 import { AccessDeniedState } from './AccessDeniedState'
-import { JourneyAreaFocus } from './JourneyAreaFocus'
+import { JourneyLoadState } from './JourneyLoadState'
+import { loadAttendanceScope } from './presenceScope'
+import { createScopedAsyncGuard } from './scopedAsyncGuard'
 import { CrossUnitPresencePanel } from './CrossUnitPresencePanel'
 import { EventSeriesPanel } from './EventSeriesPanel'
 import type { JourneyEventSeries } from './journeyEventSeries'
@@ -144,6 +142,9 @@ export default function PresenceAssistPage() {
   const selectedSessionRef=useRef('')
   const [selectedSessionId,setSelectedSessionId]=useState('')
   const [routedAbsenceIds, setRoutedAbsenceIds] = useState<Set<string>>(new Set())
+  const [absenceRoutesScope, setAbsenceRoutesScope] = useState('')
+  const [absenceRoutesError, setAbsenceRoutesError] = useState('')
+  const absenceRoutesGuard = useRef(createScopedAsyncGuard())
 
   const displaySession = sessions.find(item=>item.id===selectedSessionId) ?? sessions.find((item) => item.status === 'open') ?? sessions[0]
   const latest = useMemo(() => latestChecksByPerson(checks), [checks])
@@ -160,23 +161,41 @@ export default function PresenceAssistPage() {
     const scope=orgId+':'+unitId
     if(desiredScopeRef.current!==scope)return
     const request=++scopeRequestRef.current
-    const [nextPeople, nextSessions] = await Promise.all([
-      listJourneyPeople(orgId, unitId), listPresenceSessions(orgId, unitId),
-    ])
-    const session=nextSessions.find(item=>item.id===selectedSessionRef.current)??nextSessions.find(item=>item.status==='open')??nextSessions[0]
-    const [nextChecks,routedPeople]=session?await Promise.all([
-      listPresenceChecks(orgId,unitId,session.id),listAbsenceCareRoutePersonIds(orgId,unitId,session.id),
-    ]):[[],[]]
-    if(request!==scopeRequestRef.current||desiredScopeRef.current!==scope)return
-    setPeople(nextPeople);setSessions(nextSessions);setChecks(nextChecks);setScopeLoaded(true)
-    selectedSessionRef.current=session?.id||''
-    setSelectedSessionId(session?.id||'')
-    setRoutedAbsenceIds(new Set(routedPeople))
-  }, [])
-  useEffect(()=>()=>{scopeRequestRef.current++},[])
+    absenceRoutesGuard.current.invalidate()
+    setAbsenceRoutesScope('')
+    setScopeLoaded(false)
+    try {
+      const {people:nextPeople,sessions:nextSessions,session,checks:nextChecks} = await loadAttendanceScope(orgId,unitId,selectedSessionRef.current)
+      if(request!==scopeRequestRef.current||desiredScopeRef.current!==scope)return
+      setPeople(nextPeople);setSessions(nextSessions);setChecks(nextChecks);setScopeLoaded(true);setError('')
+      selectedSessionRef.current=session?.id||''
+      setSelectedSessionId(session?.id||'')
+    } catch(cause) {
+      if(request!==scopeRequestRef.current||desiredScopeRef.current!==scope)return
+      setError(t.error)
+      throw cause
+    }
+  }, [t.error])
+  useEffect(()=>()=>{scopeRequestRef.current++;absenceRoutesGuard.current.invalidate()},[])
+  const absenceScope = displaySession?.status==='closed' && access
+    ? access.organizationId+':'+congregationId+':'+displaySession.id : ''
+  const absenceRoutesReady = Boolean(absenceScope && absenceRoutesScope===absenceScope)
+  useEffect(()=>{
+    const guard=absenceRoutesGuard.current
+    if(!scopeLoaded||!absenceScope||!access||!displaySession)return
+    const token=guard.start(absenceScope)
+    setAbsenceRoutesScope('')
+    setAbsenceRoutesError('')
+    setRoutedAbsenceIds(new Set())
+    void withTimeout(listAbsenceCareRoutePersonIds(access.organizationId,congregationId,displaySession.id),6000,'absence_routes')
+      .then(ids=>{if(guard.isCurrent(token,absenceScope)){setRoutedAbsenceIds(new Set(ids));setAbsenceRoutesScope(absenceScope)}})
+      .catch(()=>{if(guard.isCurrent(token,absenceScope))setAbsenceRoutesError(absenceScope)})
+    return()=>{guard.invalidate()}
+  },[absenceScope,access,congregationId,displaySession,scopeLoaded])
 
   const bootstrap = useCallback(async () => {
     const runId = ++bootstrapRunRef.current
+    absenceRoutesGuard.current.invalidate()
     desiredScopeRef.current='';scopeRequestRef.current++;setScopeLoaded(false)
     setLoading(true)
     setLoadingSlow(false)
@@ -257,6 +276,7 @@ export default function PresenceAssistPage() {
 
   async function selectSession(sessionId:string){
     if(!access||busy)return
+    absenceRoutesGuard.current.invalidate()
     setScopeLoaded(false)
     selectedSessionRef.current=sessionId
     setSelectedSessionId(sessionId);setChecks([]);setFeedback('')
@@ -326,7 +346,7 @@ export default function PresenceAssistPage() {
 
   async function routeAbsenceToCare(person: PresencePerson) {
     if (!access || !displaySession || displaySession.status !== 'closed' || !online || busy || !scopeLoaded) return
-    if (!confirmedAbsences.includes(person.id) || routedAbsenceIds.has(person.id)) return
+    if (!absenceRoutesReady || !confirmedAbsences.includes(person.id) || routedAbsenceIds.has(person.id)) return
     setBusy(true)
     setError('')
     try {
@@ -340,26 +360,8 @@ export default function PresenceAssistPage() {
     }
   }
 
-  const noSessionGuide=emptyGuidance(locale,'presence_no_session')
   const canAddVisitor=Boolean(scopeLoaded&&access?.canManagePeople&&displaySession?.status==='open'&&online&&!busy)
   const activeUnit=congregations.find(item=>item.id===congregationId)
-  const unverifiedCount=coverage?.unverified??people.length
-  const focusTitle=displaySession?.status==='open'
-    ?(unverifiedCount>0
-      ?locale==='en'?unverifiedCount+' people still need confirmation':locale==='es'?unverifiedCount+' personas aún necesitan confirmación':unverifiedCount+' pessoas ainda precisam de confirmação'
-      :locale==='en'?'Everyone in this session is confirmed':locale==='es'?'Todas las personas de esta sesión están confirmadas':'Todas as pessoas desta sessão estão confirmadas')
-    :locale==='en'?'Open the service session when the team is ready':locale==='es'?'Abre la sesión del culto cuando el equipo esté listo':'Abra a sessão do culto quando a equipe estiver pronta'
-  const focusBody=displaySession?.status==='open'
-    ?locale==='en'?'Work from the people list. Confirm what actually happened, register visitors, and create a relationship without extra forms.'
-      :locale==='es'?'Trabaja desde la lista de personas. Confirma lo que realmente ocurrió, registra visitantes y crea vínculo sin formularios extras.'
-      :'Trabalhe pela lista de pessoas. Confirme o que realmente aconteceu, registre visitantes e crie vínculo sem formulários extras.'
-    :displaySession?.status==='closed'
-      ?locale==='en'?'The last session is closed. Confirmed absences can follow to Care only when the factual quality rule is met.'
-        :locale==='es'?'La última sesión está cerrada. Las ausencias confirmadas pueden seguir a Cuidado solo cuando se cumple la regla de calidad factual.'
-        :'A última sessão está encerrada. Ausências confirmadas podem seguir para Cuidado somente quando a regra de qualidade factual foi atendida.'
-      :locale==='en'?'One action opens the service workflow. From there the team can confirm attendance and register visitors.'
-        :locale==='es'?'Una acción abre el flujo del culto. Desde allí el equipo confirma presencia y registra visitantes.'
-        :'Uma ação abre o fluxo do culto. A partir daí a equipe confirma presença e registra visitantes.'
 
   if (loading) {
     const slowMessage = locale === 'en'
@@ -371,9 +373,7 @@ export default function PresenceAssistPage() {
   }
 
   if ((bootstrapFailed && !access)||(!scopeLoaded&&Boolean(error))) {
-    const title = locale === 'en' ? 'We could not load this church' : locale === 'es' ? 'No pudimos cargar esta iglesia' : 'Não conseguimos carregar esta igreja'
-    const body = locale === 'en' ? 'Your session is safe. Try again to reload your organization, permissions, and people.' : locale === 'es' ? 'Tu sesión está segura. Inténtalo de nuevo para recargar tu organización, permisos y personas.' : 'Sua sessão continua segura. Tente novamente para recarregar a organização, as permissões e as pessoas.'
-    return <main className="presence-assist"><AccessDeniedState locale={locale} title={title} body={body} retryLabel={t.retry} onRetry={() => void bootstrap()} /></main>
+    return <JourneyLoadState locale={locale} title={locale==='en'?'Service attendance':locale==='es'?'Asistencia al culto':'Presença no culto'} phase="error" onRetry={() => void bootstrap()} />
   }
 
   if (!access?.canManagePresence) {
@@ -390,32 +390,28 @@ export default function PresenceAssistPage() {
     </header>
 
     <section className="presence-hero">
-      <div><span className="presence-kicker">Journey / Presence</span><h1>{t.title}</h1><p>{t.subtitle}</p></div>
+      <div><span className="presence-kicker">Journey / Presence</span><h1>{locale==='en'?'Service attendance':locale==='es'?'Asistencia al culto':'Presença no culto'}</h1><p>{locale==='en'?'Find a person and tap Present. Your changes are saved as you go.':locale==='es'?'Busca a la persona y toca Presente. Cada cambio se guarda al momento.':'Encontre a pessoa e toque em Presente. Cada marcação é salva na hora.'}</p></div>
     </section>
 
     {error ? <div className="presence-error" role="alert">{error}</div> : null}
     {feedback?<p className="presence-save-feedback" role="status">{feedback}</p>:null}
     {!online?<div className="presence-error" role="status">{offlineNote}</div>:null}
 
-    <JourneyAreaFocus
-      locale={locale}
-      title={focusTitle}
-      body={focusBody}
-      context={displaySession?.eventName||activeUnit?.name}
-      metrics={[
-        {label:t.congregation,value:activeUnit?.name||'—'},
-        {label:t.session,value:displaySession?.status==='open'?(locale==='en'?'Open':locale==='es'?'Abierta':'Aberta'):(displaySession? t.closed:(locale==='en'?'Not opened':locale==='es'?'No abierta':'Não aberta')),tone:displaySession?.status==='open'?'good':'muted'},
-        {label:t.coverage,value:coverage?coverage.percent+'%':'—',tone:coverage?.meetsMinimum?'good':coverage?'attention':'muted'},
-      ]}
-      actions={displaySession?.status==='open'
-        ?[
-          {label:locale==='en'?'Go to people':locale==='es'?'Ir a personas':'Ir para pessoas',href:'#presence-people',primary:true},
-          ...(canAddVisitor?[{label:t.newVisitor,onClick:()=>setShowVisitor(true)}]:[]),
-          {label:t.close,onClick:()=>void closeSession(),disabled:busy||!online||!scopeLoaded},
-        ]
-        :[{label:t.newSession,onClick:()=>{if(scopeLoaded&&!sessions.some(item=>item.status==='open'))setShowSession(true)},disabled:!congregationId||busy||!online||sessions.some(item=>item.status==='open'),primary:true}]
-      }
-    />
+    <section className="presence-service-bar" aria-label={locale==='en'?'Current service':locale==='es'?'Culto actual':'Culto atual'}>
+      <div className="presence-service-title">
+        <span className="presence-kicker">{activeUnit?.name}</span>
+        <h2>{displaySession?.status==='open'?displaySession.eventName:locale==='en'?'Ready to take attendance?':locale==='es'?'¿Comenzamos la asistencia?':'Vamos conferir quem veio?'}</h2>
+        <p>{displaySession?.status==='open'
+          ?locale==='en'?'Service open · Check the people below':locale==='es'?'Culto abierto · Revisa las personas abajo':'Culto aberto · Confira as pessoas abaixo'
+          :locale==='en'?'Everyone registered in this campus is included automatically.':locale==='es'?'Todas las personas registradas en esta sede se incluyen automáticamente.':'Todos os cadastrados nesta congregação entram automaticamente.'}</p>
+      </div>
+      <div className="presence-service-actions">
+        {displaySession?.status==='open'?<>
+          {canAddVisitor?<button className="presence-button" onClick={()=>setShowVisitor(true)}>{t.newVisitor}</button>:null}
+          <button className="presence-button" onClick={()=>void closeSession()} disabled={busy||!online||!scopeLoaded}>{t.close}</button>
+        </>:<button className="presence-button primary" onClick={()=>{if(scopeLoaded&&!sessions.some(item=>item.status==='open'))setShowSession(true)}} disabled={!congregationId||!scopeLoaded||busy||!online||sessions.some(item=>item.status==='open')}>{locale==='en'?'Start attendance':locale==='es'?'Comenzar asistencia':'Começar chamada'} <UserCheck size={18}/></button>}
+      </div>
+    </section>
 
     <section className="journey-area-toolbar">
       {sessions.length>1?<label><span>{locale==='en'?'Service history':locale==='es'?'Historial de cultos':'Culto e histórico'}</span><select value={displaySession?.id||''} disabled={busy} onChange={event=>void selectSession(event.target.value)}>{sessions.map(session=><option key={session.id} value={session.id}>{session.eventName||new Date(session.openedAt).toLocaleString(locale)} · {session.status==='open'?(locale==='en'?'Open':locale==='es'?'Abierto':'Aberto'):t.closed}</option>)}</select></label>:null}
@@ -423,16 +419,16 @@ export default function PresenceAssistPage() {
       {canImportJourneyMembers(access)?<div className="presence-member-shortcuts"><a className="presence-button" href="/journey-profile?register=member">{locale==='en'?'Register member':locale==='es'?'Registrar miembro':'Cadastrar membro'}</a><a className="presence-button" href="/journey-profile?import=members">{locale==='en'?'Import a list':locale==='es'?'Importar lista':'Importar lista de membros'}</a></div>:null}
     </section>
 
-    {displaySession ? <section className="presence-panel presence-session-card">
+    {displaySession ? <details className="presence-session-summary"><summary>{locale==='en'?'Attendance summary':locale==='es'?'Resumen de asistencia':'Resumo da conferência'} · {coverage?.percent??0}%</summary><section className="presence-panel presence-session-card">
       <div className="presence-session-head"><div><span className="presence-kicker">{t.session}</span><h2>{displaySession.eventName ?? new Date(displaySession.openedAt).toLocaleString(locale)}</h2><p>{new Date(displaySession.openedAt).toLocaleString(locale)} · {displaySession.status === 'closed' ? t.closed : displaySession.eventRef}</p></div><span className="presence-badge"><UserCheck size={15} /> {displaySession.status === 'open' ? t.session : t.closed}</span></div>
       {coverage ? <><div className="coverage-wrap"><span className="coverage-number">{coverage.percent}%</span><div className="coverage-track" aria-label={`${t.coverage}: ${coverage.percent}%`}><span style={{ width: `${coverage.percent}%` }} /></div><div className="coverage-meta">{coverage.verified} {t.verified}<br />{coverage.unverified} {t.unverified}</div></div><p className="coverage-note">{coverage.meetsMinimum ? t.qualityReady : t.qualityNotReady}</p>{displaySession.status === 'closed' ? <p className="coverage-note">{coverage.meetsMinimum ? `${t.absenceEvidence}: ${confirmedAbsences.length}` : t.absenceBlocked}</p> : null}</> : null}
-    </section> : <div className="presence-panel"><GuidedEmptyState icon={UserCheck} title={noSessionGuide.title} body={noSessionGuide.body} primary={{label:noSessionGuide.primary,onClick:()=>{if(scopeLoaded&&!sessions.some(item=>item.status==='open'))setShowSession(true)}}} secondary={{label:noSessionGuide.secondary||t.back,href:'/my-today'}}/></div>}
+    </section></details> : null}
 
     {rollout.eventSeries && access && congregationId ? <EventSeriesPanel key={access.organizationId+':'+congregationId} access={access} congregationId={congregationId} locale={locale} canLaunch={scopeLoaded&&!busy&&online&&!sessions.some(item=>item.status==='open')} onLaunch={series=>{setSeriesPreset(series);setShowSession(true)}}/> : null}
     {rollout.crossUnitPresence && displaySession?.status==='open' && access ? <CrossUnitPresencePanel access={access} congregationId={congregationId} units={congregations} session={displaySession} checks={checks} locale={locale} onChanged={()=>refreshScope(access.organizationId,congregationId)}/> : null}
 
     <AttendanceRoster key={access.organizationId+':'+congregationId+':'+(displaySession?.id||'none')} people={people.filter(person=>!person.archived||displaySession?.eligiblePersonIds?.includes(person.id)||latest.has(person.id))} session={displaySession} checks={checks} locale={locale} editable={scopeLoaded&&displaySession?.status==='open'} busy={busy} online={online} onMark={(person,state)=>void markPresenceState(person,state)} profileHref={access.canManagePeople?person=>'/journey-profile?person='+encodeURIComponent(person.id):undefined} renderDetails={person=>{
-      const absenceUsable=Boolean(displaySession?.status==='closed'&&confirmedAbsences.includes(person.id))
+      const absenceUsable=Boolean(absenceRoutesReady&&displaySession?.status==='closed'&&confirmedAbsences.includes(person.id))
       const contactAllowed=Boolean(person.consent&&person.phone)
       const routedToCare=routedAbsenceIds.has(person.id)
       return <>
@@ -440,10 +436,11 @@ export default function PresenceAssistPage() {
         {absenceUsable?<div className={`presence-absence-care ${contactAllowed?'':'blocked'}`}><HeartHandshake size={15}/><div><strong>{routedToCare?absenceCare.routed:contactAllowed?absenceCare.route:absenceCare.noContact}</strong><p>{contactAllowed?absenceCare.routeHint:absenceCare.noContactHint}</p></div>{contactAllowed&&!routedToCare?<button className="presence-bond-button" disabled={busy||!online} onClick={()=>void routeAbsenceToCare(person)}>{absenceCare.route}</button>:null}</div>:null}
       </>
     }}/>
+    {absenceScope&&absenceRoutesError===absenceScope?<p className="attendance-notice" role="status">{locale==='en'?'Attendance is available. Care referrals could not be loaded for this service.':locale==='es'?'La asistencia está disponible. No se pudieron cargar las derivaciones a Cuidado para este culto.':'A chamada está disponível. Os encaminhamentos para Cuidado não puderam ser carregados neste culto.'}</p>:null}
     <p className="presence-rule">{t.sourceRule}<br />{t.correctionRule}</p>
   </div>
 
-  {showSession ? <SessionModal unitName={activeUnit?.name||''} preset={seriesPreset} close={() => {setShowSession(false);setSeriesPreset(null)}} create={async (eventName, expected, eventTypeId, eligiblePersonIds, eventSeriesId, requestId) => {
+  {showSession ? <SessionModal error={error} unitName={activeUnit?.name||''} preset={seriesPreset} close={() => {setShowSession(false);setSeriesPreset(null)}} create={async (eventName, expected, eventTypeId, eligiblePersonIds, eventSeriesId, requestId) => {
     if (!access || !online || !scopeLoaded || busy || sessions.some(item=>item.status==='open')) return
     setBusy(true); setError('')
     try {
@@ -482,7 +479,7 @@ export default function PresenceAssistPage() {
   </main>
 }
 
-function SessionModal({ close, create, eligiblePeople, locale, preset, online, unitName }: { unitName: string; close: () => void; create: (name: string, expected: number, eventTypeId: string, eligiblePersonIds: string[], eventSeriesId?: string,requestId?:string) => Promise<void>; eligiblePeople: PresencePerson[]; locale: AppLocale; preset:JourneyEventSeries|null; online:boolean }) {
+function SessionModal({ close, create, eligiblePeople, locale, preset, online, unitName, error }: { error: string; unitName: string; close: () => void; create: (name: string, expected: number, eventTypeId: string, eligiblePersonIds: string[], eventSeriesId?: string,requestId?:string) => Promise<void>; eligiblePeople: PresencePerson[]; locale: AppLocale; preset:JourneyEventSeries|null; online:boolean }) {
   const t = presenceAssistCopy[locale]
   const dialogRef = useRef<HTMLElement>(null)
   const [requestId] = useState(()=>crypto.randomUUID())
@@ -494,7 +491,8 @@ function SessionModal({ close, create, eligiblePeople, locale, preset, online, u
   const [eligibleSearch,setEligibleSearch] = useState('')
   const [selectedIds,setSelectedIds] = useState<Set<string>>(() => new Set(preset?.eventTypeId==='youth'||preset?.eventTypeId==='special'?[]:eligiblePeople.map(person=>person.id)))
   const requiresSelection = eventTypeId==='youth'||eventTypeId==='special'
-  const expected = selectedIds.size
+  const rosterIds = requiresSelection ? [...selectedIds] : eligiblePeople.map(person=>person.id)
+  const expected = rosterIds.length
   const hasPeople = eligiblePeople.length>0
   const visibleEligiblePeople = eligiblePeople.filter(person=>person.name.toLocaleLowerCase(locale).includes(eligibleSearch.trim().toLocaleLowerCase(locale)))
   const chooseEventType=(next:string)=>{
@@ -504,7 +502,7 @@ function SessionModal({ close, create, eligiblePeople, locale, preset, online, u
   const submit=async()=>{
     if(savingGuard.current||!online||!name.trim()||(requiresSelection&&expected===0))return
     savingGuard.current=true;setSaving(true)
-    try {await create(name,expected,eventTypeId,[...selectedIds],preset?.id,requestId)}
+    try {await create(name,expected,eventTypeId,rosterIds,preset?.id,requestId)}
     finally {savingGuard.current=false;setSaving(false)}
   }
   const copy = locale==='en'
@@ -512,7 +510,7 @@ function SessionModal({ close, create, eligiblePeople, locale, preset, online, u
         kicker:'PRESENCE / NEW SERVICE',title:'Record attendance',
         subtitle:'Choose the service and confirm attendees with a few taps.',
         event:'Service or gathering',people:'People expected',eventType:'Gathering type',
-        peopleHint:'This list is saved when you open the service. New visitors can still be added later.',
+        peopleHint:'Everyone registered in this campus is already included. Confirm who attended on the next screen.',
         noPeople:'No people available in this congregation',
         noPeopleHint:'Check the selected campus or add people in People. You may still open a service to register new visitors.',
         selectionHint:'Choose the people expected for this event before starting.',
@@ -524,7 +522,7 @@ function SessionModal({ close, create, eligiblePeople, locale, preset, online, u
           kicker:'PRESENCIA / NUEVO CULTO',title:'Registrar asistencia',
           subtitle:'Elige el culto y confirma las personas con pocos toques.',
           event:'Culto o encuentro',people:'Personas previstas',eventType:'Tipo de encuentro',
-          peopleHint:'Esta lista se guarda al abrir el culto. Puedes añadir visitantes después.',
+          peopleHint:'Todas las personas registradas en esta sede ya están incluidas. Confirma quién asistió en la siguiente pantalla.',
           noPeople:'No hay personas disponibles en esta congregación',
           noPeopleHint:'Revisa la sede o registra personas en Personas. Puedes abrir el culto para registrar visitantes nuevos.',
           selectionHint:'Selecciona a las personas previstas para este evento antes de comenzar.',
@@ -535,7 +533,7 @@ function SessionModal({ close, create, eligiblePeople, locale, preset, online, u
           kicker:'PRESENÇA / NOVO CULTO',title:'Registrar presença',
           subtitle:'Escolha o culto e confira as pessoas em poucos toques.',
           event:'Culto ou encontro',people:'Pessoas esperadas',eventType:'Tipo de culto',
-          peopleHint:'A lista é definida ao abrir o culto. Novos visitantes podem ser cadastrados depois.',
+          peopleHint:'Todos os cadastrados nesta congregação já estão incluídos. Você confere quem veio na próxima tela.',
           noPeople:'Nenhuma pessoa disponível nesta congregação',
           noPeopleHint:'Confira a congregação selecionada ou cadastre pessoas em Pessoas. Você ainda pode abrir o culto para registrar novos visitantes.',
           selectionHint:'Selecione as pessoas esperadas neste evento antes de começar.',
@@ -573,7 +571,7 @@ function SessionModal({ close, create, eligiblePeople, locale, preset, online, u
           <AlertCircle size={20}/>
           <div><strong>{copy.noPeople}</strong><p>{copy.noPeopleHint}</p><a href="/people">{copy.manage}</a></div>
         </div>}
-        {hasPeople?<details className="presence-roster-review" open={requiresSelection||undefined}>
+        {hasPeople&&requiresSelection?<details className="presence-roster-review" open={requiresSelection||undefined}>
           <summary>{copy.review}<span>{expected}</span></summary>
           <div className="presence-eligible-picker">
             <label className="presence-field"><span>{copy.search}</span><input type="search" value={eligibleSearch} onChange={event=>setEligibleSearch(event.target.value)} placeholder={copy.search}/></label>
@@ -581,6 +579,7 @@ function SessionModal({ close, create, eligiblePeople, locale, preset, online, u
           </div>
         </details>:null}
       </div>
+      {error?<p className="presence-error presence-session-error" role="alert">{error}</p>:null}
       <footer className="presence-modal-actions">
         <button className="presence-button presence-modal-cancel" type="button" disabled={saving} onClick={close}>{t.cancel}</button>
         <button className="presence-button primary" type="button" disabled={saving||!online||!name.trim()||(requiresSelection&&expected===0)} onClick={()=>void submit()}>{saving?(locale==='en'?'Opening…':locale==='es'?'Abriendo…':'Abrindo…'):copy.start}</button>
@@ -617,3 +616,4 @@ function VisitorModal({ close, save, locale,org,canPick,error }: { close: () => 
       : 'Quando o contato é autorizado, informe um número válido e o canal preferido antes de criar a tarefa de cuidado.'
   return createPortal(<div className="presence-modal-backdrop" onMouseDown={event=>{if(event.target===event.currentTarget&&!saving)close()}}><section ref={dialogRef} tabIndex={-1} className="presence-panel presence-modal visitor-form" role="dialog" aria-modal="true" aria-labelledby="presence-visitor-title"><div className="presence-session-head"><h2 id="presence-visitor-title">{t.newVisitor}</h2><button className="presence-button" onClick={close} disabled={saving} aria-label={t.cancel}><X size={17} /></button></div><div className="presence-modal-grid"><label className="presence-field"><span>{t.visitorName}</span><input value={name} onChange={(event) => {setName(event.target.value);setSelection({})}} /></label>{canPick?<DirectoryPersonPicker org={org} locale={locale} name={name} value={selection} onChange={setSelection}/>:null}<label className="presence-check"><input type="checkbox" checked={consent} onChange={(event) => { setConsent(event.target.checked); if (!event.target.checked) setPhone('') }} /><span>{t.consent}</span></label><label className="presence-field"><span>{t.phone}</span><input inputMode="tel" value={phone} onChange={(event) => setPhone(event.target.value)} disabled={!consent} aria-invalid={consent&&!phoneValid} /></label>{consent?<label className="presence-field"><span>{locale==='en'?'Preferred channel':locale==='es'?'Canal preferido':'Canal preferido'}</span><select value={preferredContactChannel} onChange={(event)=>setPreferredContactChannel(event.target.value as 'whatsapp'|'phone')}><option value="whatsapp">WhatsApp</option><option value="phone">{locale==='en'?'Phone call':locale==='es'?'Llamada':'Ligação'}</option></select></label>:null}{consent?<p className="coverage-note">{contactHint}</p>:null}<label className="presence-check"><input type="checkbox" checked={claimBond} onChange={(event) => setClaimBond(event.target.checked)} /><span>{bond.visitorClaim}</span></label></div>{error?<p className="journey-error" role="alert">{error}</p>:null}<div className="presence-modal-actions"><button className="presence-button" disabled={saving} onClick={close}>{t.cancel}</button><button className="presence-button primary" disabled={saving || !name.trim() || (consent && !phoneValid)} onClick={()=>void submit()}>{t.saveVisitor}</button></div></section></div>,document.body)
 }
+

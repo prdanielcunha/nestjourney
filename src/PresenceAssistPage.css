@@ -343,3 +343,24 @@
 @media(prefers-reduced-motion:reduce){
   .presence-session-modal .presence-roster-review>summary::after{transition:none}
 }
+
+
+/* A dedicated attendance workspace on phones, with room for names and touch targets. */
+.presence-session-error{margin:8px 22px;flex:none}
+@media(max-width:640px){
+  .presence-modal-backdrop:has(.presence-session-modal){padding:0;align-items:stretch}
+  .presence-modal-backdrop .presence-session-modal{
+    width:100%;height:100dvh;max-height:100dvh;border:0;border-radius:0;
+    padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom);
+  }
+  .presence-session-modal .presence-modal-scroll{flex:1}
+  .presence-session-modal .presence-modal-header{padding:24px 20px 18px}
+  .presence-session-modal .presence-modal-scroll{padding:6px 20px 20px}
+  .presence-session-modal .presence-modal-actions{padding:16px 20px 20px}
+  .presence-session-modal .presence-modal-actions .presence-button.primary{min-height:56px}
+}
+.presence-service-bar{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:22px 24px;margin:20px 0;border:1px solid var(--nj-border);border-radius:20px;background:linear-gradient(120deg,var(--nj-surface-raised),var(--nj-surface))}
+.presence-service-title{min-width:0}.presence-service-title h2{font-size:23px;line-height:1.25;margin:7px 0;letter-spacing:-.025em;overflow-wrap:anywhere}.presence-service-title p{font-size:14px;line-height:1.5;color:var(--nj-text-muted);margin:0}
+.presence-service-actions{display:flex;gap:10px;flex-wrap:wrap;flex-shrink:0}.presence-service-actions .presence-button{min-height:48px}
+.presence-session-summary{margin:12px 0;color:var(--nj-text-muted);font-size:14px}.presence-session-summary>summary{min-height:44px;align-content:center;cursor:pointer}.presence-session-summary>summary:focus-visible{outline:2px solid var(--nj-accent);outline-offset:3px}
+@media(max-width:640px){.presence-service-bar{align-items:stretch;flex-direction:column;gap:16px;padding:18px;margin:14px 0}.presence-service-title h2{font-size:21px}.presence-service-actions .presence-button{flex:1;justify-content:center}.presence-service-actions .primary{min-height:54px}.presence-assist .presence-hero h1{font-size:30px}.presence-assist .presence-hero p{font-size:14px;line-height:1.5}}

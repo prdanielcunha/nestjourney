@@ -8,7 +8,7 @@ import { presenceIntentCheckId } from './presenceIntent'
 import { journeyCollectionPath } from './productIdentity'
 import { createRaizEMesaPlaybook, createNeutralJourneyPlaybook, JOURNEY_PLAYBOOK_DEFAULT_ID, normalizeJourneyPlaybook, type JourneyPlaybookDefinition } from './playbookEngine'
 import { planFollowupOutcome, type FollowupNextActionCode, type FollowupOutcomeCode } from './followup'
-import { calculatePresenceCoverage, canUseAbsenceEvidence, type CarePromise, type PresenceCheck, type PresenceSession, type PresenceSource, type PresenceVerificationState } from './intelligence'
+import { canUseAbsenceEvidence, type CarePromise, type PresenceCheck, type PresenceSession, type PresenceSource, type PresenceVerificationState } from './intelligence'
 import { evaluateAuthorizedContact, normalizeGroupCapacity, type GroupCapacityPolicy, type PreferredContactChannel } from './roadmapReadiness'
 import type { TeamInterestArea } from './teamBulkImport'
 import { parseJourneyServiceTeam, type JourneyServiceTeam } from './journeyServiceTeams'
@@ -2728,14 +2728,14 @@ export async function closePresenceSession(
   assertSensitiveJourneyWriteIsOnline()
   const firestore = requireDb()
   const ref = doc(firestore, `${journeyCollectionPath(organizationId, 'presenceSessions')}/${session.id}`)
-  const coverage = calculatePresenceCoverage(session, checks)
+  // Canonical Hub policy permits only these lifecycle fields. Coverage is derived
+  // from the immutable checks, rather than an unsupported client-written snapshot.
+  void checks
   const batch = writeBatch(firestore)
   batch.update(ref, {
     status: 'closed',
     closedAt: serverTimestamp(),
     closedBy: actorId,
-    verifiedCountAtClose: coverage.verified,
-    absenceEvidenceEligible: coverage.meetsMinimum,
   })
   await batch.commit()
 }
