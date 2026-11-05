@@ -630,6 +630,10 @@ service cloud.firestore {
             && correctionData.get('sessionId', '') == sessionId
             && correctionData.get('personId', '') == personId
             && correctionData.get('state', '') != request.resource.data.get('state', '')
+            && (
+              request.resource.data.get('state', '') != 'unverified'
+              || correctionData.get('state', '') in ['present_confirmed', 'absent_confirmed']
+            )
           )
         );
     }
@@ -1954,12 +1958,12 @@ service cloud.firestore {
             && factId == 'presence-' + checkId
             && request.resource.data.get('evidenceRef', '') == 'presenceCheck:' + checkId
             && existsAfter(checkPath)
-            && getAfter(checkPath).data.get('state', '') != 'unverified'
             && payload.get('sessionId', '') == getAfter(checkPath).data.get('sessionId', '')
             && payload.get('state', '') == getAfter(checkPath).data.get('state', '')
             && payload.get('source', '') == getAfter(checkPath).data.get('source', '')
             && (
               (eventType == 'PRESENCE_CONFIRMED'
+                && getAfter(checkPath).data.get('state', '') != 'unverified'
                 && getAfter(checkPath).data.get('source', '') == 'human_check'
                 && getAfter(checkPath).data.get('correctedFromCheckId', '') == ''
                 && payload.get('correctedFromCheckId', '') == '')
@@ -1967,7 +1971,14 @@ service cloud.firestore {
               (eventType == 'PRESENCE_CORRECTED'
                 && getAfter(checkPath).data.get('source', '') == 'retroactive_human_correction'
                 && getAfter(checkPath).data.get('correctedFromCheckId', '') != ''
-                && payload.get('correctedFromCheckId', '') == getAfter(checkPath).data.get('correctedFromCheckId', ''))
+                && payload.get('correctedFromCheckId', '') == getAfter(checkPath).data.get('correctedFromCheckId', '')
+                && (
+                  getAfter(checkPath).data.get('state', '') != 'unverified'
+                  || (
+                    getAfter(checkPath).data.get('actorId', '') == request.auth.uid
+                    && getAfter(checkPath).data.get('recordedAt', null) == request.time
+                  )
+                ))
             )
             && request.resource.data.get('subjectRef', '') == 'person:' + getAfter(checkPath).data.get('personId', '')
             && request.resource.data.get('scope', '') == 'congregation:' + getAfter(checkPath).data.get('congregationId', ''))

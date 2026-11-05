@@ -37,8 +37,7 @@ import { CrossUnitPresencePanel } from './CrossUnitPresencePanel'
 import { EventSeriesPanel } from './EventSeriesPanel'
 import type { JourneyEventSeries } from './journeyEventSeries'
 import { loadJourneyRolloutFlags, DEFAULT_JOURNEY_ROLLOUT_FLAGS, type JourneyRolloutFlags } from './journeyReleaseFlags'
-import {AttendanceRoster} from './packages/attendance/AttendanceRoster'
-import {attendanceCopy} from './packages/attendance/copy'
+import {AttendanceRoster, type AttendanceSaveFeedback} from './packages/attendance/AttendanceRoster'
 import {canImportJourneyMembers} from './memberBulkImportRepository'
 import './PresenceAssistPage.css'
 
@@ -115,7 +114,7 @@ export default function PresenceAssistPage() {
   const [people, setPeople] = useState<JourneyPersonRecord[]>([])
   const [sessions, setSessions] = useState<PresenceSessionRecord[]>([])
   const [checks, setChecks] = useState<PresenceCheck[]>([])
-  const [feedback,setFeedback] = useState('')
+  const [feedback,setFeedback] = useState<AttendanceSaveFeedback>()
   const markGuard = useRef(false)
   const [loading, setLoading] = useState(true)
   const [loadingSlow, setLoadingSlow] = useState(false)
@@ -264,7 +263,7 @@ export default function PresenceAssistPage() {
     setScopeLoaded(false)
     scopeRequestRef.current++
     selectedSessionRef.current='';setSelectedSessionId('')
-    setPeople([]);setChecks([]);setSessions([]);setFeedback('')
+    setPeople([]);setChecks([]);setSessions([]);setFeedback(undefined)
     setCongregationId(unitId)
     setActiveJourneyCongregationId(access.organizationId,unitId)
     setBusy(true)
@@ -279,7 +278,7 @@ export default function PresenceAssistPage() {
     absenceRoutesGuard.current.invalidate()
     setScopeLoaded(false)
     selectedSessionRef.current=sessionId
-    setSelectedSessionId(sessionId);setChecks([]);setFeedback('')
+    setSelectedSessionId(sessionId);setChecks([]);setFeedback(undefined)
     setBusy(true);setError('')
     try{await refreshScope(access.organizationId,congregationId)}
     catch{setError(t.error)}finally{setBusy(false)}
@@ -291,12 +290,13 @@ export default function PresenceAssistPage() {
     const previous = latest.get(person.id)
     if (previous?.state === state) return
     if (state === 'absent_confirmed' && !window.confirm(t.confirmAbsent.replace('{name}', person.name))) return
-    const correctionReason = previous ? window.prompt(locale === 'en' ? 'Reason for correcting this check:' : locale === 'es' ? 'Motivo de la corrección:' : 'Motivo da correção desta presença:')?.trim() : undefined
-    if (previous && (!correctionReason || correctionReason.length > 240)) return
+    const correctionReason = previous
+      ? state === 'unverified' ? 'Marcação desfeita' : 'Marcação alterada'
+      : undefined
     markGuard.current=true
     setBusy(true)
     setError('')
-    setFeedback('')
+    setFeedback({ personId: person.id, status: 'saving' })
     try {
       await recordPresenceCheck({
         organizationId: access.organizationId,
@@ -309,9 +309,11 @@ export default function PresenceAssistPage() {
         correctionReason,
       })
       setChecks(await listPresenceChecks(access.organizationId, congregationId, displaySession.id))
-      const copy=attendanceCopy[locale]
-      setFeedback(person.name+' · '+(state==='present_confirmed'?copy.present:state==='absent_confirmed'?copy.absent:copy.pending))
-    } catch (cause) { console.error(cause); setError(t.error) }
+      setFeedback({ personId: person.id, status: 'saved' })
+    } catch (cause) {
+      console.error(cause)
+      setFeedback({ personId: person.id, status: 'error' })
+    }
     finally { markGuard.current=false;setBusy(false) }
   }
 
@@ -394,7 +396,6 @@ export default function PresenceAssistPage() {
     </section>
 
     {error ? <div className="presence-error" role="alert">{error}</div> : null}
-    {feedback?<p className="presence-save-feedback" role="status">{feedback}</p>:null}
     {!online?<div className="presence-error" role="status">{offlineNote}</div>:null}
 
     <section className="presence-service-bar" aria-label={locale==='en'?'Current service':locale==='es'?'Culto actual':'Culto atual'}>
@@ -427,7 +428,7 @@ export default function PresenceAssistPage() {
     {rollout.eventSeries && access && congregationId ? <EventSeriesPanel key={access.organizationId+':'+congregationId} access={access} congregationId={congregationId} locale={locale} canLaunch={scopeLoaded&&!busy&&online&&!sessions.some(item=>item.status==='open')} onLaunch={series=>{setSeriesPreset(series);setShowSession(true)}}/> : null}
     {rollout.crossUnitPresence && displaySession?.status==='open' && access ? <CrossUnitPresencePanel access={access} congregationId={congregationId} units={congregations} session={displaySession} checks={checks} locale={locale} onChanged={()=>refreshScope(access.organizationId,congregationId)}/> : null}
 
-    <AttendanceRoster key={access.organizationId+':'+congregationId+':'+(displaySession?.id||'none')} people={people.filter(person=>!person.archived||displaySession?.eligiblePersonIds?.includes(person.id)||latest.has(person.id))} session={displaySession} checks={checks} locale={locale} editable={scopeLoaded&&displaySession?.status==='open'} busy={busy} online={online} onMark={(person,state)=>void markPresenceState(person,state)} profileHref={access.canManagePeople?person=>'/journey-profile?person='+encodeURIComponent(person.id):undefined} renderDetails={person=>{
+    <AttendanceRoster key={access.organizationId+':'+congregationId+':'+(displaySession?.id||'none')} people={people.filter(person=>!person.archived||displaySession?.eligiblePersonIds?.includes(person.id)||latest.has(person.id))} session={displaySession} checks={checks} locale={locale} editable={scopeLoaded&&displaySession?.status==='open'} busy={busy} online={online} saveFeedback={feedback} onMark={(person,state)=>void markPresenceState(person,state)} profileHref={access.canManagePeople?person=>'/journey-profile?person='+encodeURIComponent(person.id):undefined} renderDetails={person=>{
       const absenceUsable=Boolean(absenceRoutesReady&&displaySession?.status==='closed'&&confirmedAbsences.includes(person.id))
       const contactAllowed=Boolean(person.consent&&person.phone)
       const routedToCare=routedAbsenceIds.has(person.id)
